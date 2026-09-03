@@ -1,0 +1,4 @@
+# Prettier is configured for LF, and the lint gate runs `prettier --check`.
+# Without this, a checkout on Windows converts to CRLF and the gate fails.
+* text=auto eol=lf
+*.png binary
