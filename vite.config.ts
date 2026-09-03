@@ -77,7 +77,10 @@ export default defineConfig(({ mode }) => ({
             },
             { name: 'fb-firestore', test: /\/(firebase|@firebase)\/firestore/ },
             { name: 'fb-auth', test: /\/(firebase|@firebase)\/auth/ },
-            { name: 'mantine', test: /\/@mantine\// },
+            // Deliberately NOT grouped: @mantine. Its components span eager
+            // (shell) and lazy (route-only, e.g. MultiSelect / Modal / Drawer)
+            // use, and forcing them into one vendor chunk drags the lazy ones
+            // onto the first-paint path — measured at +35 kB gzipped.
             { name: 'router', test: /\/react-router\// },
             { name: 'react', test: /\/node_modules\/(react|react-dom|scheduler)\// },
           ],

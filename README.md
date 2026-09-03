@@ -3,9 +3,10 @@
 A React 19 + TypeScript PWA for planning, logging, and reviewing lifting sessions.
 See [BUILD_PLAN.md](BUILD_PLAN.md) for the architecture and the phase plan.
 
-**Status: phase 0 (foundation) complete.** Auth, offline Firestore, the unit
-preference, routing, and the installable shell are in place. No lifting
-features yet — those start in phase 1.
+**Status: phase 1 complete.** On top of the phase 0 foundation (auth, offline
+Firestore, unit preference, installable shell) there is now a bundled catalog
+of 876 exercises with instant local search, plus custom-exercise CRUD. Plans
+and logging come next.
 
 ## Quick start
 
@@ -78,6 +79,46 @@ Without it, `npm run emulators -- --only auth` still works, and the app remains
 usable: Firestore writes queue in the persistent local cache and the UI reads
 back from it, which is the same path a real offline session takes. They just
 never reach a server.
+
+## The exercise catalog
+
+`src/catalog/generated/` is committed, generated data — refresh it with
+`npm run catalog:update`, never edit it by hand. It holds
+[free-exercise-db](https://github.com/yuhonas/free-exercise-db) (876 exercises,
+Unlicense/public domain) split in two:
+
+| File             | Gzipped | Loaded                                           |
+| ---------------- | ------- | ------------------------------------------------ |
+| `exercises.json` | 19 kB   | on first visit to Exercises; the searchable core |
+| `details.json`   | 142 kB  | only when an exercise detail view is opened      |
+
+Both are emitted as separate hashed assets and precached by the service worker,
+so a cold offline start can still search and add an exercise mid-session.
+
+`src/catalog/catalog.test.ts` validates the _committed_ files against the
+domain vocabularies. If an upstream refresh changes shape or introduces a
+muscle name the domain does not know, that test fails rather than the app
+silently rendering half-empty rows.
+
+Exercise images are referenced as remote paths and are not vendored, so they
+need network. Instructions work offline.
+
+## TypeScript projects
+
+`tsc --build` drives five projects, so each kind of code gets exactly the
+globals it should have:
+
+| Project              | Covers                       | Notably                                              |
+| -------------------- | ---------------------------- | ---------------------------------------------------- |
+| `tsconfig.app.json`  | `src` minus tests and the SW | no Node types — app code cannot reach `fs`/`process` |
+| `tsconfig.test.json` | `src` including tests        | adds Node types for fixture reads                    |
+| `tsconfig.sw.json`   | `src/sw.ts`                  | WebWorker lib, no DOM                                |
+| `tsconfig.node.json` | build scripts, `src/domain`  | scripts share the domain validators                  |
+| `tsconfig.e2e.json`  | Playwright specs             | DOM lib for `page.evaluate`                          |
+
+Build scripts run with `node --import ./scripts/ts-resolve.mjs`, a small hook
+that teaches Node the extensionless and `@/` specifiers Vite resolves — so a
+script and the app import the domain the same way, with no second copy of it.
 
 ## Layering rules (enforced by ESLint)
 

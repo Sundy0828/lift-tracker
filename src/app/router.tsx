@@ -34,6 +34,13 @@ const routes: RouteObject[] = [
         },
       },
       {
+        path: 'exercises',
+        lazy: async () => {
+          const { default: Component } = await import('@/features/exercises/ExercisesScreen');
+          return { Component };
+        },
+      },
+      {
         path: 'plans',
         lazy: async () => {
           const { default: Component } = await import('@/features/plans/PlansScreen');
