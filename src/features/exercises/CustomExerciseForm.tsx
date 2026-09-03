@@ -3,13 +3,14 @@ import { useState } from 'react';
 import type { CustomExercise, Equipment } from '@/domain/exercises';
 import { EQUIPMENT, isEquipment } from '@/domain/exercises';
 import type { MuscleGroup } from '@/domain/muscles';
-import { MUSCLE_REGIONS, isMuscleGroup, muscleLabel } from '@/domain/muscles';
+import { MUSCLE_OPTIONS_BY_REGION, isMuscleGroup } from '@/domain/muscles';
 
-/** Grouped by display region so the list is scannable on a phone (§2.3). */
-const MUSCLE_OPTIONS = MUSCLE_REGIONS.map((region) => ({
-  group: region.name,
-  items: region.muscles.map((muscle) => ({ value: muscle, label: muscleLabel(muscle) })),
-}));
+/**
+ * Grouped by display region so the list is scannable on a phone. Finer
+ * muscles (rear delts, tibialis) sit under their parent region, so picking
+ * one is a scroll rather than a lookup.
+ */
+const MUSCLE_OPTIONS = MUSCLE_OPTIONS_BY_REGION;
 
 const EQUIPMENT_OPTIONS = EQUIPMENT.map((item) => ({ value: item, label: item }));
 

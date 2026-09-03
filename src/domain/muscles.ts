@@ -1,8 +1,25 @@
 /**
- * free-exercise-db's muscle vocabulary, used verbatim (§2.3) so no mapping
- * layer is needed between the bundled catalog and the app.
+ * The muscle vocabulary, in two tiers.
+ *
+ * **Base groups** are free-exercise-db's 17 names, used verbatim (§2.3). They
+ * are the only names the *upstream* catalog is parsed with, so refreshing the
+ * vendored data never needs a translation step, and they are the granularity
+ * the muscle map draws — one SVG path per base group.
+ *
+ * **Extensions** are finer muscles the source vocabulary lacks, each declaring
+ * a base group as its parent. They exist because the source buckets are too
+ * coarse to train against: `shoulders` covers 129 exercises including every
+ * rear-delt movement, so a plan tagged only with base names cannot reveal the
+ * most common imbalance there is.
+ *
+ * Because every extension rolls up to a base group, adding them costs the map
+ * nothing: `baseMuscleOf` resolves any muscle to a paintable region, so volume
+ * math can track `rear delts` precisely while the diagram still shades
+ * `shoulders`.
  */
-export const MUSCLE_GROUPS = [
+
+/** free-exercise-db's vocabulary, verbatim. Never reorder or rename. */
+export const BASE_MUSCLE_GROUPS = [
   'abdominals',
   'abductors',
   'adductors',
@@ -22,30 +39,101 @@ export const MUSCLE_GROUPS = [
   'triceps',
 ] as const;
 
-export type MuscleGroup = (typeof MUSCLE_GROUPS)[number];
+export type BaseMuscleGroup = (typeof BASE_MUSCLE_GROUPS)[number];
 
-export function isMuscleGroup(value: unknown): value is MuscleGroup {
-  return typeof value === 'string' && (MUSCLE_GROUPS as readonly string[]).includes(value);
+/**
+ * Extension -> parent base group. The parent is what the muscle map paints and
+ * what volume totals roll up into, so it must be the region the muscle
+ * visually belongs to rather than the strictest anatomical grouping.
+ */
+export const MUSCLE_EXTENSIONS = {
+  'front delts': 'shoulders',
+  'side delts': 'shoulders',
+  'rear delts': 'shoulders',
+  'upper chest': 'chest',
+  obliques: 'abdominals',
+  brachialis: 'biceps',
+  soleus: 'calves',
+  // Tibialis anterior is the calves' antagonist, not part of them. It parents
+  // to `calves` only because that is the lower-leg region on the diagram;
+  // volume tracking keeps the two separate, which is the point.
+  tibialis: 'calves',
+  rhomboids: 'middle back',
+  // Rectus femoris is both a quad and a hip flexor, and the front of the hip
+  // is the nearest paintable region.
+  'hip flexors': 'quadriceps',
+} as const satisfies Record<string, BaseMuscleGroup>;
+
+export type ExtendedMuscleGroup = keyof typeof MUSCLE_EXTENSIONS;
+
+export const EXTENDED_MUSCLE_GROUPS: readonly ExtendedMuscleGroup[] = Object.keys(
+  MUSCLE_EXTENSIONS,
+) as ExtendedMuscleGroup[];
+
+export type MuscleGroup = BaseMuscleGroup | ExtendedMuscleGroup;
+
+/** Base groups first, then extensions. */
+export const MUSCLE_GROUPS: readonly MuscleGroup[] = [
+  ...BASE_MUSCLE_GROUPS,
+  ...EXTENDED_MUSCLE_GROUPS,
+];
+
+export function isBaseMuscleGroup(value: unknown): value is BaseMuscleGroup {
+  return typeof value === 'string' && (BASE_MUSCLE_GROUPS as readonly string[]).includes(value);
 }
 
-/** Keeps only the recognised muscle names from untrusted input. */
+export function isExtendedMuscleGroup(value: unknown): value is ExtendedMuscleGroup {
+  return typeof value === 'string' && value in MUSCLE_EXTENSIONS;
+}
+
+export function isMuscleGroup(value: unknown): value is MuscleGroup {
+  return isBaseMuscleGroup(value) || isExtendedMuscleGroup(value);
+}
+
+/**
+ * Resolves any muscle to the base group the map can paint and volume totals
+ * roll into. A base group resolves to itself, so this is safe to call on
+ * anything and guarantees the map never has a muscle it cannot draw.
+ */
+export function baseMuscleOf(muscle: MuscleGroup): BaseMuscleGroup {
+  return isExtendedMuscleGroup(muscle) ? MUSCLE_EXTENSIONS[muscle] : muscle;
+}
+
+/** Keeps only recognised muscle names, base or extended, from untrusted input. */
 export function parseMuscleGroups(value: unknown): MuscleGroup[] {
+  return keepKnown(value, isMuscleGroup);
+}
+
+/**
+ * Base-only variant, used when parsing the *upstream* catalog: the source data
+ * may only ever contain its own vocabulary, so an unexpected name is dropped
+ * rather than silently accepted.
+ */
+export function parseBaseMuscleGroups(value: unknown): BaseMuscleGroup[] {
+  return keepKnown(value, isBaseMuscleGroup);
+}
+
+function keepKnown<T extends MuscleGroup>(
+  value: unknown,
+  predicate: (item: unknown) => item is T,
+): T[] {
   if (!Array.isArray(value)) return [];
-  const seen = new Set<MuscleGroup>();
+  const seen = new Set<T>();
   for (const item of value as readonly unknown[]) {
-    if (isMuscleGroup(item)) seen.add(item);
+    if (predicate(item)) seen.add(item);
   }
   return [...seen];
 }
 
 export type MuscleRegion = {
   readonly name: string;
-  readonly muscles: readonly MuscleGroup[];
+  readonly muscles: readonly BaseMuscleGroup[];
 };
 
 /**
- * Display grouping only — never used for volume math. Every muscle group
- * belongs to exactly one region, which `muscles.test.ts` enforces.
+ * Display grouping only — never used for volume math. Covers the base groups;
+ * an extension's region comes from its parent via {@link regionOf}. Every base
+ * group belongs to exactly one region, which `muscles.test.ts` enforces.
  */
 export const MUSCLE_REGIONS: readonly MuscleRegion[] = [
   { name: 'Chest', muscles: ['chest'] },
@@ -77,12 +165,40 @@ const LABELS: Record<MuscleGroup, string> = {
   shoulders: 'Shoulders',
   traps: 'Traps',
   triceps: 'Triceps',
+  'front delts': 'Front delts',
+  'side delts': 'Side delts',
+  'rear delts': 'Rear delts',
+  'upper chest': 'Upper chest',
+  obliques: 'Obliques',
+  brachialis: 'Brachialis',
+  soleus: 'Soleus',
+  tibialis: 'Tibialis',
+  rhomboids: 'Rhomboids',
+  'hip flexors': 'Hip flexors',
 };
 
 export function muscleLabel(muscle: MuscleGroup): string {
   return LABELS[muscle];
 }
 
+/** The display region for any muscle, resolved through its base group. */
 export function regionOf(muscle: MuscleGroup): string | null {
-  return MUSCLE_REGIONS.find((region) => region.muscles.includes(muscle))?.name ?? null;
+  const base = baseMuscleOf(muscle);
+  return MUSCLE_REGIONS.find((region) => region.muscles.includes(base))?.name ?? null;
 }
+
+/**
+ * Muscle options grouped by display region, for pickers. Extensions appear
+ * under their parent's region, so "Rear delts" sits with "Shoulders".
+ */
+// Mutable member arrays on purpose: this feeds Mantine's `ComboboxData`,
+// whose prop type does not accept readonly arrays.
+export const MUSCLE_OPTIONS_BY_REGION: {
+  group: string;
+  items: { value: MuscleGroup; label: string }[];
+}[] = MUSCLE_REGIONS.map((region) => ({
+  group: region.name,
+  items: MUSCLE_GROUPS.filter((muscle) => region.muscles.includes(baseMuscleOf(muscle))).map(
+    (muscle) => ({ value: muscle, label: muscleLabel(muscle) }),
+  ),
+}));

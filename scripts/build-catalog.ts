@@ -18,6 +18,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CatalogExercise, ExerciseDetails } from '@/domain/exercises';
 import { parseCatalogExercise, parseExerciseDetails } from '@/domain/exercises';
+import { parseBaseMuscleGroups } from '@/domain/muscles';
+import { REFINEMENTS, refineMuscles } from './catalog-refinements';
 
 const SOURCE =
   'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
@@ -51,7 +53,11 @@ async function main(): Promise<void> {
       rejected.push(`${entry.id} (duplicate id)`);
       continue;
     }
-    core.push(entry);
+    core.push({
+      ...entry,
+      primaryMuscles: refineMuscles(entry.name, entry.primaryMuscles),
+      secondaryMuscles: refineMuscles(entry.name, entry.secondaryMuscles),
+    });
     details[entry.id] = parseExerciseDetails(raw);
   }
 
@@ -75,6 +81,60 @@ async function main(): Promise<void> {
 
   console.log(`\n${String(core.length)} exercises written, ${String(rejected.length)} rejected`);
   for (const id of rejected) console.log(`  rejected: ${id}`);
+
+  reportRefinements(core);
+  reportUnknownUpstreamMuscles(payload as readonly RawExercise[]);
+}
+
+/**
+ * Fails the refresh if a curated rule stopped matching. Without this a rule
+ * could silently go stale after an upstream rename and quietly stop refining.
+ */
+function reportRefinements(core: readonly CatalogExercise[]): void {
+  console.log('\nmuscle refinements applied:');
+  const stale: string[] = [];
+
+  for (const rule of REFINEMENTS) {
+    const hits = core.filter(
+      (entry) => entry.primaryMuscles.includes(rule.to) || entry.secondaryMuscles.includes(rule.to),
+    ).length;
+
+    const ok = hits >= rule.expectAtLeast;
+    if (!ok) stale.push(`${rule.from} -> ${rule.to}`);
+    console.log(
+      `  ${rule.from} -> ${rule.to}: ${String(hits)} exercises` +
+        ` (expected >= ${String(rule.expectAtLeast)})${ok ? '' : '  STALE'}`,
+    );
+  }
+
+  if (stale.length > 0) {
+    throw new Error(
+      `Refinement rules matched fewer exercises than expected (${stale.join(', ')}). ` +
+        'Upstream names may have changed — review scripts/catalog-refinements.ts.',
+    );
+  }
+}
+
+/** Surfaces any muscle name upstream uses that the base vocabulary lacks. */
+function reportUnknownUpstreamMuscles(payload: readonly RawExercise[]): void {
+  const unknown = new Set<string>();
+
+  for (const raw of payload) {
+    for (const key of ['primaryMuscles', 'secondaryMuscles'] as const) {
+      const value: unknown = raw[key];
+      if (!Array.isArray(value)) continue;
+      const known = new Set<string>(parseBaseMuscleGroups(value));
+      for (const item of value as readonly unknown[]) {
+        if (typeof item === 'string' && !known.has(item)) unknown.add(item);
+      }
+    }
+  }
+
+  if (unknown.size > 0) {
+    console.log(
+      `\nWARNING: upstream uses muscle names the domain does not know: ${[...unknown].join(', ')}`,
+    );
+  }
 }
 
 function write(name: string, value: unknown): void {

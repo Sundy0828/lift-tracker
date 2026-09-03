@@ -119,6 +119,44 @@ test.describe('exercise catalog', () => {
     await expect(list.getByRole('button').first()).toContainText('Zulu Cable Y-Raise');
   });
 
+  test('a custom exercise can use a finer muscle the source vocabulary lacks', async ({ page }) => {
+    await signIn(page);
+    await openExercises(page);
+
+    // The case that motivated the second muscle tier: tibialis anterior is the
+    // calves' antagonist, so tagging it `calves` would corrupt calf volume.
+    await page.getByRole('button', { name: 'New' }).click();
+    await page.getByRole('textbox', { name: 'Name' }).fill('Zeta Tibialis Raise');
+    await page.getByRole('combobox', { name: 'Primary muscles' }).click();
+    await page.getByRole('option', { name: 'Tibialis', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Add exercise' }).click();
+
+    await page.getByRole('textbox', { name: 'Search exercises' }).fill('zeta tibialis');
+    const list = page.getByTestId('exercise-list');
+    const row = list.getByRole('button', { name: /Zeta Tibialis Raise/u });
+    await expect(row).toBeVisible();
+    // The muscle line reads Tibialis, not folded into Calves.
+    await expect(row).toContainText('Tibialis ·');
+    await expect(row).not.toContainText('Calves');
+  });
+
+  test('the catalog separates rear delts from the generic shoulders bucket', async ({ page }) => {
+    await signIn(page);
+    await openExercises(page);
+
+    await page.getByRole('combobox', { name: 'Muscle' }).click();
+    await page.getByRole('option', { name: 'Rear delts' }).click();
+    await page.keyboard.press('Escape');
+
+    const count = await page.getByTestId('result-count').textContent();
+    const total = Number(/(\d+)/.exec(count ?? '')?.[1] ?? '0');
+    // Refined catalog entries, without having to redefine them by hand.
+    expect(total).toBeGreaterThanOrEqual(10);
+    expect(total).toBeLessThan(60);
+    await expect(page.getByTestId('exercise-list').getByText('Face Pull')).toBeVisible();
+  });
+
   test('a custom exercise rejects a blank name and a duplicate name', async ({ page }) => {
     await signIn(page);
     await openExercises(page);

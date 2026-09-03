@@ -21,17 +21,14 @@ import {
 import type { CustomExercise, Equipment, Exercise } from '@/domain/exercises';
 import { EQUIPMENT, isEquipment } from '@/domain/exercises';
 import type { MuscleGroup } from '@/domain/muscles';
-import { MUSCLE_REGIONS, isMuscleGroup, muscleLabel } from '@/domain/muscles';
+import { MUSCLE_OPTIONS_BY_REGION, isMuscleGroup } from '@/domain/muscles';
 import { search } from '@/domain/search';
 import type { CustomExerciseDraft } from './CustomExerciseForm';
 import { CustomExerciseForm } from './CustomExerciseForm';
 import { ExerciseDetailDrawer } from './ExerciseDetailDrawer';
 import { ExerciseList } from './ExerciseList';
 
-const MUSCLE_OPTIONS = MUSCLE_REGIONS.map((region) => ({
-  group: region.name,
-  items: region.muscles.map((muscle) => ({ value: muscle, label: muscleLabel(muscle) })),
-}));
+const MUSCLE_OPTIONS = MUSCLE_OPTIONS_BY_REGION;
 
 const EQUIPMENT_OPTIONS = EQUIPMENT.map((item) => ({ value: item, label: item }));
 

@@ -15,6 +15,6 @@
   // Tests import app sources, so the project has to contain them. They are
   // compiled here as well as in the app project; the outDirs differ, so
   // nothing collides.
-  "include": ["src"],
+  "include": ["src", "scripts"],
   "exclude": ["src/sw.ts"]
 }
