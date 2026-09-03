@@ -1,0 +1,11 @@
+dist
+coverage
+node_modules
+dev-dist
+playwright-report
+test-results
+src/catalog/generated
+package-lock.json
+
+# Spec and docs are authored by hand; the format gate must not rewrite them.
+BUILD_PLAN.md

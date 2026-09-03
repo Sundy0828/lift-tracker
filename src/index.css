@@ -1,0 +1,22 @@
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  margin: 0;
+  /* Keep the page itself from bouncing; scrolling lives in the main column. */
+  overscroll-behavior-y: none;
+}
+
+body {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* iOS zooms the page when a font-size < 16px input is focused, which is
+   unusable mid-set. Mantine's md size is 16px, so this is a guard rail. */
+input,
+select,
+textarea {
+  font-size: max(16px, 1em);
+}

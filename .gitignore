@@ -1,0 +1,16 @@
+node_modules
+dist
+dev-dist
+coverage
+playwright-report
+test-results
+*.local
+.env*.local
+!.env
+.firebase
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.emulator-data
+.DS_Store
+*.tsbuildinfo
