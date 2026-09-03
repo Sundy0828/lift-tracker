@@ -41,10 +41,31 @@ npm run typecheck && npm run lint && npm run test && npm run build
 ## Firebase configuration
 
 `.env` is committed and points at the emulator suite with a `demo-` project id,
-so nothing here needs a real Firebase account. For a real deploy, copy
-`.env.example` to `.env.production.local` (git-ignored) and fill in the values
-from the Firebase console — it overrides `.env`, including
-`VITE_USE_FIREBASE_EMULATORS`.
+so nothing here needs a real Firebase account.
+
+To use a real Firebase project, `cp .env.example .env.local` and fill in the six
+values from the console (Project settings > General > Your apps > SDK setup and
+configuration). `.env.local` is git-ignored and overrides `.env` in every mode,
+so it covers dev, build, and the e2e suite at once.
+
+Three of these cannot be done from a config file:
+
+1. **Authentication > Sign-in method** — enable **Email/Password** and
+   **Google** (Google also wants a support email). `localhost` is an authorized
+   domain by default, so the sign-in popup works in dev with no extra setup.
+2. **Firestore Database > Create database** — pick a region. Production mode is
+   fine; the rules below replace the defaults.
+3. **Deploy the rules**, or every write is denied:
+
+   ```bash
+   npx firebase login
+   npx firebase use --add          # select the project, alias it `default`
+   npx firebase deploy --only firestore:rules
+   ```
+
+   Skipping this has a misleading symptom rather than an error: the unit toggle
+   still works, because the write lands in the local cache, but the
+   "saved locally · will sync" chip never clears.
 
 ### The Firestore emulator needs Java
 
