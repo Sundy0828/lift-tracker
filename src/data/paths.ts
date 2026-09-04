@@ -19,6 +19,9 @@ export const paths = {
   customExercises: (uid: string): CollectionReference =>
     collection(db, 'users', uid, 'customExercises'),
   plans: (uid: string): CollectionReference => collection(db, 'users', uid, 'plans'),
+  plan: (uid: string, planId: string): DocumentReference => doc(db, 'users', uid, 'plans', planId),
+  planVersions: (uid: string, planId: string): CollectionReference =>
+    collection(db, 'users', uid, 'plans', planId, 'versions'),
   sessions: (uid: string): CollectionReference => collection(db, 'users', uid, 'sessions'),
   workoutStats: (uid: string): CollectionReference => collection(db, 'users', uid, 'workoutStats'),
   exerciseStats: (uid: string): CollectionReference =>

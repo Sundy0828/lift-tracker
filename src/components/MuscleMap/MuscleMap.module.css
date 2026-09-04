@@ -1,0 +1,87 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-sm);
+}
+
+.figures {
+  display: flex;
+  justify-content: center;
+  gap: var(--mantine-spacing-md);
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+}
+
+.svg {
+  width: 100%;
+  max-width: 132px;
+  height: auto;
+}
+
+.caption {
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inert {
+  fill: light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-4));
+  stroke: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
+  stroke-width: 0.5;
+}
+
+.muscle {
+  fill: var(--stop-color);
+  stroke: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
+  stroke-width: 0.5;
+}
+
+/* Five stops, 0 = untrained. Both schemes keep stop 0 clearly "empty" and
+   stop 4 clearly "high", with three distinguishable steps between.
+   Each stop sets one custom property, then applies it to both `fill` (for the
+   SVG paths) and `background` (for the legend swatches, which are spans and
+   ignore `fill`). */
+.stop0 {
+  --stop-color: light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+}
+.stop1 {
+  --stop-color: light-dark(#ffe9b8, #5c4a22);
+}
+.stop2 {
+  --stop-color: light-dark(#ffcb69, #8a6a1f);
+}
+.stop3 {
+  --stop-color: light-dark(#f79325, #bb7a15);
+}
+.stop4 {
+  --stop-color: light-dark(#d1541a, #ffa604);
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+}
+
+.swatches {
+  display: flex;
+  gap: 3px;
+}
+
+.swatch {
+  width: 16px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--stop-color);
+  border: 1px solid light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-4));
+}

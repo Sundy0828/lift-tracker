@@ -48,6 +48,13 @@ const routes: RouteObject[] = [
         },
       },
       {
+        path: 'plans/:planId',
+        lazy: async () => {
+          const { default: Component } = await import('@/features/plans/PlanEditorScreen');
+          return { Component };
+        },
+      },
+      {
         path: 'history',
         lazy: async () => {
           const { default: Component } = await import('@/features/history/HistoryScreen');

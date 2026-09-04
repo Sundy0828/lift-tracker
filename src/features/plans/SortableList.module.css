@@ -1,0 +1,37 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-radius: var(--mantine-radius-md);
+  background: light-dark(var(--mantine-color-white), var(--mantine-color-dark-6));
+  /* dnd-kit sets transform inline; keep it from being clipped mid-drag. */
+  position: relative;
+}
+
+.row[data-dragging='true'] {
+  z-index: 2;
+  box-shadow: var(--mantine-shadow-md);
+  opacity: 0.95;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+.handle {
+  cursor: grab;
+  touch-action: none;
+}
+
+.handle:active {
+  cursor: grabbing;
+}
