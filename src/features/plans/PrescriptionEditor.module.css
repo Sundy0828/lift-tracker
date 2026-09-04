@@ -1,0 +1,13 @@
+.readout {
+  /* Stops the number jittering the row width while a thumb is dragged. */
+  font-variant-numeric: tabular-nums;
+  min-width: 3.5em;
+  text-align: right;
+}
+
+/* Mark labels (1/10/20/30) render below the track and are absolutely
+   positioned, so the slider needs reserved space or they collide with
+   whatever follows. */
+.sliderRow {
+  padding-bottom: 20px;
+}

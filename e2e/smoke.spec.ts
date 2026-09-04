@@ -66,4 +66,27 @@ test.describe('phase 0 foundation', () => {
       }),
     ).toBeChecked();
   });
+  test('the default rest time can be set and persists across a reload', async ({ page }) => {
+    // Stored at users/{uid}.defaultRestSeconds, and the prescription editor
+    // names it as the fallback for an exercise with no rest of its own.
+    const email = `rest-${String(Date.now())}@example.com`;
+
+    await page.goto('/sign-in');
+    await page.getByRole('button', { name: 'Need an account?' }).click();
+    await page.getByRole('textbox', { name: 'Email' }).fill(email);
+    await page.getByRole('textbox', { name: 'Password' }).fill('lifttracker');
+    await page.getByRole('button', { name: 'Create account' }).click();
+    await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+
+    await page.goto('/settings');
+    await expect(page.getByText('Default rest')).toBeVisible();
+    // 120s is the profile default.
+    await expect(page.getByRole('button', { name: '2:00' })).toBeVisible();
+
+    await page.getByRole('button', { name: '3:00' }).click();
+    await expect(page.getByRole('textbox', { name: 'Default rest seconds' })).toHaveValue(/180/);
+
+    await page.reload();
+    await expect(page.getByRole('textbox', { name: 'Default rest seconds' })).toHaveValue(/180/);
+  });
 });

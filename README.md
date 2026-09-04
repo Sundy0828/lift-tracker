@@ -144,6 +144,19 @@ Build scripts run with `node --import ./scripts/ts-resolve.mjs`, a small hook
 that teaches Node the extensionless and `@/` specifiers Vite resolves — so a
 script and the app import the domain the same way, with no second copy of it.
 
+## Where preferences live
+
+| Preference           | Stored at                        | Set from |
+| -------------------- | -------------------------------- | -------- |
+| `displayUnit`        | `users/{uid}.displayUnit`        | Settings |
+| `defaultRestSeconds` | `users/{uid}.defaultRestSeconds` | Settings |
+| Colour scheme        | `localStorage` (Mantine)         | Settings |
+
+`defaultRestSeconds` (120s out of the box) is the rest the timer uses for any
+exercise whose prescription has no `restSeconds` of its own — a per-slot rest
+of `null` means "fall back to this". The prescription editor names the current
+default rather than just saying "your default".
+
 ## Layering rules (enforced by ESLint)
 
 - `src/domain/` is pure — no React, no Firebase. This is the layer to test hardest.

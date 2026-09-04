@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   Group,
+  NumberInput,
   SegmentedControl,
   Skeleton,
   Stack,
@@ -13,11 +14,14 @@ import {
 import { useNavigate } from 'react-router';
 import { useAuth } from '@/data/hooks/useAuth';
 import { useProfile } from '@/data/hooks/useProfile';
-import { setDisplayUnit } from '@/data/mutations/profile';
+import { setDefaultRestSeconds, setDisplayUnit } from '@/data/mutations/profile';
+import { formatRestSeconds } from '@/domain/plans';
 import { formatWeight, isUnit, stepFor } from '@/domain/units';
 
 // A load stored in lb, so switching the display unit visibly converts it.
 const SAMPLE = { value: 185, unit: 'lb' } as const;
+
+const REST_PRESETS = [60, 90, 120, 180, 240];
 
 export default function SettingsScreen() {
   const { user, signOutUser } = useAuth();
@@ -70,6 +74,60 @@ export default function SettingsScreen() {
             {formatWeight(SAMPLE, profile.displayUnit)} and steppers move in{' '}
             {stepFor(profile.displayUnit)} {profile.displayUnit}.
           </Text>
+        </Stack>
+      </Card>
+
+      <Card withBorder>
+        <Stack gap="sm">
+          <Group justify="space-between" align="center">
+            <Text fw={600}>Default rest</Text>
+            {isPending ? null : (
+              <Text size="sm" c="dimmed">
+                {formatRestSeconds(profile.defaultRestSeconds)}
+              </Text>
+            )}
+          </Group>
+
+          <Text size="sm" c="dimmed">
+            Used by the rest timer for any exercise that has no rest of its own, and shown as the
+            fallback when you edit a prescription.
+          </Text>
+
+          {isPending ? (
+            <Skeleton height={42} radius="md" />
+          ) : (
+            <>
+              <Group gap="xs">
+                {REST_PRESETS.map((seconds) => (
+                  <Button
+                    key={seconds}
+                    size="compact-sm"
+                    variant={profile.defaultRestSeconds === seconds ? 'filled' : 'default'}
+                    onClick={() => {
+                      if (uid !== null) void setDefaultRestSeconds(uid, seconds);
+                    }}
+                  >
+                    {formatRestSeconds(seconds)}
+                  </Button>
+                ))}
+              </Group>
+              <NumberInput
+                aria-label="Default rest seconds"
+                suffix=" s"
+                min={15}
+                max={3600}
+                step={15}
+                clampBehavior="blur"
+                allowDecimal={false}
+                value={profile.defaultRestSeconds}
+                onChange={(value) => {
+                  if (uid !== null && typeof value === 'number' && value >= 15) {
+                    void setDefaultRestSeconds(uid, value);
+                  }
+                }}
+              />
+            </>
+          )}
         </Stack>
       </Card>
 

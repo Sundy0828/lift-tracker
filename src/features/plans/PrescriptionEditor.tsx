@@ -3,6 +3,7 @@ import {
   Drawer,
   Group,
   NumberInput,
+  RangeSlider,
   Stack,
   Switch,
   Text,
@@ -10,8 +11,18 @@ import {
   TextInput,
 } from '@mantine/core';
 import { useState } from 'react';
-import type { PlanExerciseSlot, Prescription } from '@/domain/plans';
-import { MAX_REPS, MAX_RIR, MAX_SETS, normalizePrescription } from '@/domain/plans';
+import { useProfile } from '@/data/hooks/useProfile';
+import type { PlanExerciseSlot, Prescription, RepRange } from '@/domain/plans';
+import {
+  MAX_SETS,
+  REPS_SOFT_MAX,
+  RIR_SOFT_MAX,
+  formatRange,
+  formatRestSeconds,
+  normalizePrescription,
+  sliderBound,
+} from '@/domain/plans';
+import classes from './PrescriptionEditor.module.css';
 
 export type SlotEdit = {
   prescription: Prescription;
@@ -28,15 +39,24 @@ type Props = {
   onRemove: (slotId: string) => void;
 };
 
+const REST_PRESETS = [60, 90, 120, 180, 240];
+
 /**
- * Prescription editor for one slot: sets, rep range, RIR range, rest, notes,
- * and superset grouping. Values are normalised on save (`normalizePrescription`)
- * so a max below a min, or an out-of-range number, cannot be stored.
+ * Prescription editor for one slot.
+ *
+ * Rep and RIR ranges use a two-thumb slider rather than a pair of number
+ * fields. A slider cannot represent an inverted range at all — dragging the
+ * top thumb past the bottom pushes the bottom down — so "max below min" is
+ * unrepresentable instead of merely corrected. `minRange={0}` keeps a single
+ * value (5-5 reps, 2-2 RIR) available.
+ *
+ * Values are still normalised on save, because imported and shared plans
+ * arrive from outside this form.
  */
 export function PrescriptionEditor({ slot, supersetIdFor, onClose, onSave, onRemove }: Props) {
+  const { profile } = useProfile();
   const [draft, setDraft] = useState<SlotEdit | null>(null);
 
-  // Reset the draft whenever a different slot is opened.
   const current: SlotEdit | null =
     slot === null
       ? null
@@ -61,105 +81,150 @@ export function PrescriptionEditor({ slot, supersetIdFor, onClose, onSave, onRem
     setDraft({ ...current, prescription: { ...current.prescription, ...change } });
   };
 
-  const asNumber = (value: string | number, fallback: number): number =>
-    typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  const asRange = (value: [number, number]): RepRange => ({ min: value[0], max: value[1] });
 
   return (
     <Drawer
       opened={slot !== null}
       onClose={close}
       position="bottom"
-      size="90%"
+      size="92%"
       title={slot?.exerciseName ?? ''}
     >
       {slot === null || current === null ? null : (
-        <Stack>
+        <Stack gap="lg">
           <NumberInput
             label="Sets"
             min={1}
             max={MAX_SETS}
             clampBehavior="strict"
+            allowDecimal={false}
             value={current.prescription.sets}
             onChange={(value) => {
-              patchPrescription({ sets: asNumber(value, current.prescription.sets) });
-            }}
-          />
-
-          <Group grow>
-            <NumberInput
-              label="Reps from"
-              min={1}
-              max={MAX_REPS}
-              value={current.prescription.repRange.min}
-              onChange={(value) => {
-                patchPrescription({
-                  repRange: {
-                    ...current.prescription.repRange,
-                    min: asNumber(value, current.prescription.repRange.min),
-                  },
-                });
-              }}
-            />
-            <NumberInput
-              label="to"
-              min={1}
-              max={MAX_REPS}
-              value={current.prescription.repRange.max}
-              onChange={(value) => {
-                patchPrescription({
-                  repRange: {
-                    ...current.prescription.repRange,
-                    max: asNumber(value, current.prescription.repRange.max),
-                  },
-                });
-              }}
-            />
-          </Group>
-
-          <Group grow>
-            <NumberInput
-              label="RIR from"
-              min={0}
-              max={MAX_RIR}
-              value={current.prescription.rirRange.min}
-              onChange={(value) => {
-                patchPrescription({
-                  rirRange: {
-                    ...current.prescription.rirRange,
-                    min: asNumber(value, current.prescription.rirRange.min),
-                  },
-                });
-              }}
-            />
-            <NumberInput
-              label="to"
-              min={0}
-              max={MAX_RIR}
-              value={current.prescription.rirRange.max}
-              onChange={(value) => {
-                patchPrescription({
-                  rirRange: {
-                    ...current.prescription.rirRange,
-                    max: asNumber(value, current.prescription.rirRange.max),
-                  },
-                });
-              }}
-            />
-          </Group>
-
-          <NumberInput
-            label="Rest (seconds)"
-            description="Leave empty to use your default"
-            min={0}
-            max={3600}
-            step={15}
-            value={current.prescription.restSeconds ?? ''}
-            onChange={(value) => {
               patchPrescription({
-                restSeconds: value === '' ? null : asNumber(value, 0),
+                sets: typeof value === 'number' ? value : current.prescription.sets,
               });
             }}
           />
+
+          <Stack gap="xs">
+            <Group justify="space-between">
+              <Text size="sm" fw={500}>
+                Reps
+              </Text>
+              <Text size="sm" fw={600} className={classes.readout}>
+                {formatRange(current.prescription.repRange)}
+              </Text>
+            </Group>
+            <RangeSlider
+              min={1}
+              max={sliderBound(REPS_SOFT_MAX, current.prescription.repRange.max)}
+              step={1}
+              minRange={0}
+              label={(value) => String(value)}
+              className={classes.sliderRow}
+              marks={[
+                { value: 1, label: '1' },
+                { value: 10, label: '10' },
+                { value: 20, label: '20' },
+                { value: 30, label: '30' },
+              ]}
+              value={[current.prescription.repRange.min, current.prescription.repRange.max]}
+              onChange={(value) => {
+                patchPrescription({ repRange: asRange(value) });
+              }}
+              aria-label="Rep range"
+              thumbFromLabel="Lowest reps"
+              thumbToLabel="Highest reps"
+            />
+          </Stack>
+
+          <Stack gap="xs">
+            <Group justify="space-between">
+              <Text size="sm" fw={500}>
+                RIR
+              </Text>
+              <Text size="sm" fw={600} className={classes.readout}>
+                {formatRange(current.prescription.rirRange)}
+              </Text>
+            </Group>
+            <RangeSlider
+              min={0}
+              max={sliderBound(RIR_SOFT_MAX, current.prescription.rirRange.max)}
+              step={1}
+              minRange={0}
+              label={(value) => String(value)}
+              className={classes.sliderRow}
+              marks={[
+                { value: 0, label: '0' },
+                { value: 1, label: '1' },
+                { value: 2, label: '2' },
+                { value: 3, label: '3' },
+                { value: 4, label: '4' },
+                { value: 5, label: '5' },
+              ]}
+              value={[current.prescription.rirRange.min, current.prescription.rirRange.max]}
+              onChange={(value) => {
+                patchPrescription({ rirRange: asRange(value) });
+              }}
+              aria-label="RIR range"
+              thumbFromLabel="Lowest RIR"
+              thumbToLabel="Highest RIR"
+            />
+            <Text size="xs" c="dimmed">
+              Reps in reserve — how many you could still have done. 0 is failure.
+            </Text>
+          </Stack>
+
+          <Stack gap="xs">
+            <Group justify="space-between">
+              <Text size="sm" fw={500}>
+                Rest
+              </Text>
+              {current.prescription.restSeconds === null ? (
+                <Text size="sm" c="dimmed">
+                  your default, {formatRestSeconds(profile.defaultRestSeconds)}
+                </Text>
+              ) : (
+                <Button
+                  variant="subtle"
+                  size="compact-xs"
+                  onClick={() => {
+                    patchPrescription({ restSeconds: null });
+                  }}
+                >
+                  Use my default
+                </Button>
+              )}
+            </Group>
+            <Group gap="xs">
+              {REST_PRESETS.map((seconds) => (
+                <Button
+                  key={seconds}
+                  size="compact-sm"
+                  variant={current.prescription.restSeconds === seconds ? 'filled' : 'default'}
+                  onClick={() => {
+                    patchPrescription({ restSeconds: seconds });
+                  }}
+                >
+                  {formatRestSeconds(seconds)}
+                </Button>
+              ))}
+            </Group>
+            <NumberInput
+              aria-label="Rest seconds"
+              placeholder={`${String(profile.defaultRestSeconds)} (your default)`}
+              suffix=" s"
+              min={0}
+              max={3600}
+              step={15}
+              allowDecimal={false}
+              value={current.prescription.restSeconds ?? ''}
+              onChange={(value) => {
+                patchPrescription({ restSeconds: typeof value === 'number' ? value : null });
+              }}
+            />
+          </Stack>
 
           <TextInput
             label="Load note"
@@ -181,19 +246,20 @@ export function PrescriptionEditor({ slot, supersetIdFor, onClose, onSave, onRem
             }}
           />
 
-          <Switch
-            label="Superset with the next exercise"
-            checked={current.supersetGroup !== null}
-            onChange={(event) => {
-              patch({ supersetGroup: event.currentTarget.checked ? supersetIdFor() : null });
-            }}
-          />
+          <Stack gap={4}>
+            <Switch
+              label="Superset with the next exercise"
+              checked={current.supersetGroup !== null}
+              onChange={(event) => {
+                patch({ supersetGroup: event.currentTarget.checked ? supersetIdFor() : null });
+              }}
+            />
+            <Text size="xs" c="dimmed">
+              Supersets change rest, not volume — set-equivalents are unaffected.
+            </Text>
+          </Stack>
 
-          <Text size="xs" c="dimmed">
-            Supersets change rest, not volume — set-equivalents are unaffected.
-          </Text>
-
-          <Group justify="space-between" mt="sm">
+          <Group justify="space-between">
             <Button
               variant="light"
               color="red"

@@ -70,14 +70,39 @@ export type PlanVersion = {
 export const DEFAULT_PRESCRIPTION: Prescription = {
   sets: 3,
   repRange: { min: 8, max: 12 },
-  rirRange: { min: 1, max: 3 },
+  // 1-2 RIR: close enough to failure to drive adaptation, with a rep in hand.
+  rirRange: { min: 1, max: 2 },
   restSeconds: null,
   loadHint: null,
 };
 
+/** Hard caps. Imported and shared plans are clamped to these. */
 export const MAX_SETS = 20;
 export const MAX_REPS = 100;
 export const MAX_RIR = 10;
+
+/**
+ * Soft bounds for the range controls. Real programming lives well inside
+ * these, and an editor bound to the hard caps would make every useful value a
+ * pixel apart. A prescription that arrives above a soft bound (an imported
+ * 50-rep set) widens its own control rather than being clamped — see
+ * `sliderBound`.
+ */
+export const REPS_SOFT_MAX = 30;
+export const RIR_SOFT_MAX = 5;
+
+/** Upper bound for a range control that must still fit `current`. */
+export function sliderBound(softMax: number, current: number): number {
+  return Math.max(softMax, Math.ceil(current));
+}
+
+/** Rest as `2:00`, or `45s` under a minute. */
+export function formatRestSeconds(seconds: number): string {
+  if (seconds < 60) return `${String(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${String(minutes)}:${remainder.toString().padStart(2, '0')}`;
+}
 
 /**
  * Next occurrence index for an exercise in a workout.
@@ -188,7 +213,7 @@ export function formatRange(range: RepRange): string {
   return range.min === range.max ? String(range.min) : `${String(range.min)}-${String(range.max)}`;
 }
 
-/** e.g. `4 x 12-20 @ 1-3 RIR` */
+/** e.g. `4 x 12-20 @ 1-2 RIR` */
 export function formatPrescription(prescription: Prescription): string {
   return (
     `${String(prescription.sets)} x ${formatRange(prescription.repRange)}` +

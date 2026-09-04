@@ -90,7 +90,7 @@ test.describe('exercise preview before adding', () => {
     await page.getByRole('button', { name: /^Add to DELTS$/u }).click();
 
     await expect(page.getByText('1 exercise')).toBeVisible();
-    await expect(page.getByText('3 x 8-12 @ 1-3 RIR')).toBeVisible();
+    await expect(page.getByText('3 x 8-12 @ 1-2 RIR')).toBeVisible();
   });
 
   test('the picker names the workout it will add to', async ({ page }) => {
