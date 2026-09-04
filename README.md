@@ -112,8 +112,20 @@ domain vocabularies. If an upstream refresh changes shape or introduces a
 muscle name the domain does not know, that test fails rather than the app
 silently rendering half-empty rows.
 
-Exercise images are referenced as remote paths and are not vendored, so they
-need network. Instructions work offline.
+### Exercise images
+
+Image URLs are **derived from the exercise id**, not stored: free-exercise-db
+names every image `{id}/0.jpg` and `{id}/1.jpg` — the start and finish position
+of the movement. `catalog.test.ts` asserts that derivation against the
+committed data for all 873 exercises that have images, so an upstream rename
+fails the build instead of showing broken thumbnails. Three exercises have no
+images at all, so callers must tolerate a failed load.
+
+The files themselves are remote and not vendored (~1750 JPEGs is not worth
+bundling), so they need network on first view. The service worker then caches
+them cache-first, capped at 400 entries, so an exercise you have looked at
+renders offline and scrolling the picker again costs no data. Instructions are
+bundled and always work offline.
 
 ## TypeScript projects
 

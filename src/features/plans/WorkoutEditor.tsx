@@ -209,6 +209,7 @@ export function WorkoutEditor({
 
       <ExercisePicker
         opened={picking}
+        workoutName={workout.name}
         onClose={() => {
           setPicking(false);
         }}

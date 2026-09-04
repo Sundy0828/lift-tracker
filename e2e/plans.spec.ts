@@ -26,13 +26,17 @@ async function createPlan(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('textbox', { name: 'Plan name' })).toHaveValue(name);
 }
 
-/** Adds an exercise to the workout card at `cardIndex`. */
+/**
+ * Adds an exercise to the workout card at `cardIndex`. Tapping a result opens
+ * a preview, so adding takes an explicit confirmation.
+ */
 async function addExercise(page: Page, cardIndex: number, query: string): Promise<void> {
   await page.getByRole('button', { name: 'Add exercise' }).nth(cardIndex).click();
   await page.getByRole('textbox', { name: 'Search exercises to add' }).fill(query);
-  const list = page.getByTestId('exercise-list');
-  await list.getByRole('button').first().click();
-  await expect(page.getByRole('dialog')).toBeHidden();
+  await page.getByTestId('exercise-list').getByRole('button').first().click();
+  const confirm = page.getByRole('button', { name: /^Add to /u });
+  await confirm.click();
+  await expect(confirm).toBeHidden();
 }
 
 async function renameWorkout(page: Page, index: number, name: string): Promise<void> {

@@ -95,6 +95,27 @@ export type Exercise = {
 export const EXERCISE_IMAGE_BASE =
   'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
 
+/**
+ * Image URLs for a catalog exercise, derived from its id rather than stored.
+ *
+ * free-exercise-db names every image `{id}/0.jpg` and `{id}/1.jpg` — the start
+ * and end position of the movement — which `exercises.test.ts` asserts against
+ * the committed data for all 873 exercises that have images. Deriving them
+ * keeps the searchable core at 19 kB instead of carrying 876 path pairs.
+ *
+ * Three exercises have no images and a handful may 404 after an upstream
+ * change, so callers must handle a failed load. The images are also remote, so
+ * they need network on first view; the service worker caches them after that.
+ */
+export function catalogImageUrls(exercise: Exercise): string[] {
+  // Custom exercises have no bundled imagery.
+  if (exercise.isCustom) return [];
+  return [
+    `${EXERCISE_IMAGE_BASE}${exercise.id}/0.jpg`,
+    `${EXERCISE_IMAGE_BASE}${exercise.id}/1.jpg`,
+  ];
+}
+
 export function isEquipment(value: unknown): value is Equipment {
   return typeof value === 'string' && (EQUIPMENT as readonly string[]).includes(value);
 }

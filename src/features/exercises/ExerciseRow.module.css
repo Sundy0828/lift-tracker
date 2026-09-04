@@ -1,11 +1,10 @@
 .row {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  justify-content: center;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   height: 100%;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: none;
   border-radius: var(--mantine-radius-md);
   background: transparent;
@@ -18,6 +17,14 @@
 
 .row:hover {
   background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6));
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .name {
@@ -37,4 +44,10 @@
   color: var(--mantine-color-dimmed);
   white-space: nowrap;
   overflow: hidden;
+}
+
+.chevron {
+  flex: none;
+  color: var(--mantine-color-dimmed);
+  font-size: 14px;
 }

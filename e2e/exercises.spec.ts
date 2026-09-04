@@ -40,13 +40,17 @@ test.describe('exercise catalog', () => {
     await expect(page.getByTestId('result-count')).not.toContainText(/8\d\d exercises/);
   });
 
-  test('search is served locally, with no network request per keystroke', async ({ page }) => {
+  test('search is served locally, with no data request per keystroke', async ({ page }) => {
     await signIn(page);
     await openExercises(page);
 
-    const requests: string[] = [];
+    const dataRequests: string[] = [];
     page.on('request', (request) => {
-      requests.push(request.url());
+      // Row thumbnails are lazy images fetched as rows scroll into view; they
+      // are not part of answering the query. Everything else would be.
+      if (request.resourceType() === 'image') return;
+      if (request.url().startsWith('data:')) return;
+      dataRequests.push(request.url());
     });
 
     const box = page.getByRole('textbox', { name: 'Search exercises' });
@@ -55,8 +59,9 @@ test.describe('exercise catalog', () => {
     }
     await expect(page.getByTestId('exercise-list').getByText(/Bench/).first()).toBeVisible();
 
-    // The catalog is bundled, so typing must not hit the network at all.
-    expect(requests.filter((url) => !url.startsWith('data:'))).toEqual([]);
+    // The catalog is bundled and already loaded, so typing fetches no data at
+    // all — in particular it never re-requests the catalog itself.
+    expect(dataRequests).toEqual([]);
   });
 
   test('an unmatched query says so instead of showing everything', async ({ page }) => {

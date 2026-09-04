@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { CatalogExercise, ExerciseDetails } from '@/domain/exercises';
-import { fromCatalog, parseCatalogExercise } from '@/domain/exercises';
+import {
+  EXERCISE_IMAGE_BASE,
+  catalogImageUrls,
+  fromCatalog,
+  parseCatalogExercise,
+} from '@/domain/exercises';
 import { MUSCLE_GROUPS } from '@/domain/muscles';
 import { buildSearchIndex, search } from '@/domain/search';
 
@@ -99,6 +104,34 @@ describe('generated catalog', () => {
   it('is sorted by id, so a refresh produces a readable diff', () => {
     const ids = raw.map((entry) => entry['id'] as string);
     expect(ids).toEqual([...ids].sort((a, b) => a.localeCompare(b, 'en')));
+  });
+});
+
+describe('derived image urls', () => {
+  it('matches the committed image paths for every exercise that has them', () => {
+    // Guards the id-derivation shortcut: if upstream ever renames an image,
+    // this fails instead of the UI quietly showing broken thumbnails.
+    const mismatched: string[] = [];
+
+    for (const entry of raw) {
+      const parsed = parseCatalogExercise(entry);
+      if (parsed === null) continue;
+
+      const stored = details[parsed.id]?.images ?? [];
+      if (stored.length === 0) continue;
+
+      const derived = catalogImageUrls(fromCatalog(parsed));
+      const expected = stored.map((path) => `${EXERCISE_IMAGE_BASE}${path}`);
+      if (JSON.stringify(derived) !== JSON.stringify(expected)) mismatched.push(parsed.id);
+    }
+
+    expect(mismatched).toEqual([]);
+  });
+
+  it('knows how many exercises ship without images', () => {
+    const without = Object.entries(details).filter(([, value]) => value.images.length === 0);
+    // Callers must tolerate a missing image; this is the size of that case.
+    expect(without).toHaveLength(3);
   });
 });
 

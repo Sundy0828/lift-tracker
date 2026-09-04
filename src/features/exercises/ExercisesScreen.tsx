@@ -158,7 +158,7 @@ export default function ExercisesScreen() {
           <Text size="xs" c={stale ? 'dimmed' : 'bright'} data-testid="result-count">
             {results.length === 1 ? '1 exercise' : `${String(results.length)} exercises`}
           </Text>
-          <ExerciseList exercises={results} onSelect={setSelected} />
+          <ExerciseList exercises={results} onSelect={setSelected} withChevron />
         </>
       )}
 

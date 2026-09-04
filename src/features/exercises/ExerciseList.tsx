@@ -5,18 +5,22 @@ import type { Exercise } from '@/domain/exercises';
 import { ExerciseRow } from './ExerciseRow';
 import classes from './ExerciseList.module.css';
 
-const ROW_HEIGHT = 52;
+// Tall enough for a 48px thumbnail: the picture is what makes near-identical
+// names distinguishable, so it earns the vertical space.
+const ROW_HEIGHT = 62;
 
 type Props = {
   exercises: readonly Exercise[];
   onSelect: (exercise: Exercise) => void;
+  /** Hint that tapping opens a preview rather than acting immediately. */
+  withChevron?: boolean;
 };
 
 /**
  * Virtualised so that matching 876 exercises renders a screenful of rows
  * rather than 876 of them (§3).
  */
-export function ExerciseList({ exercises, onSelect }: Props) {
+export function ExerciseList({ exercises, onSelect, withChevron = false }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
 
   // React Compiler cannot auto-memoise a component holding a virtualiser,
@@ -49,7 +53,7 @@ export function ExerciseList({ exercises, onSelect }: Props) {
                 className={classes.item}
                 style={{ height: item.size, transform: `translateY(${String(item.start)}px)` }}
               >
-                <ExerciseRow exercise={exercise} onSelect={onSelect} />
+                <ExerciseRow exercise={exercise} onSelect={onSelect} withChevron={withChevron} />
               </div>
             );
           })}
