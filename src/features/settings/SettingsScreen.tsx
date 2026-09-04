@@ -113,7 +113,7 @@ export default function SettingsScreen() {
               </Group>
               <NumberInput
                 aria-label="Default rest seconds"
-                suffix=" s"
+                suffix="s"
                 min={15}
                 max={3600}
                 step={15}

@@ -15,7 +15,9 @@ import { useProfile } from '@/data/hooks/useProfile';
 import type { PlanExerciseSlot, Prescription, RepRange } from '@/domain/plans';
 import {
   MAX_SETS,
+  REPS_MIN_GAP,
   REPS_SOFT_MAX,
+  RIR_MIN_GAP,
   RIR_SOFT_MAX,
   formatRange,
   formatRestSeconds,
@@ -45,10 +47,10 @@ const REST_PRESETS = [60, 90, 120, 180, 240];
  * Prescription editor for one slot.
  *
  * Rep and RIR ranges use a two-thumb slider rather than a pair of number
- * fields. A slider cannot represent an inverted range at all — dragging the
- * top thumb past the bottom pushes the bottom down — so "max below min" is
- * unrepresentable instead of merely corrected. `minRange={0}` keeps a single
- * value (5-5 reps, 2-2 RIR) available.
+ * fields. A slider cannot represent an inverted range at all: `minRange`
+ * keeps the thumbs a fixed distance apart and `pushOnOverlap` moves the far
+ * thumb out of the way, so raising the bottom of an 8-12 rep range to 11
+ * carries the top to 13 rather than waiting for a collision.
  *
  * Values are still normalised on save, because imported and shared plans
  * arrive from outside this form.
@@ -120,7 +122,7 @@ export function PrescriptionEditor({ slot, supersetIdFor, onClose, onSave, onRem
               min={1}
               max={sliderBound(REPS_SOFT_MAX, current.prescription.repRange.max)}
               step={1}
-              minRange={0}
+              minRange={REPS_MIN_GAP}
               label={(value) => String(value)}
               className={classes.sliderRow}
               marks={[
@@ -152,7 +154,7 @@ export function PrescriptionEditor({ slot, supersetIdFor, onClose, onSave, onRem
               min={0}
               max={sliderBound(RIR_SOFT_MAX, current.prescription.rirRange.max)}
               step={1}
-              minRange={0}
+              minRange={RIR_MIN_GAP}
               label={(value) => String(value)}
               className={classes.sliderRow}
               marks={[
@@ -213,8 +215,8 @@ export function PrescriptionEditor({ slot, supersetIdFor, onClose, onSave, onRem
             </Group>
             <NumberInput
               aria-label="Rest seconds"
-              placeholder={`${String(profile.defaultRestSeconds)} (your default)`}
-              suffix=" s"
+              placeholder={`${formatRestSeconds(profile.defaultRestSeconds)} (your default)`}
+              suffix="s"
               min={0}
               max={3600}
               step={15}

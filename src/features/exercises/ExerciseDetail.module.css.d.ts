@@ -3,5 +3,6 @@ declare const classes: {
   readonly frame: string;
   readonly image: string;
   readonly frameCaption: string;
+  readonly missing: string;
 };
 export default classes;

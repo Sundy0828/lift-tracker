@@ -18,7 +18,6 @@ import classes from './ExerciseDetail.module.css';
 function Frames({ exercise }: { exercise: Exercise }) {
   const [failed, setFailed] = useState<Set<number>>(new Set());
   const urls = catalogImageUrls(exercise);
-  const usable = urls.filter((_, position) => !failed.has(position));
 
   if (urls.length === 0) {
     return (
@@ -28,33 +27,43 @@ function Frames({ exercise }: { exercise: Exercise }) {
     );
   }
 
+  const allFailed = urls.every((_, position) => failed.has(position));
+
   return (
-    <div className={classes.frames}>
-      {urls.map((url, position) =>
-        failed.has(position) ? null : (
+    <Stack gap={4}>
+      <div className={classes.frames}>
+        {urls.map((url, position) => (
           <figure key={url} className={classes.frame}>
-            <img
-              className={classes.image}
-              src={url}
-              alt={`${exercise.name}, position ${String(position + 1)}`}
-              loading="lazy"
-              decoding="async"
-              onError={() => {
-                setFailed((current) => new Set(current).add(position));
-              }}
-            />
+            {failed.has(position) ? (
+              // The frame keeps its place rather than disappearing: losing the
+              // picture should not also lose the Start/Finish structure.
+              <div className={classes.missing} aria-hidden="true">
+                ◍
+              </div>
+            ) : (
+              <img
+                className={classes.image}
+                src={url}
+                alt={`${exercise.name}, position ${String(position + 1)}`}
+                loading="lazy"
+                decoding="async"
+                onError={() => {
+                  setFailed((current) => new Set(current).add(position));
+                }}
+              />
+            )}
             <figcaption className={classes.frameCaption}>
               {position === 0 ? 'Start' : 'Finish'}
             </figcaption>
           </figure>
-        ),
-      )}
-      {usable.length === 0 ? (
-        <Text size="sm" c="dimmed">
+        ))}
+      </div>
+      {allFailed ? (
+        <Text size="xs" c="dimmed">
           Pictures need a connection — they are cached once you have seen them.
         </Text>
       ) : null}
-    </div>
+    </Stack>
   );
 }
 

@@ -204,9 +204,39 @@ test.describe('plans', () => {
     await expect(page.getByText(/4 sets/u).first()).toBeVisible();
   });
 
-  test('a range cannot invert: dragging the top thumb down pushes the bottom', async ({ page }) => {
+  test('raising the bottom of a range carries the top with it', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'Range Plan');
+    await page.getByRole('button', { name: 'Add workout' }).click();
+    await addExercise(page, 0, 'barbell bench press');
+    await page.getByText('3 x 8-12 @ 1-2 RIR').click();
+
+    const drawer = page.getByRole('dialog');
+    const rirLow = drawer.getByRole('slider', { name: 'Lowest RIR' });
+    const rirHigh = drawer.getByRole('slider', { name: 'Highest RIR' });
+
+    // RIR 1-2 is exactly the minimum gap. Nudging the bottom to 2 must carry
+    // the top to 3 straight away, not wait for them to collide.
+    await rirLow.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(rirLow).toHaveAttribute('aria-valuenow', '2');
+    await expect(rirHigh).toHaveAttribute('aria-valuenow', '3');
+
+    // Reps keep a two-rep gap, so 8-12 raised to 11 carries the top to 13.
+    const repLow = drawer.getByRole('slider', { name: 'Lowest reps' });
+    const repHigh = drawer.getByRole('slider', { name: 'Highest reps' });
+    await repLow.focus();
+    for (let step = 0; step < 3; step += 1) await page.keyboard.press('ArrowRight');
+    await expect(repLow).toHaveAttribute('aria-valuenow', '11');
+    await expect(repHigh).toHaveAttribute('aria-valuenow', '13');
+
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('3 x 11-13 @ 2-3 RIR')).toBeVisible();
+  });
+
+  test('lowering the top of a range pushes the bottom, keeping the gap', async ({ page }) => {
+    await signIn(page);
+    await createPlan(page, 'Range Down Plan');
     await page.getByRole('button', { name: 'Add workout' }).click();
     await addExercise(page, 0, 'barbell bench press');
     await page.getByText('3 x 8-12 @ 1-2 RIR').click();
@@ -215,25 +245,16 @@ test.describe('plans', () => {
     const repLow = drawer.getByRole('slider', { name: 'Lowest reps' });
     const repHigh = drawer.getByRole('slider', { name: 'Highest reps' });
 
-    // Walk the top thumb from 12 down past the bottom thumb at 8.
+    // 12 down to 3 across nine steps; the bottom is pushed once the gap is hit.
     await repHigh.focus();
     for (let step = 0; step < 9; step += 1) await page.keyboard.press('ArrowLeft');
 
-    // Both ended up at 3: the bottom was pushed down rather than crossed.
     await expect(repHigh).toHaveAttribute('aria-valuenow', '3');
-    await expect(repLow).toHaveAttribute('aria-valuenow', '3');
+    await expect(repLow).toHaveAttribute('aria-valuenow', '1');
 
-    // Same for RIR, and the readout never shows an inverted range.
-    const rirHigh = drawer.getByRole('slider', { name: 'Highest RIR' });
-    const rirLow = drawer.getByRole('slider', { name: 'Lowest RIR' });
-    await rirHigh.focus();
-    await page.keyboard.press('ArrowLeft');
-    await page.keyboard.press('ArrowLeft');
-    await expect(rirHigh).toHaveAttribute('aria-valuenow', '0');
-    await expect(rirLow).toHaveAttribute('aria-valuenow', '0');
-
+    // The range never inverts and never drops below its minimum gap.
     await drawer.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByText('3 x 3 @ 0 RIR')).toBeVisible();
+    await expect(page.getByText('3 x 1-3 @ 1-2 RIR')).toBeVisible();
   });
 
   test('a per-exercise rest falls back to the profile default', async ({ page }) => {
@@ -244,14 +265,15 @@ test.describe('plans', () => {
     await page.getByText('3 x 8-12 @ 1-2 RIR').click();
 
     const drawer = page.getByRole('dialog');
-    // No rest of its own yet, so it names the profile default.
-    await expect(drawer.getByText('your default, 2:00')).toBeVisible();
+    // No rest of its own yet, so it names the profile default -- in seconds,
+    // matching the presets and the field.
+    await expect(drawer.getByText('your default, 120s')).toBeVisible();
 
-    await drawer.getByRole('button', { name: '3:00' }).click();
+    await drawer.getByRole('button', { name: '180s' }).click();
     await expect(drawer.getByRole('button', { name: 'Use my default' })).toBeVisible();
 
     await drawer.getByRole('button', { name: 'Use my default' }).click();
-    await expect(drawer.getByText('your default, 2:00')).toBeVisible();
+    await expect(drawer.getByText('your default, 120s')).toBeVisible();
   });
 
   test('a workout can be reordered with the move buttons', async ({ page }) => {

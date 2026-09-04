@@ -91,14 +91,41 @@ export const MAX_RIR = 10;
 export const REPS_SOFT_MAX = 30;
 export const RIR_SOFT_MAX = 5;
 
+/**
+ * Smallest span a range control will let you set.
+ *
+ * A prescription is a target *window*, so a collapsed range says less than it
+ * looks like it does. Reps get a wider floor than RIR because two reps of
+ * latitude is the useful unit there, whereas RIR only spans 0-5 at all.
+ *
+ * These constrain the editor, not the data: an imported plan with a fixed
+ * target is stored and shown as-is (see `normalizePrescription`, which only
+ * enforces max >= min).
+ */
+export const REPS_MIN_GAP = 2;
+export const RIR_MIN_GAP = 1;
+
 /** Upper bound for a range control that must still fit `current`. */
 export function sliderBound(softMax: number, current: number): number {
   return Math.max(softMax, Math.ceil(current));
 }
 
-/** Rest as `2:00`, or `45s` under a minute. */
+/**
+ * Rest as a plain seconds count: `120s`.
+ *
+ * Configuration is expressed in seconds everywhere — the stored value, the
+ * presets, and the input all agree — because mixing `2:00` presets with a
+ * `120 s` field made the same number look like two different quantities.
+ */
 export function formatRestSeconds(seconds: number): string {
-  if (seconds < 60) return `${String(seconds)}s`;
+  return `${String(seconds)}s`;
+}
+
+/**
+ * A duration as `2:00`, for a *running* clock. The rest timer counts down, so
+ * m:ss is right there; it is deliberately not used for configuration.
+ */
+export function formatDuration(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
   return `${String(minutes)}:${remainder.toString().padStart(2, '0')}`;

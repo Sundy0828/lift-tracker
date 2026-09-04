@@ -5,11 +5,14 @@ import {
   MAX_REPS,
   MAX_RIR,
   MAX_SETS,
+  REPS_MIN_GAP,
   REPS_SOFT_MAX,
+  RIR_MIN_GAP,
   RIR_SOFT_MAX,
   createSlot,
   formatPrescription,
   formatRange,
+  formatDuration,
   formatRestSeconds,
   nextOccurrenceIndex,
   normalizePrescription,
@@ -233,6 +236,31 @@ describe('normalizePrescription', () => {
   });
 });
 
+describe('range minimum gaps', () => {
+  it('gives reps a wider floor than RIR', () => {
+    expect(REPS_MIN_GAP).toBe(2);
+    expect(RIR_MIN_GAP).toBe(1);
+  });
+
+  it('leaves the default prescription comfortably inside both', () => {
+    const { repRange, rirRange } = DEFAULT_PRESCRIPTION;
+    expect(repRange.max - repRange.min).toBeGreaterThanOrEqual(REPS_MIN_GAP);
+    expect(rirRange.max - rirRange.min).toBeGreaterThanOrEqual(RIR_MIN_GAP);
+  });
+
+  it('is an editor constraint, not a data invariant', () => {
+    // An imported plan with a fixed target is stored as-is rather than
+    // silently widened.
+    const fixed = normalizePrescription({
+      ...DEFAULT_PRESCRIPTION,
+      repRange: { min: 5, max: 5 },
+      rirRange: { min: 2, max: 2 },
+    });
+    expect(fixed.repRange).toEqual({ min: 5, max: 5 });
+    expect(fixed.rirRange).toEqual({ min: 2, max: 2 });
+  });
+});
+
 describe('sliderBound', () => {
   it('uses the soft maximum normally', () => {
     expect(sliderBound(REPS_SOFT_MAX, 12)).toBe(REPS_SOFT_MAX);
@@ -262,16 +290,23 @@ describe('formatRange / formatPrescription', () => {
 });
 
 describe('formatRestSeconds', () => {
-  it('uses seconds under a minute', () => {
-    expect(formatRestSeconds(45)).toBe('45s');
+  it('always reads in seconds, so configuration uses one unit throughout', () => {
+    // Presets, the stored value and the input all agree; mixing `2:00` labels
+    // with a `120s` field made one number look like two quantities.
     expect(formatRestSeconds(0)).toBe('0s');
+    expect(formatRestSeconds(45)).toBe('45s');
+    expect(formatRestSeconds(120)).toBe('120s');
+    expect(formatRestSeconds(240)).toBe('240s');
   });
+});
 
-  it('uses m:ss from a minute up, zero-padded', () => {
-    expect(formatRestSeconds(60)).toBe('1:00');
-    expect(formatRestSeconds(90)).toBe('1:30');
-    expect(formatRestSeconds(120)).toBe('2:00');
-    expect(formatRestSeconds(185)).toBe('3:05');
+describe('formatDuration', () => {
+  it('renders m:ss for a running clock', () => {
+    expect(formatDuration(0)).toBe('0:00');
+    expect(formatDuration(45)).toBe('0:45');
+    expect(formatDuration(90)).toBe('1:30');
+    expect(formatDuration(120)).toBe('2:00');
+    expect(formatDuration(185)).toBe('3:05');
   });
 });
 

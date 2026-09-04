@@ -80,10 +80,10 @@ test.describe('phase 0 foundation', () => {
 
     await page.goto('/settings');
     await expect(page.getByText('Default rest')).toBeVisible();
-    // 120s is the profile default.
-    await expect(page.getByRole('button', { name: '2:00' })).toBeVisible();
+    // Everything here reads in seconds: presets, readout and field agree.
+    await expect(page.getByRole('button', { name: '120s' })).toBeVisible();
 
-    await page.getByRole('button', { name: '3:00' }).click();
+    await page.getByRole('button', { name: '180s' }).click();
     await expect(page.getByRole('textbox', { name: 'Default rest seconds' })).toHaveValue(/180/);
 
     await page.reload();
