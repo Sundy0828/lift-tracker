@@ -48,7 +48,7 @@ function slot(exerciseId: string, sets: number, overrides: Partial<PlanExerciseS
 }
 
 function workout(name: string, slots: PlanExerciseSlot[]): PlanWorkout {
-  return { workoutId: `w-${name}`, name, slots };
+  return { workoutId: `w-${name}`, name, slots, groupRest: {} };
 }
 
 const get = (volume: ReadonlyMap<MuscleGroup, number>, muscle: MuscleGroup): number =>

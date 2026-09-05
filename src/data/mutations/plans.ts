@@ -80,6 +80,30 @@ export function deletePlan(uid: string, planId: string): Promise<void> {
   return deleteDoc(paths.plan(uid, planId));
 }
 
+/**
+ * Throws away unpublished edits by resetting the working copy to a published
+ * snapshot.
+ *
+ * Edits still auto-save as they are made — so being interrupted never loses
+ * work — and this is the explicit way back out. `currentVersion` is left
+ * alone: reverting to v1 does not create a v2, because nothing was published.
+ */
+export function discardPlanChanges(
+  uid: string,
+  planId: string,
+  publishedWorkouts: readonly PlanWorkout[],
+): Promise<void> {
+  return setDoc(
+    paths.plan(uid, planId),
+    {
+      workouts: cloneWorkouts(publishedWorkouts),
+      workoutOrder: publishedWorkouts.map((workout) => workout.workoutId),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 export type PublishResult = { versionNumber: number; changeSummary: string };
 
 /**

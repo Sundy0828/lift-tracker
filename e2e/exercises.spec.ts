@@ -46,11 +46,14 @@ test.describe('exercise catalog', () => {
 
     const dataRequests: string[] = [];
     page.on('request', (request) => {
-      // Row thumbnails are lazy images fetched as rows scroll into view; they
-      // are not part of answering the query. Everything else would be.
+      const url = request.url();
+      // Row thumbnails are lazy images fetched as rows scroll into view, and
+      // Firestore keeps a background connection it retries on its own clock.
+      // Neither is part of answering the query; anything else would be.
       if (request.resourceType() === 'image') return;
-      if (request.url().startsWith('data:')) return;
-      dataRequests.push(request.url());
+      if (url.startsWith('data:')) return;
+      if (/firestore|:8080|:9099/u.test(url)) return;
+      dataRequests.push(url);
     });
 
     const box = page.getByRole('textbox', { name: 'Search exercises' });
@@ -59,8 +62,8 @@ test.describe('exercise catalog', () => {
     }
     await expect(page.getByTestId('exercise-list').getByText(/Bench/).first()).toBeVisible();
 
-    // The catalog is bundled and already loaded, so typing fetches no data at
-    // all — in particular it never re-requests the catalog itself.
+    // The catalog is bundled and already loaded, so typing fetches nothing
+    // from this origin — in particular it never re-requests the catalog.
     expect(dataRequests).toEqual([]);
   });
 

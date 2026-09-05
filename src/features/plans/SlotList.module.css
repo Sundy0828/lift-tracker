@@ -1,0 +1,27 @@
+.slotButton {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+}
+
+/* The circuit reads as one block, so its members are visibly inside it. */
+.circuit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid light-dark(var(--mantine-color-amber-3), var(--mantine-color-amber-9));
+  border-radius: var(--mantine-radius-md);
+  background: light-dark(var(--mantine-color-amber-0), rgba(255, 166, 4, 0.06));
+}
+
+.circuitLabel {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: light-dark(var(--mantine-color-amber-8), var(--mantine-color-amber-4));
+}
+
+.circuitFoot {
+  padding-inline: 2px;
+}

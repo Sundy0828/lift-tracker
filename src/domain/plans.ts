@@ -43,6 +43,18 @@ export type PlanWorkout = {
   workoutId: string;
   name: string;
   slots: PlanExerciseSlot[];
+  /**
+   * Rest between rounds of a circuit, keyed by `supersetGroup` id.
+   *
+   * A circuit has two different rests: the pause *after each exercise* (a
+   * slot's own `restSeconds`, normally 0 so the round flows) and the pause
+   * *after a whole round*, which is this. It lives on the workout rather than
+   * on the last member because reordering the circuit would otherwise move
+   * the round rest into the middle of it.
+   *
+   * A missing entry means fall back to the profile default.
+   */
+  groupRest: Record<string, number | null>;
 };
 
 /** The editable working copy at `plans/{planId}`. */
@@ -253,6 +265,114 @@ export function totalSets(workout: PlanWorkout): number {
   return workout.slots.reduce((sum, slot) => sum + slot.prescription.sets, 0);
 }
 
+/**
+ * Rounds a circuit runs for: every member's set count, when they agree.
+ *
+ * Returns null when members disagree, which only happens for an imported
+ * plan — the editor writes the count to every member at once.
+ */
+export function groupRounds(members: readonly PlanExerciseSlot[]): number | null {
+  const first = members[0];
+  if (first === undefined) return null;
+  const rounds = first.prescription.sets;
+  return members.every((slot) => slot.prescription.sets === rounds) ? rounds : null;
+}
+
+/** Sets the round count across every member of a group. */
+export function withGroupRounds(
+  slots: readonly PlanExerciseSlot[],
+  groupId: string,
+  rounds: number,
+): PlanExerciseSlot[] {
+  const sets = clamp(Math.round(rounds), 1, MAX_SETS);
+  return slots.map((slot) =>
+    slot.supersetGroup === groupId
+      ? { ...slot, prescription: { ...slot.prescription, sets } }
+      : slot,
+  );
+}
+
+/**
+ * Joins a slot into the group of the slot directly above it, starting a new
+ * group when that slot has none. Groups are contiguous by construction, which
+ * is what lets the logger walk a round in order.
+ *
+ * The joined slot's own rest drops to 0: inside a circuit you move straight to
+ * the next exercise, and the pause belongs to `groupRest` instead.
+ */
+export function linkToPrevious(
+  slots: readonly PlanExerciseSlot[],
+  slotId: string,
+  newGroupId: string,
+): PlanExerciseSlot[] {
+  const position = slots.findIndex((slot) => slot.slotId === slotId);
+  const previous = position > 0 ? slots[position - 1] : undefined;
+  if (previous === undefined) return [...slots];
+
+  const groupId = previous.supersetGroup ?? newGroupId;
+  const rounds = previous.prescription.sets;
+
+  return slots.map((slot, index) => {
+    if (index === position - 1) {
+      return { ...slot, supersetGroup: groupId, prescription: { ...slot.prescription } };
+    }
+    if (index === position) {
+      return {
+        ...slot,
+        supersetGroup: groupId,
+        prescription: { ...slot.prescription, sets: rounds, restSeconds: 0 },
+      };
+    }
+    return slot;
+  });
+}
+
+/**
+ * Removes a slot from its group. A group left with one member is dissolved,
+ * since a circuit of one is just an exercise.
+ */
+export function unlink(slots: readonly PlanExerciseSlot[], slotId: string): PlanExerciseSlot[] {
+  const target = slots.find((slot) => slot.slotId === slotId);
+  const groupId = target?.supersetGroup ?? null;
+  if (groupId === null) return [...slots];
+
+  const detached = slots.map((slot) =>
+    slot.slotId === slotId
+      ? { ...slot, supersetGroup: null, prescription: { ...slot.prescription, restSeconds: null } }
+      : slot,
+  );
+
+  const remaining = detached.filter((slot) => slot.supersetGroup === groupId);
+  if (remaining.length > 1) return detached;
+
+  return detached.map((slot) =>
+    slot.supersetGroup === groupId
+      ? { ...slot, supersetGroup: null, prescription: { ...slot.prescription, restSeconds: null } }
+      : slot,
+  );
+}
+
+/** Group ids still in use by at least two slots. */
+export function activeGroupIds(slots: readonly PlanExerciseSlot[]): string[] {
+  const counts = new Map<string, number>();
+  for (const slot of slots) {
+    if (slot.supersetGroup !== null) {
+      counts.set(slot.supersetGroup, (counts.get(slot.supersetGroup) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()].filter(([, count]) => count > 1).map(([id]) => id);
+}
+
+/** Drops round-rest entries for groups that no longer exist. */
+export function pruneGroupRest(workout: PlanWorkout): PlanWorkout {
+  const live = new Set(activeGroupIds(workout.slots));
+  const groupRest: Record<string, number | null> = {};
+  for (const [groupId, rest] of Object.entries(workout.groupRest)) {
+    if (live.has(groupId)) groupRest[groupId] = rest;
+  }
+  return { ...workout, groupRest };
+}
+
 /** Slots grouped into supersets, preserving order; ungrouped slots stand alone. */
 export function supersetGroups(workout: PlanWorkout): PlanExerciseSlot[][] {
   const groups: PlanExerciseSlot[][] = [];
@@ -364,10 +484,30 @@ export function parsePlanWorkouts(value: unknown): PlanWorkout[] {
       }
     }
 
-    workouts.push({ workoutId, name: asString(record['name'], 'Workout'), slots });
+    workouts.push({
+      workoutId,
+      name: asString(record['name'], 'Workout'),
+      slots,
+      groupRest: parseGroupRest(record['groupRest']),
+    });
   }
 
   return workouts;
+}
+
+/** Narrows the round-rest map, dropping anything that is not a group id. */
+export function parseGroupRest(value: unknown): Record<string, number | null> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+
+  const parsed: Record<string, number | null> = {};
+  for (const [groupId, rest] of Object.entries(value as Record<string, unknown>)) {
+    if (groupId === '') continue;
+    if (rest === null) parsed[groupId] = null;
+    else if (typeof rest === 'number' && Number.isFinite(rest)) {
+      parsed[groupId] = clamp(Math.round(rest), 0, 3600);
+    }
+  }
+  return parsed;
 }
 
 export function parseWorkoutOrder(value: unknown): string[] {

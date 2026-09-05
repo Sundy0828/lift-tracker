@@ -44,7 +44,7 @@ function slot(overrides: Partial<PlanExerciseSlot> = {}): PlanExerciseSlot {
 }
 
 function workout(workoutId: string, slots: PlanExerciseSlot[] = []): PlanWorkout {
-  return { workoutId, name: workoutId.toUpperCase(), slots };
+  return { workoutId, name: workoutId.toUpperCase(), slots, groupRest: {} };
 }
 
 function plan(workouts: PlanWorkout[], workoutOrder: string[]): Plan {

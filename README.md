@@ -144,6 +144,32 @@ Build scripts run with `node --import ./scripts/ts-resolve.mjs`, a small hook
 that teaches Node the extensionless and `@/` specifiers Vite resolves — so a
 script and the app import the domain the same way, with no second copy of it.
 
+## Circuits, and the two kinds of rest
+
+A contiguous run of slots sharing a `supersetGroup` is a **circuit**, drawn as
+one block. Its **rounds** are the members' shared set count, so three rounds of
+four exercises is four slots at three sets each — which is also why volume math
+needed no changes: supersets alter rest, not work.
+
+The two rests are deliberately separate:
+
+| Rest                | Stored on                       | In a circuit                     |
+| ------------------- | ------------------------------- | -------------------------------- |
+| after an exercise   | `slot.prescription.restSeconds` | 0 by default, so the round flows |
+| after a whole round | `workout.groupRest[groupId]`    | set once on the block            |
+
+`groupRest` lives on the workout, keyed by group id, rather than on the last
+member: putting it on a slot would mean reordering the circuit silently moved
+the round rest into the middle of it. `pruneGroupRest` drops entries for
+dissolved groups so a later circuit cannot inherit a stale pause.
+
+## Discarding plan edits
+
+Edits auto-save, so being interrupted never loses work. Backing out is explicit
+instead: **Discard** resets the working copy to the last published version, and
+does not create a new one. For a plan with nothing published yet it empties the
+plan and says so.
+
 ## Where preferences live
 
 | Preference           | Stored at                        | Set from |

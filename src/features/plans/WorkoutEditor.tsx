@@ -13,11 +13,11 @@ import { useState } from 'react';
 import { MuscleMap } from '@/components/MuscleMap';
 import type { Exercise } from '@/domain/exercises';
 import type { PlanExerciseSlot, PlanWorkout } from '@/domain/plans';
-import { formatPrescription, totalSets } from '@/domain/plans';
+import { totalSets } from '@/domain/plans';
 import type { MuscleLookup } from '@/domain/volume';
 import { SESSION_STOPS, workoutVolume } from '@/domain/volume';
 import { ExercisePicker } from './ExercisePicker';
-import { SortableList, SortableRow } from './SortableList';
+import { SlotList } from './SlotList';
 
 type Props = {
   workout: PlanWorkout;
@@ -30,6 +30,11 @@ type Props = {
   onAddExercise: (workoutId: string, exercise: Exercise) => void;
   onReorderSlots: (workoutId: string, from: number, to: number) => void;
   onEditSlot: (slot: PlanExerciseSlot) => void;
+  onLinkSlot: (workoutId: string, slotId: string) => void;
+  onUnlinkSlot: (workoutId: string, slotId: string) => void;
+  onRounds: (workoutId: string, groupId: string, rounds: number) => void;
+  onGroupRest: (workoutId: string, groupId: string, seconds: number | null) => void;
+  defaultRestSeconds: number;
 };
 
 export function WorkoutEditor({
@@ -43,13 +48,25 @@ export function WorkoutEditor({
   onAddExercise,
   onReorderSlots,
   onEditSlot,
+  onLinkSlot,
+  onUnlinkSlot,
+  onRounds,
+  onGroupRest,
+  defaultRestSeconds,
 }: Props) {
-  const [name, setName] = useState(workout.name);
+  /**
+   * The name field keeps a local draft so the cursor does not jump mid-word,
+   * tagged with the committed value it was derived from. When the workout
+   * changes underneath — a discard, or another tab — the tag stops matching
+   * and the field falls back to the real value instead of showing stale text.
+   */
+  const [draftName, setDraftName] = useState<{ base: string; value: string } | null>(null);
+  const name = draftName?.base === workout.name ? draftName.value : workout.name;
+
   const [picking, setPicking] = useState(false);
   const [showMap, setShowMap] = useState(false);
 
   const volume = workoutVolume(workout, lookup);
-  const slotIds = workout.slots.map((slot) => slot.slotId);
 
   return (
     <Card withBorder padding="sm">
@@ -61,12 +78,12 @@ export function WorkoutEditor({
             value={name}
             style={{ flex: 1 }}
             onChange={(event) => {
-              setName(event.currentTarget.value);
+              setDraftName({ base: workout.name, value: event.currentTarget.value });
             }}
             onBlur={() => {
               const trimmed = name.trim();
               if (trimmed !== '' && trimmed !== workout.name) onRename(workout.workoutId, trimmed);
-              else if (trimmed === '') setName(workout.name);
+              setDraftName(null);
             }}
           />
           <ActionIcon
@@ -122,58 +139,26 @@ export function WorkoutEditor({
             No exercises yet.
           </Text>
         ) : (
-          <SortableList
-            ids={slotIds}
+          <SlotList
+            workout={workout}
+            defaultRestSeconds={defaultRestSeconds}
             onReorder={(from, to) => {
               onReorderSlots(workout.workoutId, from, to);
             }}
-          >
-            {workout.slots.map((slot, position) => (
-              <SortableRow
-                key={slot.slotId}
-                id={slot.slotId}
-                index={position}
-                total={workout.slots.length}
-                label={slot.exerciseName}
-                onMove={(from, to) => {
-                  onReorderSlots(workout.workoutId, from, to);
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    onEditSlot(slot);
-                  }}
-                  style={{
-                    all: 'unset',
-                    cursor: 'pointer',
-                    display: 'block',
-                    width: '100%',
-                  }}
-                >
-                  <Text size="sm" fw={550} lineClamp={1}>
-                    {slot.exerciseName}
-                    {slot.occurrenceIndex > 0 ? (
-                      <Text component="span" size="xs" c="dimmed">
-                        {' '}
-                        (again)
-                      </Text>
-                    ) : null}
-                  </Text>
-                  <Group gap={6}>
-                    <Text size="xs" c="dimmed">
-                      {formatPrescription(slot.prescription)}
-                    </Text>
-                    {slot.supersetGroup === null ? null : (
-                      <Badge size="xs" variant="light" color="amber">
-                        superset
-                      </Badge>
-                    )}
-                  </Group>
-                </button>
-              </SortableRow>
-            ))}
-          </SortableList>
+            onEditSlot={onEditSlot}
+            onLink={(slotId) => {
+              onLinkSlot(workout.workoutId, slotId);
+            }}
+            onUnlink={(slotId) => {
+              onUnlinkSlot(workout.workoutId, slotId);
+            }}
+            onRounds={(groupId, rounds) => {
+              onRounds(workout.workoutId, groupId, rounds);
+            }}
+            onGroupRest={(groupId, seconds) => {
+              onGroupRest(workout.workoutId, groupId, seconds);
+            }}
+          />
         )}
 
         <Group>

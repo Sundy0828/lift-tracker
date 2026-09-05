@@ -36,10 +36,20 @@ type SortableRowProps = {
   total: number;
   label: string;
   onMove: (from: number, to: number) => void;
+  /** Row-specific actions, rendered before the move and drag controls. */
+  extraControls?: ReactNode;
   children: ReactNode;
 };
 
-export function SortableRow({ id, index, total, label, onMove, children }: SortableRowProps) {
+export function SortableRow({
+  id,
+  index,
+  total,
+  label,
+  onMove,
+  extraControls,
+  children,
+}: SortableRowProps) {
   const {
     attributes,
     listeners,
@@ -60,6 +70,7 @@ export function SortableRow({ id, index, total, label, onMove, children }: Sorta
       <div className={classes.body}>{children}</div>
 
       <Group gap={2} wrap="nowrap">
+        {extraControls}
         <ActionIcon
           variant="subtle"
           color="gray"

@@ -5,7 +5,6 @@ import {
   NumberInput,
   RangeSlider,
   Stack,
-  Switch,
   Text,
   Textarea,
   TextInput,
@@ -34,8 +33,6 @@ export type SlotEdit = {
 
 type Props = {
   slot: PlanExerciseSlot | null;
-  /** Group id to use when the user supersets this slot with the next one. */
-  supersetIdFor: () => string;
   onClose: () => void;
   onSave: (slotId: string, edit: SlotEdit) => void;
   onRemove: (slotId: string) => void;
@@ -55,7 +52,7 @@ const REST_PRESETS = [60, 90, 120, 180, 240];
  * Values are still normalised on save, because imported and shared plans
  * arrive from outside this form.
  */
-export function PrescriptionEditor({ slot, supersetIdFor, onClose, onSave, onRemove }: Props) {
+export function PrescriptionEditor({ slot, onClose, onSave, onRemove }: Props) {
   const { profile } = useProfile();
   const [draft, setDraft] = useState<SlotEdit | null>(null);
 
@@ -95,19 +92,21 @@ export function PrescriptionEditor({ slot, supersetIdFor, onClose, onSave, onRem
     >
       {slot === null || current === null ? null : (
         <Stack gap="lg">
-          <NumberInput
-            label="Sets"
-            min={1}
-            max={MAX_SETS}
-            clampBehavior="strict"
-            allowDecimal={false}
-            value={current.prescription.sets}
-            onChange={(value) => {
-              patchPrescription({
-                sets: typeof value === 'number' ? value : current.prescription.sets,
-              });
-            }}
-          />
+          {slot.supersetGroup === null ? (
+            <NumberInput
+              label="Sets"
+              min={1}
+              max={MAX_SETS}
+              clampBehavior="strict"
+              allowDecimal={false}
+              value={current.prescription.sets}
+              onChange={(value) => {
+                patchPrescription({
+                  sets: typeof value === 'number' ? value : current.prescription.sets,
+                });
+              }}
+            />
+          ) : null}
 
           <Stack gap="xs">
             <Group justify="space-between">
@@ -181,7 +180,7 @@ export function PrescriptionEditor({ slot, supersetIdFor, onClose, onSave, onRem
           <Stack gap="xs">
             <Group justify="space-between">
               <Text size="sm" fw={500}>
-                Rest
+                {slot.supersetGroup === null ? 'Rest' : 'Rest before the next exercise'}
               </Text>
               {current.prescription.restSeconds === null ? (
                 <Text size="sm" c="dimmed">
@@ -248,18 +247,12 @@ export function PrescriptionEditor({ slot, supersetIdFor, onClose, onSave, onRem
             }}
           />
 
-          <Stack gap={4}>
-            <Switch
-              label="Superset with the next exercise"
-              checked={current.supersetGroup !== null}
-              onChange={(event) => {
-                patch({ supersetGroup: event.currentTarget.checked ? supersetIdFor() : null });
-              }}
-            />
+          {slot.supersetGroup === null ? null : (
             <Text size="xs" c="dimmed">
-              Supersets change rest, not volume — set-equivalents are unaffected.
+              This exercise is part of a circuit. Its rounds and the pause between rounds are set on
+              the circuit itself; the rest above is the pause before the next exercise in the round.
             </Text>
-          </Stack>
+          )}
 
           <Group justify="space-between">
             <Button

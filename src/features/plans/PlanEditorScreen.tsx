@@ -19,7 +19,9 @@ import { MuscleMap } from '@/components/MuscleMap';
 import { useAuth } from '@/data/hooks/useAuth';
 import { useMuscleLookup } from '@/data/hooks/useMuscleLookup';
 import { usePlan } from '@/data/hooks/usePlan';
+import { useProfile } from '@/data/hooks/useProfile';
 import {
+  discardPlanChanges,
   newId,
   publishPlanVersion,
   savePlanDetails,
@@ -28,7 +30,16 @@ import {
 import type { Exercise } from '@/domain/exercises';
 import { diffPlans } from '@/domain/planDiff';
 import type { PlanExerciseSlot, PlanWorkout } from '@/domain/plans';
-import { createSlot, orderedWorkouts, reorder, totalSets } from '@/domain/plans';
+import {
+  createSlot,
+  linkToPrevious,
+  orderedWorkouts,
+  pruneGroupRest,
+  reorder,
+  totalSets,
+  unlink,
+  withGroupRounds,
+} from '@/domain/plans';
 import { WEEKLY_STOPS, planVolume } from '@/domain/volume';
 import { PrescriptionEditor, type SlotEdit } from './PrescriptionEditor';
 import { VersionHistory } from './VersionHistory';
@@ -49,6 +60,7 @@ export default function PlanEditorScreen() {
 
   const { plan, versions, isPending, notFound } = usePlan(planId);
   const { lookup } = useMuscleLookup();
+  const { profile } = useProfile();
 
   const [editingSlot, setEditingSlot] = useState<PlanExerciseSlot | null>(null);
   const [name, setName] = useState<string | null>(null);
@@ -81,7 +93,11 @@ export default function PlanEditorScreen() {
 
   const mapWorkout = (workoutId: string, change: (workout: PlanWorkout) => PlanWorkout): void => {
     commit(
-      workouts.map((workout) => (workout.workoutId === workoutId ? change(workout) : workout)),
+      workouts.map((workout) =>
+        // Pruned on every edit so a dissolved circuit cannot leave its round
+        // rest behind to be inherited by a later group reusing the id.
+        workout.workoutId === workoutId ? pruneGroupRest(change(workout)) : workout,
+      ),
     );
   };
 
@@ -90,7 +106,7 @@ export default function PlanEditorScreen() {
     // existing day keeps its id, which is what preserves its overlay history.
     commit([
       ...workouts,
-      { workoutId: newId(), name: `Day ${String(workouts.length + 1)}`, slots: [] },
+      { workoutId: newId(), name: `Day ${String(workouts.length + 1)}`, slots: [], groupRest: {} },
     ]);
   };
 
@@ -124,6 +140,18 @@ export default function PlanEditorScreen() {
         slots: workout.slots.filter((slot) => slot.slotId !== slotId),
       })),
     );
+  };
+
+  const discard = (): void => {
+    if (uid === null || !pendingDiff.hasChanges) return;
+    void discardPlanChanges(uid, plan.id, publishedWorkouts);
+    notifications.show({
+      message:
+        plan.currentVersion === 0
+          ? 'Discarded — this plan has nothing published yet, so it is now empty'
+          : `Reverted to v${String(plan.currentVersion)}`,
+      color: 'gray',
+    });
   };
 
   const publish = (): void => {
@@ -179,6 +207,11 @@ export default function PlanEditorScreen() {
               <Button size="compact-sm" onClick={publish}>
                 Publish v{String(plan.currentVersion + 1)}
               </Button>
+              <Button size="compact-sm" variant="default" onClick={discard}>
+                {plan.currentVersion === 0
+                  ? 'Discard all'
+                  : `Discard, back to v${String(plan.currentVersion)}`}
+              </Button>
             </Group>
           </Stack>
         </Alert>
@@ -209,6 +242,31 @@ export default function PlanEditorScreen() {
               }));
             }}
             onEditSlot={setEditingSlot}
+            onLinkSlot={(workoutId, slotId) => {
+              mapWorkout(workoutId, (current) => ({
+                ...current,
+                slots: linkToPrevious(current.slots, slotId, newId()),
+              }));
+            }}
+            onUnlinkSlot={(workoutId, slotId) => {
+              mapWorkout(workoutId, (current) => ({
+                ...current,
+                slots: unlink(current.slots, slotId),
+              }));
+            }}
+            onRounds={(workoutId, groupId, rounds) => {
+              mapWorkout(workoutId, (current) => ({
+                ...current,
+                slots: withGroupRounds(current.slots, groupId, rounds),
+              }));
+            }}
+            onGroupRest={(workoutId, groupId, seconds) => {
+              mapWorkout(workoutId, (current) => ({
+                ...current,
+                groupRest: { ...current.groupRest, [groupId]: seconds },
+              }));
+            }}
+            defaultRestSeconds={profile.defaultRestSeconds}
           />
         ))}
       </Stack>
@@ -267,7 +325,6 @@ export default function PlanEditorScreen() {
 
       <PrescriptionEditor
         slot={editingSlot}
-        supersetIdFor={newId}
         onClose={() => {
           setEditingSlot(null);
         }}

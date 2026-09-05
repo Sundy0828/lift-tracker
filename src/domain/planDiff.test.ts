@@ -28,7 +28,7 @@ function slot(
 }
 
 function workout(workoutId: string, name: string, slots: PlanExerciseSlot[]): PlanWorkout {
-  return { workoutId, name, slots };
+  return { workoutId, name, slots, groupRest: {} };
 }
 
 const withSets = (sets: number): Prescription => ({ ...DEFAULT_PRESCRIPTION, sets });

@@ -339,6 +339,7 @@ export function plansEqual(a: readonly PlanWorkout[], b: readonly PlanWorkout[])
 export function cloneWorkouts(workouts: readonly PlanWorkout[]): PlanWorkout[] {
   return workouts.map((workout) => ({
     ...workout,
+    groupRest: { ...workout.groupRest },
     slots: workout.slots.map((slot: PlanExerciseSlot) => ({
       ...slot,
       prescription: {
