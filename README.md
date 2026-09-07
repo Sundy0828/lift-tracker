@@ -144,6 +144,28 @@ Build scripts run with `node --import ./scripts/ts-resolve.mjs`, a small hook
 that teaches Node the extensionless and `@/` specifiers Vite resolves — so a
 script and the app import the domain the same way, with no second copy of it.
 
+## The muscle map
+
+`src/components/MuscleMap/bodyPolygons.ts` holds the front and back figures,
+adapted from [body-highlighter](https://github.com/lahaxearnaud/body-highlighter)
+(MIT — see [LICENSES.md](LICENSES.md)). Vendored rather than imported: the
+package renders its own SVG and shades by _how many exercises_ hit a muscle,
+while this app shades set-equivalents on a fixed five-stop scale and needs the
+drawing to stay decorative with the table as the real content. The geometry
+alone is 3 kB gzipped with no runtime dependency.
+
+A **region** is one shaded area and declares the muscles it answers for, so
+the drawing can be finer than the base vocabulary where the artwork allows and
+coarser where it does not:
+
+- front and rear delts shade **separately**; generic `shoulders` work shades
+  both, because it cannot be attributed to either
+- lats and mid back **share** the upper back, which the artwork does not split
+- obliques, soleus and the adductors get their own regions
+
+`bodyPolygons.test.ts` asserts every muscle in both tiers is shaded somewhere,
+so nothing can be tracked but undrawable.
+
 ## Circuits, and the two kinds of rest
 
 A contiguous run of slots sharing a `supersetGroup` is a **circuit**, drawn as

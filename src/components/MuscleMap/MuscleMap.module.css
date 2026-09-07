@@ -20,7 +20,9 @@
 
 .svg {
   width: 100%;
-  max-width: 132px;
+  /* The anatomical artwork carries more detail than the old block figure,
+     so it earns a little more width. */
+  max-width: 152px;
   height: auto;
 }
 
@@ -34,20 +36,22 @@
 .inert {
   fill: light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-4));
   stroke: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
-  stroke-width: 0.5;
+  stroke-width: 0.4;
 }
 
+/* Set on the <g>; fill and stroke inherit to the polygons inside it, so one
+   region is one shade however many polygons it takes to draw. */
 .muscle {
   fill: var(--stop-color);
   stroke: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
-  stroke-width: 0.5;
+  stroke-width: 0.4;
 }
 
 /* Five stops, 0 = untrained. Both schemes keep stop 0 clearly "empty" and
    stop 4 clearly "high", with three distinguishable steps between.
-   Each stop sets one custom property, then applies it to both `fill` (for the
-   SVG paths) and `background` (for the legend swatches, which are spans and
-   ignore `fill`). */
+   Each stop sets one custom property, then applies it to both `fill` (for
+   the SVG regions) and `background` (for the legend swatches, which are spans
+   and ignore `fill`). */
 .stop0 {
   --stop-color: light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
 }

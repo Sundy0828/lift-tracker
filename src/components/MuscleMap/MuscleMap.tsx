@@ -1,7 +1,6 @@
 import { Table, Text } from '@mantine/core';
 import { memo } from 'react';
 import { muscleLabel } from '@/domain/muscles';
-import type { MuscleGroup } from '@/domain/muscles';
 import type { HeatStop, VolumeByMuscle } from '@/domain/volume';
 import {
   WEEKLY_STOPS,
@@ -11,18 +10,20 @@ import {
   totalSetEquivalents,
   volumeRows,
 } from '@/domain/volume';
-import type { BodyView } from './bodyPaths';
-import { DRAWN_MUSCLE_SET, VIEW_BOX, outlineFor, pathsFor } from './bodyPaths';
+import type { BodyRegion, BodyView } from './bodyPolygons';
+import { DRAWN_MUSCLE_SET, VIEW_BOX, inertFor, regionsFor } from './bodyPolygons';
 import classes from './MuscleMap.module.css';
 
 /**
  * Front/back body heat map plus the set-count readout behind it.
  *
  * The diagram is **decorative** and hidden from assistive technology: the
- * table is the real content, which is also the only way to read an exact
- * number. The diagram shades base muscle groups; the table lists the finer
- * muscles, so a rear-delt row appears by name while the drawing shades the
- * shoulder.
+ * table is the real content, and the only place to read an exact number.
+ *
+ * Each shaded region declares the muscles it answers for, so the drawing can
+ * be finer than the base vocabulary where the artwork allows (front and rear
+ * delts shade separately) and coarser where it does not (lats and mid back
+ * share the upper back). The table always lists muscles by their own name.
  */
 
 const STOP_CLASSES: Record<HeatStop, string> = {
@@ -35,23 +36,26 @@ const STOP_CLASSES: Record<HeatStop, string> = {
 
 type BodyFigureProps = {
   view: BodyView;
-  stopFor: (muscle: MuscleGroup) => HeatStop;
+  stopFor: (region: BodyRegion) => HeatStop;
 };
 
 const BodyFigure = memo(function BodyFigure({ view, stopFor }: BodyFigureProps) {
-  const paths = pathsFor(view);
-
   return (
     <figure className={classes.figure}>
       <svg className={classes.svg} viewBox={VIEW_BOX} aria-hidden="true" focusable="false">
-        <path className={classes.inert} d={outlineFor(view)} />
-        {Object.entries(paths).map(([muscle, d]) => (
-          <path
-            key={muscle}
-            data-muscle={muscle}
-            className={`${classes.muscle} ${STOP_CLASSES[stopFor(muscle as MuscleGroup)]}`}
-            d={d}
-          />
+        {inertFor(view).map((points) => (
+          <polygon key={points} className={classes.inert} points={points} />
+        ))}
+        {regionsFor(view).map((region) => (
+          <g
+            key={region.id}
+            data-muscle={region.id}
+            className={`${classes.muscle} ${STOP_CLASSES[stopFor(region)]}`}
+          >
+            {region.polygons.map((points) => (
+              <polygon key={points} points={points} />
+            ))}
+          </g>
         ))}
       </svg>
       <figcaption className={classes.caption}>{view}</figcaption>
@@ -86,7 +90,13 @@ export function MuscleMap({
   const rows = volumeRows(volume, stops);
   const total = totalSetEquivalents(volume);
 
-  const stopFor = (muscle: MuscleGroup): HeatStop => heatStop(byRegion.get(muscle) ?? 0, stops);
+  // A region sums the muscles it answers for. Generic `shoulders` work feeds
+  // both delt regions, because it cannot be attributed front or back.
+  const stopFor = (region: BodyRegion): HeatStop => {
+    let total = 0;
+    for (const source of region.sources) total += byRegion.get(source) ?? 0;
+    return heatStop(total, stops);
+  };
 
   return (
     <div className={classes.wrap} data-testid={testId}>

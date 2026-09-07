@@ -1,2 +1,2 @@
 export { MuscleMap, type MuscleMapProps } from './MuscleMap';
-export { DRAWN_MUSCLES, type BodyView } from './bodyPaths';
+export { DRAWN_MUSCLE_SET, type BodyRegion, type BodyView } from './bodyPolygons';

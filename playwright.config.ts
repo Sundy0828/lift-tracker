@@ -7,7 +7,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env['CI']),
   retries: process.env['CI'] ? 2 : 0,
-  workers: process.env['CI'] ? 1 : '50%',
+  // The whole suite shares one auth emulator and one preview server, so
+  // unbounded parallelism is self-inflicted contention: sign-ins start timing
+  // out. Four keeps the suite quick without starving it.
+  workers: process.env['CI'] ? 1 : 4,
   reporter: process.env['CI'] ? 'github' : 'list',
   use: {
     baseURL: `http://localhost:${String(PORT)}`,

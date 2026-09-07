@@ -182,9 +182,12 @@ test.describe('discarding plan edits', () => {
     await page.getByRole('button', { name: 'Add workout' }).click();
     await addExercise(page, 'barbell squat');
 
-    await page.goto('/plans');
-    // By role, and settle on the editor before asserting: clicking the row
-    // while the list is still rendering can hit a detached node.
+    // In-app navigation, which is how leaving the screen actually happens.
+    // A hard page load fired in the same tick as the write is a different
+    // test: it can outrun Firestore's IndexedDB flush and is not the claim.
+    await page.getByRole('link', { name: 'Back to plans' }).click();
+    await expect(page.getByRole('heading', { name: 'Plans' })).toBeVisible();
+
     await page.getByRole('link', { name: 'Autosave Plan' }).click();
     await expect(page.getByRole('textbox', { name: 'Plan name' })).toHaveValue('Autosave Plan');
 
