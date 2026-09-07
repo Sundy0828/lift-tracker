@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { MuscleMap } from '@/components/MuscleMap';
 import type { Exercise } from '@/domain/exercises';
 import type { PlanExerciseSlot, PlanWorkout } from '@/domain/plans';
-import { estimateWorkoutSeconds, formatEstimate, totalSets } from '@/domain/plans';
+import { estimateWorkoutSeconds, exerciseSlots, formatEstimate, totalSets } from '@/domain/plans';
 import type { MuscleLookup } from '@/domain/volume';
 import { SESSION_STOPS, workoutVolume } from '@/domain/volume';
 import { ExercisePicker } from './ExercisePicker';
@@ -34,7 +34,8 @@ type Props = {
   onReorderSlots: (workoutId: string, from: number, to: number) => void;
   onEditSlot: (slot: PlanExerciseSlot) => void;
   onGroupSlots: (workoutId: string, activeSlotId: string, targetSlotId: string) => void;
-  onUnlinkSlot: (workoutId: string, slotId: string) => void;
+  /** Inserts a rest row after `afterSlotId`. */
+  onAddRest: (workoutId: string, afterSlotId: string) => void;
   onRounds: (workoutId: string, groupId: string, rounds: number) => void;
   onGroupRest: (workoutId: string, groupId: string, seconds: number | null) => void;
   defaultRestSeconds: number;
@@ -53,7 +54,7 @@ export function WorkoutEditor({
   onReorderSlots,
   onEditSlot,
   onGroupSlots,
-  onUnlinkSlot,
+  onAddRest,
   onRounds,
   onGroupRest,
   defaultRestSeconds,
@@ -75,6 +76,7 @@ export function WorkoutEditor({
   const [showMap, setShowMap] = useState(false);
 
   const volume = workoutVolume(workout, lookup);
+  const exerciseCount = exerciseSlots(workout.slots).length;
 
   return (
     <Card withBorder padding="sm">
@@ -133,9 +135,8 @@ export function WorkoutEditor({
 
         <Group gap="xs">
           <Badge variant="light" color="gray" size="sm">
-            {workout.slots.length === 1
-              ? '1 exercise'
-              : `${String(workout.slots.length)} exercises`}
+            {/* Exercises, not rows: a rest row is a pause, not an exercise. */}
+            {exerciseCount === 1 ? '1 exercise' : `${String(exerciseCount)} exercises`}
           </Badge>
           <Badge variant="light" color="gray" size="sm">
             {totalSets(workout)} sets
@@ -162,13 +163,13 @@ export function WorkoutEditor({
             onGroup={(activeSlotId, targetSlotId) => {
               onGroupSlots(workout.workoutId, activeSlotId, targetSlotId);
             }}
-            onUnlink={(slotId) => {
-              onUnlinkSlot(workout.workoutId, slotId);
-            }}
             onAddAfter={(slotId) => {
               setPicking({ afterSlotId: slotId });
             }}
-            onSlotRest={(slotId, seconds) => {
+            onAddRestAfter={(slotId) => {
+              onAddRest(workout.workoutId, slotId);
+            }}
+            onRestSeconds={(slotId, seconds) => {
               onSlotRest(workout.workoutId, slotId, seconds);
             }}
             onRounds={(groupId, rounds) => {
@@ -180,7 +181,7 @@ export function WorkoutEditor({
           />
         )}
 
-        {workout.slots.length > 1 ? (
+        {exerciseCount > 1 ? (
           <Text size="xs" c="dimmed">
             Drag an exercise onto another and hold for a moment to make them a circuit, or press{' '}
             <kbd className={classes.kbd}>g</kbd> while dragging.

@@ -174,14 +174,23 @@ test.describe('drag out of a circuit', () => {
     await expect(page.getByTestId('circuit-block')).toHaveCount(1);
   });
 
-  test('the remove button is still there for the keyboard', async ({ page }) => {
+  test('the keyboard can leave a circuit by arrowing out', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Remove Button Plan');
+    await buildWorkout(page, 'Keyboard Out Plan');
     await group(page, 'Crunches', 'Pushups', 2);
+    await group(page, 'Pullups', 'Crunches', 3);
 
-    // Dragging out is a pointer gesture, so the explicit control stays.
-    await page.getByRole('button', { name: /^Remove Crunches from the circuit$/u }).click();
-    await expect(page.getByTestId('circuit-block')).toHaveCount(0);
+    // No button for it: pick the row up and arrow it clear of the block.
+    await page.getByRole('button', { name: /^Reorder or group Pullups$/u }).focus();
+    await page.keyboard.press('Space');
+    for (let step = 0; step < 3; step += 1) {
+      await page.waitForTimeout(120);
+      await page.keyboard.press('ArrowUp');
+    }
+    await page.waitForTimeout(120);
+    await page.keyboard.press('Space');
+
+    await expect(page.getByText(/rounds of these 2, in order/u)).toBeVisible();
   });
 });
 
@@ -219,29 +228,51 @@ test.describe('adding in place, and uneven rests', () => {
     await expect(page.getByTestId('circuit-block')).toHaveCount(1);
   });
 
-  test('each member takes its own rest, on top of the round rest', async ({ page }) => {
+  test('a rest row can be placed between exercises, with its own length', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Uneven Rest Plan');
+    await buildWorkout(page, 'Rest Row Plan');
     await group(page, 'Crunches', 'Pushups', 2);
     await group(page, 'Pullups', 'Crunches', 3);
 
-    // A short pause after the first, a long one after the last — the 400 vs
-    // the 2k case.
-    const first = page.getByRole('textbox', { name: /^Rest after Pushups$/u });
-    const last = page.getByRole('textbox', { name: /^Rest after Pullups$/u });
-    await first.fill('15');
-    await last.fill('90');
-    await expect(first).toHaveValue(/15/);
-    await expect(last).toHaveValue(/90/);
+    // The 400-then-2k case: a short pause after the first, a long one later.
+    await page.getByRole('button', { name: /^Add a rest after Pushups$/u }).click();
+    await page.getByRole('textbox', { name: 'Rest length' }).first().fill('15');
 
-    // The round rest is separate and still its own control.
-    const roundRest = page.getByRole('textbox', { name: /^Rest between rounds/u });
-    await roundRest.fill('120');
-    await expect(roundRest).toHaveValue(/120/);
+    await page.getByRole('button', { name: /^Add a rest after Crunches$/u }).click();
+    const lengths = page.getByRole('textbox', { name: 'Rest length' });
+    await expect(lengths).toHaveCount(2);
+    await lengths.nth(1).fill('90');
+
+    // Rests sit inside the circuit but are not exercises: still 3 rounds of 3.
+    await expect(page.getByText(/3 rounds of these 3, in order/u)).toBeVisible();
+    await expect(page.getByText('4 exercises')).toBeVisible();
 
     await page.reload();
-    await expect(page.getByRole('textbox', { name: /^Rest after Pushups$/u })).toHaveValue(/15/);
-    await expect(page.getByRole('textbox', { name: /^Rest after Pullups$/u })).toHaveValue(/90/);
-    await expect(page.getByRole('textbox', { name: /^Rest between rounds/u })).toHaveValue(/120/);
+    const after = page.getByRole('textbox', { name: 'Rest length' });
+    await expect(after).toHaveCount(2);
+    await expect(after.nth(0)).toHaveValue(/15/);
+    await expect(after.nth(1)).toHaveValue(/90/);
+  });
+
+  test('a rest row adds no sets and no volume', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Rest Volume Plan');
+    await expect(page.getByText('12 sets', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: /^Add a rest after Pushups$/u }).click();
+    await page.getByRole('textbox', { name: 'Rest length' }).fill('60');
+
+    // Still 12 sets, and the exercise count is unchanged.
+    await expect(page.getByText('12 sets', { exact: true })).toBeVisible();
+    await expect(page.getByText('4 exercises')).toBeVisible();
+  });
+
+  test('the round rest label explains itself on hover', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Round Rest Tooltip Plan');
+    await group(page, 'Crunches', 'Pushups', 2);
+
+    await page.getByText('rest between rounds').hover();
+    await expect(page.getByText(/Pause after a whole round/u)).toBeVisible();
   });
 });

@@ -17,6 +17,7 @@ function slot(
 ): PlanExerciseSlot {
   return {
     slotId,
+    kind: 'exercise',
     exerciseId: exerciseName.toLowerCase().replace(/\s+/gu, '_'),
     exerciseName,
     occurrenceIndex: 0,

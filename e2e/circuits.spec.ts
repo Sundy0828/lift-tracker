@@ -137,22 +137,6 @@ test.describe('circuits', () => {
     await expect(roundRest).toHaveValue(/30/);
   });
 
-  test('a member can be removed from the circuit again', async ({ page }) => {
-    await signIn(page);
-    await createPlan(page, 'Unlink Plan');
-    await buildBodyweightWorkout(page);
-    await groupWithAbove(page, 'Crunches', 'Pushups', 2);
-    await groupWithAbove(page, 'Pullups', 'Crunches', 3);
-
-    await page.getByRole('button', { name: /^Remove Pullups from the circuit$/u }).click();
-    await expect(page.getByText(/3 rounds of these 2/u)).toBeVisible();
-
-    // Removing the second-to-last dissolves the circuit entirely.
-    await page.getByRole('button', { name: /^Remove Crunches from the circuit$/u }).click();
-    await expect(page.getByTestId('circuit-block')).toHaveCount(0);
-    await expect(page.getByText('4 exercises')).toBeVisible();
-  });
-
   test('a circuit survives a reload', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'Persist Plan');

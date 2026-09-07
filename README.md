@@ -174,12 +174,15 @@ four exercises is four slots at three sets each — which is also why volume mat
 needed no changes: supersets alter rest, not work.
 
 Build one by **dragging an exercise onto another and holding** — the folder-drop
-pattern, so a plain reorder is unaffected. The target says "release to group"
-before you commit, and `g` mid-drag skips the wait (also the keyboard route:
-focus the handle, Space, arrow to the target, `g`, Space). **Dragging a member
-clear of the block removes it** — `reconcileGroups` re-establishes the
-one-contiguous-run invariant after any reorder, so leaving is the same gesture
-as arriving. The explicit remove control stays for the keyboard.
+pattern, so a plain reorder is unaffected. The target dims to "hold to group"
+the moment you arrive and firms up to "release to group" once armed, so the
+wait is never silent; `g` mid-drag skips it. **Dragging a member clear of the
+block removes it** — `reconcileGroups` re-establishes the one-contiguous-run
+invariant after any reorder, so leaving is the same gesture as arriving.
+
+There is no button for either direction. Without a pointer, both are still
+reachable: pick a row up with Space, arrow to a target and press `g` to join,
+or arrow clear of the block and drop to leave.
 
 The two rests are deliberately separate:
 

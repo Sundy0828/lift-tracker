@@ -37,6 +37,7 @@ function slot(exerciseId: string, sets: number, overrides: Partial<PlanExerciseS
   const prescription: Prescription = { ...DEFAULT_PRESCRIPTION, sets };
   return {
     slotId: `slot-${String(slotCounter)}`,
+    kind: 'exercise',
     exerciseId,
     exerciseName: exerciseId,
     occurrenceIndex: 0,

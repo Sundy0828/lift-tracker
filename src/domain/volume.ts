@@ -46,6 +46,10 @@ export function workoutVolume(workout: PlanWorkout, lookup: MuscleLookup): Volum
   const totals = new Map<MuscleGroup, number>();
 
   for (const slot of workout.slots) {
+    // A rest row is not work. Skipped explicitly rather than relying on its
+    // reserved id failing to resolve.
+    if (slot.kind === 'rest') continue;
+
     const exercise = lookup(slot.exerciseId);
     if (exercise === null) continue;
 

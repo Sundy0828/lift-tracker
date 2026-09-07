@@ -36,6 +36,7 @@ import {
 function slot(overrides: Partial<PlanExerciseSlot> = {}): PlanExerciseSlot {
   return {
     slotId: 's1',
+    kind: 'exercise',
     exerciseId: 'bench',
     exerciseName: 'Bench Press',
     occurrenceIndex: 0,

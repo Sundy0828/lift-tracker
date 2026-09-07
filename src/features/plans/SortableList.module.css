@@ -63,3 +63,15 @@
 .handle:active {
   cursor: grabbing;
 }
+
+/* Arming: the dwell is running. Quieter than the armed state, so the two are
+   not confused, but immediate — the wait is never silent. */
+.row[data-group-arming='true'] {
+  border-color: light-dark(var(--mantine-color-amber-4), var(--mantine-color-amber-8));
+  border-style: dashed;
+}
+
+.groupHintPending {
+  background: light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  color: var(--mantine-color-dimmed);
+}

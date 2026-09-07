@@ -3,6 +3,7 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -38,22 +39,31 @@ import classes from './SortableList.module.css';
  * target, `g`, Space).
  */
 
-/** How long a dragged row must hover before the drop means "group". */
-const GROUP_DWELL_MS = 600;
+/**
+ * How long a dragged row must hover before the drop means "group".
+ *
+ * Short enough not to feel like a stall, long enough that passing over a row
+ * on the way somewhere else does not arm it. The target dims into a "hold to
+ * group" state immediately, so the wait is never silent.
+ */
+const GROUP_DWELL_MS = 420;
 
 type GroupIntent = { activeId: string; targetId: string } | null;
 
-const GroupIntentContext = createContext<GroupIntent>(null);
+/** `pending` is hovering-but-not-yet-armed; `intent` is armed. */
+type GroupState = { pending: GroupIntent; intent: GroupIntent };
+
+const GroupStateContext = createContext<GroupState>({ pending: null, intent: null });
 
 /**
- * The row a dragged row is about to be grouped with, if any.
+ * What the current drag would do to a row: nothing, arming, or grouping.
  *
- * eslint-disable-next-line react-refresh/only-export-components -- consumed
- * by SortableRow in this same file; splitting it out buys nothing.
+ * Consumed by SortableRow in this same file, so splitting it out to satisfy
+ * fast refresh would buy nothing.
  */
 // eslint-disable-next-line react-refresh/only-export-components
-export function useGroupIntent(): GroupIntent {
-  return useContext(GroupIntentContext);
+export function useGroupState(): GroupState {
+  return useContext(GroupStateContext);
 }
 
 type SortableRowProps = {
@@ -87,8 +97,9 @@ export function SortableRow({
     isDragging,
   } = useSortable({ id });
 
-  const intent = useGroupIntent();
+  const { pending, intent } = useGroupState();
   const isGroupTarget = intent?.targetId === id;
+  const isArming = !isGroupTarget && pending?.targetId === id;
 
   return (
     <div
@@ -96,6 +107,7 @@ export function SortableRow({
       className={classes.row}
       data-dragging={isDragging ? 'true' : undefined}
       data-group-target={isGroupTarget ? 'true' : undefined}
+      data-group-arming={isArming ? 'true' : undefined}
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
       <div className={classes.body}>{children}</div>
@@ -103,6 +115,10 @@ export function SortableRow({
       {isGroupTarget ? (
         <span className={classes.groupHint} aria-hidden="true">
           release to group
+        </span>
+      ) : isArming ? (
+        <span className={`${classes.groupHint} ${classes.groupHintPending}`} aria-hidden="true">
+          hold to group
         </span>
       ) : null}
 
@@ -169,6 +185,7 @@ export function SortableList({ ids, onReorder, onGroup, canGroup, children }: So
   );
 
   const [intent, setIntent] = useState<GroupIntent>(null);
+  const [pending, setPending] = useState<GroupIntent>(null);
   /**
    * The current drop target, in a ref rather than state.
    *
@@ -222,6 +239,7 @@ export function SortableList({ ids, onReorder, onGroup, canGroup, children }: So
     pointerDrag.current = !(event.activatorEvent instanceof KeyboardEvent);
     stopDwell();
     setIntent(null);
+    setPending(null);
     hover.current = null;
   };
 
@@ -235,10 +253,12 @@ export function SortableList({ ids, onReorder, onGroup, canGroup, children }: So
 
     if (targetId === null || !groupable(activeId, targetId)) {
       hover.current = null;
+      setPending(null);
       return;
     }
 
     hover.current = { activeId, targetId };
+    setPending({ activeId, targetId });
     if (!pointerDrag.current) return;
 
     dwell.current = window.setTimeout(() => {
@@ -249,6 +269,7 @@ export function SortableList({ ids, onReorder, onGroup, canGroup, children }: So
   const finish = (): void => {
     stopDwell();
     setIntent(null);
+    setPending(null);
     hover.current = null;
   };
 
@@ -276,7 +297,13 @@ export function SortableList({ ids, onReorder, onGroup, canGroup, children }: So
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      // pointerWithin first: for "drop onto that one" the target should be
+      // whatever is literally under the finger. closestCenter is the fallback
+      // for keyboard drags and for gaps between rows, where nothing is.
+      collisionDetection={(args) => {
+        const within = pointerWithin(args);
+        return within.length > 0 ? within : closestCenter(args);
+      }}
       // Vertical only, but deliberately NOT restricted to the parent element:
       // a circuit member's parent *is* the circuit block, so clamping to it
       // would make dragging out of a circuit impossible.
@@ -287,9 +314,9 @@ export function SortableList({ ids, onReorder, onGroup, canGroup, children }: So
       onDragCancel={finish}
     >
       <SortableContext items={[...ids]} strategy={verticalListSortingStrategy}>
-        <GroupIntentContext.Provider value={intent}>
+        <GroupStateContext.Provider value={{ pending, intent }}>
           <div className={classes.list}>{children}</div>
-        </GroupIntentContext.Provider>
+        </GroupStateContext.Provider>
       </SortableContext>
     </DndContext>
   );

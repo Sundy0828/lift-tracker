@@ -31,6 +31,7 @@ import type { Exercise } from '@/domain/exercises';
 import { diffPlans } from '@/domain/planDiff';
 import type { PlanExerciseSlot, PlanWorkout } from '@/domain/plans';
 import {
+  createRestSlot,
   createSlot,
   estimatePlanSeconds,
   formatEstimate,
@@ -41,7 +42,6 @@ import {
   pruneGroupRest,
   reorder,
   totalSets,
-  unlink,
   withGroupRounds,
 } from '@/domain/plans';
 import { WEEKLY_STOPS, planVolume } from '@/domain/volume';
@@ -272,10 +272,10 @@ export default function PlanEditorScreen() {
                 slots: groupWithSlot(current.slots, activeSlotId, targetSlotId, newId()),
               }));
             }}
-            onUnlinkSlot={(workoutId, slotId) => {
+            onAddRest={(workoutId, afterSlotId) => {
               mapWorkout(workoutId, (current) => ({
                 ...current,
-                slots: unlink(current.slots, slotId),
+                slots: insertSlotAfter(current.slots, afterSlotId, createRestSlot(newId())),
               }));
             }}
             onRounds={(workoutId, groupId, rounds) => {

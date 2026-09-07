@@ -3,8 +3,8 @@ declare const classes: {
   readonly circuit: string;
   readonly circuitLabel: string;
   readonly circuitFoot: string;
-  readonly memberRests: string;
-  readonly restLabel: string;
-  readonly restsTitle: string;
+  readonly insertRow: string;
+  readonly insertRule: string;
+  readonly roundRestLabel: string;
 };
 export default classes;

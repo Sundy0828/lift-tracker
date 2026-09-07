@@ -3,16 +3,23 @@ import type { PlanExerciseSlot, PlanWorkout } from './plans';
 import {
   DEFAULT_PRESCRIPTION,
   MAX_SETS,
+  DEFAULT_REST_SLOT_SECONDS,
+  REST_SLOT_ID,
   activeGroupIds,
+  createRestSlot,
+  exerciseSlots,
   groupRounds,
   groupWithSlot,
   insertSlotAfter,
   linkToPrevious,
+  parsePlanWorkouts,
   parseGroupRest,
   pruneGroupRest,
   reconcileGroups,
   reorder,
   supersetGroups,
+  isRestSlot,
+  restSlotSeconds,
   totalSets,
   unlink,
   withGroupRounds,
@@ -28,6 +35,7 @@ import { workoutVolume, type MuscleLookup } from './volume';
 function slot(overrides: Partial<PlanExerciseSlot> = {}): PlanExerciseSlot {
   return {
     slotId: 's',
+    kind: 'exercise',
     exerciseId: 'x',
     exerciseName: 'X',
     occurrenceIndex: 0,
@@ -477,5 +485,98 @@ describe('insertSlotAfter', () => {
     const slots = base();
     insertSlotAfter(slots, 'a', fresh());
     expect(slots).toHaveLength(4);
+  });
+});
+
+describe('rest rows', () => {
+  it('is a slot kind, not a catalog exercise', () => {
+    const rest = createRestSlot('r1');
+    expect(rest.kind).toBe('rest');
+    expect(isRestSlot(rest)).toBe(true);
+    expect(rest.exerciseId).toBe(REST_SLOT_ID);
+    expect(rest.exerciseName).toBe('Rest');
+    expect(restSlotSeconds(rest)).toBe(DEFAULT_REST_SLOT_SECONDS);
+  });
+
+  it('takes an explicit length, clamped', () => {
+    expect(restSlotSeconds(createRestSlot('r', 30))).toBe(30);
+    expect(restSlotSeconds(createRestSlot('r', -5))).toBe(0);
+    expect(restSlotSeconds(createRestSlot('r', 99999))).toBe(3600);
+  });
+
+  it('contributes no volume', () => {
+    const lookup: MuscleLookup = () => ({ primaryMuscles: ['chest'], secondaryMuscles: [] });
+    // Even with a lookup that would answer for anything, a rest row is skipped.
+    const slots = [slot({ slotId: 'a' }), createRestSlot('r1', 60)];
+    const volume = workoutVolume(asWorkout(slots), lookup);
+    expect(volume.get('chest')).toBe(DEFAULT_PRESCRIPTION.sets);
+  });
+
+  it('does not count towards the set total', () => {
+    const slots = [slot({ slotId: 'a' }), createRestSlot('r1'), slot({ slotId: 'b' })];
+    expect(totalSets(asWorkout(slots))).toBe(DEFAULT_PRESCRIPTION.sets * 2);
+  });
+
+  it('is excluded from exerciseSlots', () => {
+    const slots = [slot({ slotId: 'a' }), createRestSlot('r1'), slot({ slotId: 'b' })];
+    expect(exerciseSlots(slots).map((item) => item.slotId)).toEqual(['a', 'b']);
+  });
+
+  it('does not affect a circuit round count', () => {
+    // Rest rows sit inside the circuit but carry no sets of their own, so the
+    // rounds still come from the exercises.
+    let slots = linkToPrevious(base(), 'b', 'g1');
+    slots = insertSlotAfter(slots, 'a', createRestSlot('r1', 30));
+    slots = withGroupRounds(slots, 'g1', 4);
+
+    const members = slots.filter((item) => item.supersetGroup === 'g1');
+    expect(groupRounds(members)).toBe(4);
+    expect(restSlotSeconds(members.find((m) => m.kind === 'rest') ?? createRestSlot('x', 0))).toBe(
+      30,
+    );
+  });
+
+  it('joins the circuit when inserted after a member', () => {
+    const circuit = linkToPrevious(base(), 'b', 'g1');
+    const slots = insertSlotAfter(circuit, 'a', createRestSlot('r1', 30));
+    expect(slots.find((item) => item.slotId === 'r1')?.supersetGroup).toBe('g1');
+  });
+
+  it('is never given a round count by withGroupRounds', () => {
+    let slots = linkToPrevious(base(), 'b', 'g1');
+    slots = insertSlotAfter(slots, 'a', createRestSlot('r1', 30));
+    slots = withGroupRounds(slots, 'g1', 5);
+
+    const rest = slots.find((item) => item.slotId === 'r1');
+    expect(rest?.prescription.sets).toBe(1);
+    expect(restSlotSeconds(rest ?? createRestSlot('x', 0))).toBe(30);
+  });
+
+  it('survives a round trip through the parser', () => {
+    const parsed = parsePlanWorkouts([
+      {
+        workoutId: 'w1',
+        name: 'W',
+        slots: [
+          {
+            slotId: 'r1',
+            kind: 'rest',
+            exerciseId: REST_SLOT_ID,
+            prescription: { restSeconds: 45 },
+          },
+        ],
+      },
+    ]);
+    const rest = parsed[0]?.slots[0];
+    expect(rest?.kind).toBe('rest');
+    expect(rest?.exerciseName).toBe('Rest');
+    expect(restSlotSeconds(rest ?? createRestSlot('x', 0))).toBe(45);
+  });
+
+  it('defaults an unmarked slot to an exercise', () => {
+    const parsed = parsePlanWorkouts([
+      { workoutId: 'w1', name: 'W', slots: [{ slotId: 's1', exerciseId: 'bench' }] },
+    ]);
+    expect(parsed[0]?.slots[0]?.kind).toBe('exercise');
   });
 });

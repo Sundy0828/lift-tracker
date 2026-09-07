@@ -26,17 +26,75 @@ export type Prescription = {
   loadHint: string | null;
 };
 
+/**
+ * What a row in a workout is.
+ *
+ * `rest` is a deliberate pause you place between exercises, rather than a
+ * number hidden on the exercise before it. It is a slot kind rather than a
+ * catalog entry precisely so it stays out of everything that reasons about
+ * exercises: it has no muscles, so no volume; no occurrence key, so no
+ * overlay history; and it is not a set, so it never counts towards a PR.
+ */
+export type SlotKind = 'exercise' | 'rest';
+
+/** Reserved id for rest rows. Never resolves against the exercise catalog. */
+export const REST_SLOT_ID = '__rest__';
+
 export type PlanExerciseSlot = {
   /** Stable uuid; survives reordering, and is how planDiff matches slots. */
   slotId: string;
+  kind: SlotKind;
   exerciseId: string;
   /** Denormalised so shared plans and offline sessions render without a lookup. */
   exerciseName: string;
   occurrenceIndex: number;
+  /**
+   * For a rest row only `restSeconds` carries meaning — it is the length of
+   * the pause. The other fields are inert.
+   */
   prescription: Prescription;
   supersetGroup: string | null;
   notes: string;
 };
+
+export function isRestSlot(slot: PlanExerciseSlot): boolean {
+  return slot.kind === 'rest';
+}
+
+export const DEFAULT_REST_SLOT_SECONDS = 60;
+
+/** Builds a rest row of `seconds`. */
+export function createRestSlot(
+  slotId: string,
+  seconds = DEFAULT_REST_SLOT_SECONDS,
+): PlanExerciseSlot {
+  return {
+    slotId,
+    kind: 'rest',
+    exerciseId: REST_SLOT_ID,
+    exerciseName: 'Rest',
+    occurrenceIndex: 0,
+    prescription: {
+      ...DEFAULT_PRESCRIPTION,
+      sets: 1,
+      repRange: { min: 1, max: 1 },
+      rirRange: { min: 0, max: 0 },
+      restSeconds: clamp(Math.round(seconds), 0, 3600),
+    },
+    supersetGroup: null,
+    notes: '',
+  };
+}
+
+/** Seconds a rest row pauses for. */
+export function restSlotSeconds(slot: PlanExerciseSlot): number {
+  return slot.prescription.restSeconds ?? 0;
+}
+
+/** Only the exercise rows — what volume, rounds and set counts care about. */
+export function exerciseSlots(slots: readonly PlanExerciseSlot[]): PlanExerciseSlot[] {
+  return slots.filter((slot) => slot.kind === 'exercise');
+}
 
 export type PlanWorkout = {
   /** Stable across plan versions — the overlay depends on this. */
@@ -184,6 +242,7 @@ export function createSlot(
 ): PlanExerciseSlot {
   return {
     slotId: input.slotId,
+    kind: 'exercise',
     exerciseId: input.exerciseId,
     exerciseName: input.exerciseName,
     occurrenceIndex: nextOccurrenceIndex(slots, input.exerciseId),
@@ -213,18 +272,23 @@ export function insertSlotAfter(
   const host = slots[position];
   const groupId = host?.supersetGroup ?? null;
 
+  // A rest row joins the group but keeps its own prescription: adopting the
+  // host's round count and zeroing its rest would erase the pause it exists
+  // to hold.
   const joined: PlanExerciseSlot =
     groupId === null
       ? slot
-      : {
-          ...slot,
-          supersetGroup: groupId,
-          prescription: {
-            ...slot.prescription,
-            sets: host?.prescription.sets ?? slot.prescription.sets,
-            restSeconds: 0,
-          },
-        };
+      : slot.kind === 'rest'
+        ? { ...slot, supersetGroup: groupId }
+        : {
+            ...slot,
+            supersetGroup: groupId,
+            prescription: {
+              ...slot.prescription,
+              sets: host?.prescription.sets ?? slot.prescription.sets,
+              restSeconds: 0,
+            },
+          };
 
   const next = [...slots];
   next.splice(position + 1, 0, joined);
@@ -330,6 +394,12 @@ export function estimateWorkoutSeconds(workout: PlanWorkout, defaultRestSeconds:
     const first = group[0];
     if (first === undefined) continue;
 
+    if (first.kind === 'rest') {
+      total += restSlotSeconds(first);
+      trailingRest = 0;
+      continue;
+    }
+
     if (first.supersetGroup === null) {
       // A plain exercise: every set, each followed by its rest.
       const rest = first.prescription.restSeconds ?? defaultRestSeconds;
@@ -344,9 +414,10 @@ export function estimateWorkoutSeconds(workout: PlanWorkout, defaultRestSeconds:
 
     let perRound = 0;
     for (const member of group) {
-      // Inside a circuit a member's own rest is the pause before the next
-      // exercise, and defaults to none rather than the profile default.
-      perRound += estimateSetSeconds(member.prescription) + (member.prescription.restSeconds ?? 0);
+      // A rest row inside the circuit contributes only its pause; an exercise
+      // contributes its working time.
+      perRound +=
+        member.kind === 'rest' ? restSlotSeconds(member) : estimateSetSeconds(member.prescription);
     }
 
     total += rounds * perRound + rounds * roundRest;
@@ -381,7 +452,7 @@ export function formatEstimate(seconds: number): string {
 
 /** Total prescribed sets in a workout. */
 export function totalSets(workout: PlanWorkout): number {
-  return workout.slots.reduce((sum, slot) => sum + slot.prescription.sets, 0);
+  return exerciseSlots(workout.slots).reduce((sum, slot) => sum + slot.prescription.sets, 0);
 }
 
 /**
@@ -391,10 +462,11 @@ export function totalSets(workout: PlanWorkout): number {
  * plan — the editor writes the count to every member at once.
  */
 export function groupRounds(members: readonly PlanExerciseSlot[]): number | null {
-  const first = members[0];
+  const working = exerciseSlots(members);
+  const first = working[0];
   if (first === undefined) return null;
   const rounds = first.prescription.sets;
-  return members.every((slot) => slot.prescription.sets === rounds) ? rounds : null;
+  return working.every((slot) => slot.prescription.sets === rounds) ? rounds : null;
 }
 
 /** Sets the round count across every member of a group. */
@@ -405,7 +477,8 @@ export function withGroupRounds(
 ): PlanExerciseSlot[] {
   const sets = clamp(Math.round(rounds), 1, MAX_SETS);
   return slots.map((slot) =>
-    slot.supersetGroup === groupId
+    // A rest row has no sets to set; only the exercises take the round count.
+    slot.supersetGroup === groupId && slot.kind === 'exercise'
       ? { ...slot, prescription: { ...slot.prescription, sets } }
       : slot,
   );
@@ -448,6 +521,10 @@ export function linkToPrevious(
 
 /** Detaches a slot from any group, restoring its own rest. */
 function detach(slot: PlanExerciseSlot): PlanExerciseSlot {
+  // A rest row's restSeconds *is* its length, so leaving a circuit must not
+  // clear it the way it clears an exercise's between-sets rest.
+  if (slot.kind === 'rest') return { ...slot, supersetGroup: null };
+
   return {
     ...slot,
     supersetGroup: null,
@@ -515,11 +592,14 @@ export function groupWithSlot(
     if (inTargetGroup) insertAt = index + 1;
   }
 
-  const joined: PlanExerciseSlot = {
-    ...active,
-    supersetGroup: groupId,
-    prescription: { ...active.prescription, sets: rounds, restSeconds: 0 },
-  };
+  const joined: PlanExerciseSlot =
+    active.kind === 'rest'
+      ? { ...active, supersetGroup: groupId }
+      : {
+          ...active,
+          supersetGroup: groupId,
+          prescription: { ...active.prescription, sets: rounds, restSeconds: 0 },
+        };
 
   const next = without.map((slot) =>
     slot.slotId === targetSlotId ? { ...slot, supersetGroup: groupId } : slot,
@@ -634,7 +714,7 @@ export function workoutMuscles(
   primaryMusclesOf: (exerciseId: string) => readonly MuscleGroup[],
 ): MuscleGroup[] {
   const seen = new Set<MuscleGroup>();
-  for (const slot of workout.slots) {
+  for (const slot of exerciseSlots(workout.slots)) {
     for (const muscle of primaryMusclesOf(slot.exerciseId)) seen.add(muscle);
   }
   return [...seen];
@@ -687,10 +767,13 @@ export function parseSlot(value: unknown): PlanExerciseSlot | null {
 
   const superset: unknown = record['supersetGroup'];
 
+  const kind: SlotKind = record['kind'] === 'rest' ? 'rest' : 'exercise';
+
   return {
     slotId,
+    kind,
     exerciseId,
-    exerciseName: asString(record['exerciseName'], exerciseId),
+    exerciseName: asString(record['exerciseName'], kind === 'rest' ? 'Rest' : exerciseId),
     occurrenceIndex: Math.max(0, Math.round(asNumber(record['occurrenceIndex'], 0))),
     prescription: parsePrescription(record['prescription']),
     supersetGroup: typeof superset === 'string' && superset !== '' ? superset : null,
