@@ -43,6 +43,7 @@ import {
   reconcileGroups,
   reorder,
   totalSets,
+  ungroup,
   unlink,
   withGroupRounds,
 } from '@/domain/workouts';
@@ -265,6 +266,9 @@ export default function WorkoutEditorScreen() {
         onLeaveCircuit={(slotId) => {
           mapSlots((slots) => unlink(slots, slotId));
         }}
+        onUngroup={(groupId) => {
+          mapSlots((slots) => ungroup(slots, groupId));
+        }}
         onAddAfter={(slotId, join) => {
           setPicking({ afterSlotId: slotId, join });
         }}
@@ -293,7 +297,9 @@ export default function WorkoutEditorScreen() {
               <kbd className={classes.kbd}>g</kbd> while dragging.
             </>
           ) : null}
-          {hasCircuit ? ' Swipe a circuit member right to take it back out.' : null}
+          {hasCircuit
+            ? ' Swipe a member right to take it out of a circuit, or use Ungroup to take the whole circuit apart.'
+            : null}
         </Text>
       )}
 

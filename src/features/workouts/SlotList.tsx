@@ -1,4 +1,4 @@
-import { ActionIcon, Group, NumberInput, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Button, Group, NumberInput, Text, Tooltip } from '@mantine/core';
 import type { ExerciseSlot, WorkoutBody } from '@/domain/workouts';
 import {
   MAX_SETS,
@@ -22,11 +22,14 @@ import classes from './SlotList.module.css';
  * The block's own rest is the pause after a whole round.
  *
  * Joining a circuit is the drag gesture — hold a row over another — and there
- * is no button for it. Leaving has two routes, because drag alone is not
- * enough: dragging a member clear of the block works when there is somewhere
- * clear to go, and **swiping the row right** works always, including the case
- * that has no outside at all (a two-exercise workout that is entirely one
- * circuit).
+ * is no button for it, because a drag onto something always has a target.
+ *
+ * Leaving needs more than a drag. Dragging a member clear of the block works
+ * only when there is somewhere clear to go: a two-exercise workout that is
+ * entirely one circuit has no outside, and any reorder leaves the two adjacent
+ * and still grouped. So there are three routes, deliberately — drag out where
+ * there is room, swipe a row right for one member, and **Ungroup** on the
+ * block, which is the visible one and takes the whole thing apart.
  */
 
 type Props = {
@@ -38,6 +41,8 @@ type Props = {
   onGroup: (activeSlotId: string, targetSlotId: string) => void;
   /** Takes one slot out of its circuit, dissolving a group left with one. */
   onLeaveCircuit: (slotId: string) => void;
+  /** Takes a whole circuit apart. */
+  onUngroup: (groupId: string) => void;
   /**
    * Opens the picker to insert after this slot; null for the start.
    *
@@ -244,6 +249,7 @@ export function SlotList({
   onRemoveSlot,
   onGroup,
   onLeaveCircuit,
+  onUngroup,
   onAddAfter,
   onAddRestAfter,
   onRounds,
@@ -417,11 +423,29 @@ export function SlotList({
                 </div>
               ))}
 
-              <Text size="xs" c="dimmed" className={classes.circuitFoot}>
-                {rounds === null
-                  ? 'Members have different set counts — set the rounds to line them up.'
-                  : `${String(rounds)} rounds of these ${String(exerciseCount)}, in order.`}
-              </Text>
+              {/* The block's own action, on the line that describes the
+                  block. A gesture is a shortcut, not the only way out: this is
+                  the one that is visible, and the one that undoes grouping two
+                  rows by accident in a single tap. */}
+              <Group justify="space-between" align="center" wrap="nowrap" gap="xs">
+                <Text size="xs" c="dimmed" className={classes.circuitFoot}>
+                  {rounds === null
+                    ? 'Members have different set counts — set the rounds to line them up.'
+                    : `${String(rounds)} rounds of these ${String(exerciseCount)}, in order.`}
+                </Text>
+                <Button
+                  variant="subtle"
+                  color="gray"
+                  size="compact-xs"
+                  style={{ flexShrink: 0 }}
+                  aria-label={`Ungroup the circuit starting with ${lead}`}
+                  onClick={() => {
+                    onUngroup(item.groupId);
+                  }}
+                >
+                  Ungroup
+                </Button>
+              </Group>
             </div>
 
             {/* Outside the block, and `join` false: this is how a workout that

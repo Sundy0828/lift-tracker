@@ -54,6 +54,9 @@
   position: relative;
   /* Vertical scrolling stays with the page; horizontal is ours. */
   touch-action: pan-y;
+  /* A sideways drag on a row is a swipe, not a text selection. Without this a
+     mouse drag highlights the exercise name as it goes. */
+  user-select: none;
   background: light-dark(var(--mantine-color-white), var(--mantine-color-dark-6));
   border-radius: var(--mantine-radius-md);
 }

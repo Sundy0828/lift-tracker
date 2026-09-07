@@ -514,6 +514,47 @@ test.describe('leaving a circuit', () => {
   });
 });
 
+test.describe('ungrouping a circuit', () => {
+  test('one tap takes the block apart, whatever the member count', async ({ page }) => {
+    // The visible route out, and the only one that does not depend on a
+    // gesture landing.
+    await signIn(page);
+    await createWorkout(page, 'Ungroup Workout');
+    await addExercise(page, 'pushups');
+    await addExercise(page, 'crunches');
+    await group(page, 'Crunches', 'Pushups', 2);
+
+    await page.getByRole('button', { name: /^Ungroup the circuit starting with/u }).click();
+
+    await expect(page.getByTestId('circuit-block')).toHaveCount(0);
+    // Nothing deleted — the exercises are just no longer a circuit.
+    await expect(page.getByText('2 exercises')).toBeVisible();
+    await expect(page.getByTestId('slot-name').filter({ hasText: 'Crunches' })).toHaveCount(1);
+    await expect(page.getByTestId('slot-name').filter({ hasText: 'Pushups' })).toHaveCount(1);
+  });
+
+  test('it survives a reload, so it really was saved', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Ungroup Persist Workout');
+    await group(page, 'Crunches', 'Pushups', 2);
+    await group(page, 'Pullups', 'Crunches', 3);
+    await expect(page.getByTestId('circuit-block')).toHaveCount(1);
+
+    await page.getByRole('button', { name: /^Ungroup the circuit starting with/u }).click();
+    await expect(page.getByTestId('circuit-block')).toHaveCount(0);
+
+    await page.reload();
+    await expect(page.getByText('4 exercises')).toBeVisible();
+    await expect(page.getByTestId('circuit-block')).toHaveCount(0);
+  });
+
+  test('there is no Ungroup button without a circuit', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'No Ungroup Workout');
+    await expect(page.getByRole('button', { name: /^Ungroup/u })).toHaveCount(0);
+  });
+});
+
 test.describe('adding after a circuit', () => {
   test('the insert row below the block adds outside it', async ({ page }) => {
     // A circuit at the end of a workout used to be a dead end: every

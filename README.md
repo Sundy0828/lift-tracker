@@ -201,18 +201,31 @@ pattern, so a plain reorder is unaffected. The target dims to "hold to group"
 the moment you arrive and firms up to "release to group" once armed, so the
 wait is never silent; `g` mid-drag skips it.
 
-Leaving has **two** routes, and needs both. Dragging a member clear of the
-block removes it — `reconcileGroups` re-establishes the one-contiguous-run
-invariant after any reorder, so leaving is the same gesture as arriving. But
-that only works when there is somewhere clear to go: a two-exercise workout
-that is entirely one circuit has no outside, and any reorder leaves the two
-members adjacent and still grouped. So **swiping a member right** calls
-`unlink` directly, which works at any member count. A circuit left with one
-member dissolves, since a circuit of one is just an exercise.
+Leaving needs **three** routes, and the reason is worth writing down.
 
-There is no button for either direction. Without a pointer, joining and the
-drag route out are still reachable: pick a row up with Space, arrow to a target
-and press `g` to join, or arrow clear of the block and drop to leave.
+1. **Drag a member clear of the block.** `reconcileGroups` re-establishes the
+   one-contiguous-run invariant after any reorder, so leaving is the same
+   gesture as arriving — but only where there is somewhere clear to go.
+2. **Swipe a member right** (`unlink`). Works at any member count, including
+   the case drag cannot touch: a two-exercise workout that is entirely one
+   circuit has **no outside**, and any reorder leaves the two members adjacent
+   and still grouped.
+3. **Ungroup**, on the block (`ungroup`). Takes the whole circuit apart.
+
+Three looks like a lot for one operation. It is deliberate: the first two are
+gestures, and a gesture that does not land leaves you stuck with no visible way
+out — which is exactly what happened with only the first, and then with only
+the first two. Ungroup is a plain labelled button on the block, so there is
+always something to press. It is also the operation people actually want after
+grouping two rows by accident.
+
+A circuit left with one member dissolves either way, since a circuit of one is
+just an exercise.
+
+Joining has no button, because a drag onto something always has a target.
+Without a pointer, joining and the drag route out are both still reachable:
+pick a row up with Space, arrow to a target and press `g` to join, or arrow
+clear of the block and drop to leave.
 
 ## Where the + rows go
 
