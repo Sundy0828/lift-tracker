@@ -49,9 +49,7 @@
 }
 
 .roundRestLabel {
-  max-width: 9ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* "round rest" fits, so nothing truncates; the tooltip carries the detail. */
   white-space: nowrap;
   cursor: help;
 }

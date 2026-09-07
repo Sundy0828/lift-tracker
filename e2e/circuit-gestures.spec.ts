@@ -272,7 +272,54 @@ test.describe('adding in place, and uneven rests', () => {
     await buildWorkout(page, 'Round Rest Tooltip Plan');
     await group(page, 'Crunches', 'Pushups', 2);
 
-    await page.getByText('rest between rounds').hover();
+    await page.getByText('round rest').hover();
     await expect(page.getByText(/Pause after a whole round/u)).toBeVisible();
+  });
+});
+
+test.describe('deleting rows', () => {
+  test('an exercise can be deleted from its row', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Delete Plan');
+
+    await page.getByRole('button', { name: /^Delete Crunches$/u }).click();
+
+    await expect(page.getByText('3 exercises')).toBeVisible();
+    await expect(page.getByTestId('slot-name').filter({ hasText: 'Crunches' })).toHaveCount(0);
+  });
+
+  test('a rest row can be deleted too', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Delete Rest Plan');
+
+    await page.getByRole('button', { name: /^Add a rest after Pushups$/u }).click();
+    await expect(page.getByRole('textbox', { name: 'Rest length' })).toHaveCount(1);
+
+    await page.getByRole('button', { name: /^Delete rest$/u }).click();
+    await expect(page.getByRole('textbox', { name: 'Rest length' })).toHaveCount(0);
+    await expect(page.getByText('4 exercises')).toBeVisible();
+  });
+
+  test('deleting down to one member dissolves the circuit', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Delete Member Plan');
+    await group(page, 'Crunches', 'Pushups', 2);
+
+    // A circuit of one is just an exercise, so the block goes with it.
+    await page.getByRole('button', { name: /^Delete Crunches$/u }).click();
+    await expect(page.getByTestId('circuit-block')).toHaveCount(0);
+    await expect(page.getByText('3 exercises')).toBeVisible();
+  });
+
+  test('the round rest label is not truncated', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Label Plan');
+    await group(page, 'Crunches', 'Pushups', 2);
+
+    const label = page.getByText('round rest');
+    await expect(label).toBeVisible();
+    // Rendered width matches its content, so no ellipsis is applied.
+    const overflowing = await label.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+    expect(overflowing).toBe(false);
   });
 });

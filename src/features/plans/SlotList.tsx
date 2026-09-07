@@ -30,6 +30,7 @@ type Props = {
   defaultRestSeconds: number;
   onReorder: (from: number, to: number) => void;
   onEditSlot: (slot: PlanExerciseSlot) => void;
+  onRemoveSlot: (slotId: string) => void;
   onGroup: (activeSlotId: string, targetSlotId: string) => void;
   /** Opens the picker to insert directly after this slot. */
   onAddAfter: (slotId: string) => void;
@@ -138,6 +139,31 @@ function SlotBody({
   );
 }
 
+function RemoveButton({
+  slot,
+  onRemoveSlot,
+}: {
+  slot: PlanExerciseSlot;
+  onRemoveSlot: (slotId: string) => void;
+}) {
+  const label = slot.kind === 'rest' ? 'rest' : slot.exerciseName;
+  return (
+    <Tooltip label={`Delete ${label}`} withArrow>
+      <ActionIcon
+        variant="subtle"
+        color="red"
+        size="md"
+        aria-label={`Delete ${label}`}
+        onClick={() => {
+          onRemoveSlot(slot.slotId);
+        }}
+      >
+        ✕
+      </ActionIcon>
+    </Tooltip>
+  );
+}
+
 /**
  * The insertion point below a row: its own row rather than a control on the
  * exercise, because it acts on the gap, not on the exercise above it.
@@ -190,6 +216,7 @@ export function SlotList({
   defaultRestSeconds,
   onReorder,
   onEditSlot,
+  onRemoveSlot,
   onGroup,
   onAddAfter,
   onAddRestAfter,
@@ -226,6 +253,7 @@ export function SlotList({
                 total={workout.slots.length}
                 label={slot.exerciseName}
                 onMove={onReorder}
+                extraControls={<RemoveButton slot={slot} onRemoveSlot={onRemoveSlot} />}
               >
                 <SlotBody
                   slot={slot}
@@ -270,7 +298,7 @@ export function SlotList({
               <Group gap={4} wrap="nowrap">
                 <Tooltip label="Pause after a whole round, on top of any rest rows" withArrow>
                   <Text size="xs" c="dimmed" className={classes.roundRestLabel}>
-                    rest between rounds
+                    round rest
                   </Text>
                 </Tooltip>
                 <NumberInput
@@ -299,6 +327,7 @@ export function SlotList({
                   total={workout.slots.length}
                   label={slot.exerciseName}
                   onMove={onReorder}
+                  extraControls={<RemoveButton slot={slot} onRemoveSlot={onRemoveSlot} />}
                 >
                   <SlotBody
                     slot={slot}

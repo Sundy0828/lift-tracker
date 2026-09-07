@@ -127,7 +127,7 @@ export function SortableRow({
         <ActionIcon
           variant="subtle"
           color="gray"
-          size="lg"
+          size="md"
           disabled={index === 0}
           aria-label={`Move ${label} up`}
           onClick={() => {
@@ -139,7 +139,7 @@ export function SortableRow({
         <ActionIcon
           variant="subtle"
           color="gray"
-          size="lg"
+          size="md"
           disabled={index === total - 1}
           aria-label={`Move ${label} down`}
           onClick={() => {
@@ -152,7 +152,7 @@ export function SortableRow({
           ref={setActivatorNodeRef}
           variant="subtle"
           color="gray"
-          size="lg"
+          size="md"
           className={classes.handle}
           aria-label={`Reorder or group ${label}`}
           aria-description="Hold over another exercise to group them, or press g while dragging."

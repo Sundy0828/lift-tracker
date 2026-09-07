@@ -151,10 +151,14 @@ export default function PlanEditorScreen() {
 
   const removeSlot = (slotId: string): void => {
     commit(
-      workouts.map((workout) => ({
-        ...workout,
-        slots: workout.slots.filter((slot) => slot.slotId !== slotId),
-      })),
+      workouts.map((workout) =>
+        // Reconciled and pruned: deleting a circuit member can leave the
+        // group with one member, or leave a round rest with no group.
+        pruneGroupRest({
+          ...workout,
+          slots: reconcileGroups(workout.slots.filter((slot) => slot.slotId !== slotId)),
+        }),
+      ),
     );
   };
 
@@ -266,6 +270,7 @@ export default function PlanEditorScreen() {
               }));
             }}
             onEditSlot={setEditingSlot}
+            onRemoveSlot={removeSlot}
             onGroupSlots={(workoutId, activeSlotId, targetSlotId) => {
               mapWorkout(workoutId, (current) => ({
                 ...current,

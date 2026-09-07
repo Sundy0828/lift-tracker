@@ -118,19 +118,17 @@ test.describe('circuits', () => {
     await expect(page.getByText('15 sets', { exact: true })).toBeVisible();
   });
 
-  test('a circuit member has no rest of its own by default', async ({ page }) => {
+  test('a circuit adds no pause of its own until you place one', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'Flow Plan');
     await buildBodyweightWorkout(page);
     await groupWithAbove(page, 'Crunches', 'Pushups', 2);
 
-    // Joining drops the member rest to 0, so the round flows straight through
-    // rather than pausing after each exercise.
-    await expect(page.getByText(/^then /u)).toBeHidden();
+    // A round flows straight through: no rest rows unless you add them.
+    await expect(page.getByRole('textbox', { name: 'Rest length' })).toHaveCount(0);
 
-    // The pause belongs to the circuit instead, and starts on the profile
-    // default rather than a value of its own.
-    await expect(page.getByText('rest between rounds')).toBeVisible();
+    // The round rest starts on the profile default rather than a value of
+    // its own, so an untouched circuit inherits your setting.
     const roundRest = page.getByRole('textbox', { name: /^Rest between rounds/u });
     await expect(roundRest).toHaveValue('');
     await roundRest.fill('30');

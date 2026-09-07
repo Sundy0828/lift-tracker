@@ -33,6 +33,7 @@ type Props = {
   onSlotRest: (workoutId: string, slotId: string, seconds: number | null) => void;
   onReorderSlots: (workoutId: string, from: number, to: number) => void;
   onEditSlot: (slot: PlanExerciseSlot) => void;
+  onRemoveSlot: (slotId: string) => void;
   onGroupSlots: (workoutId: string, activeSlotId: string, targetSlotId: string) => void;
   /** Inserts a rest row after `afterSlotId`. */
   onAddRest: (workoutId: string, afterSlotId: string) => void;
@@ -53,6 +54,7 @@ export function WorkoutEditor({
   onSlotRest,
   onReorderSlots,
   onEditSlot,
+  onRemoveSlot,
   onGroupSlots,
   onAddRest,
   onRounds,
@@ -160,6 +162,7 @@ export function WorkoutEditor({
               onReorderSlots(workout.workoutId, from, to);
             }}
             onEditSlot={onEditSlot}
+            onRemoveSlot={onRemoveSlot}
             onGroup={(activeSlotId, targetSlotId) => {
               onGroupSlots(workout.workoutId, activeSlotId, targetSlotId);
             }}
