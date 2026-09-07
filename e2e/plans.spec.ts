@@ -55,7 +55,7 @@ test.describe('plans', () => {
 
     const days = ['PUSH', 'PULL', 'CHEST + DELTS', 'ARMS + LEGS'];
     for (const [index, day] of days.entries()) {
-      await page.getByRole('button', { name: 'Add workout' }).click();
+      await page.getByRole('button', { name: '+ Add another day' }).click();
       await renameWorkout(page, index, day);
     }
 
@@ -88,7 +88,7 @@ test.describe('plans', () => {
   test('one muscle map, updating as exercises are added', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'Map Plan');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
 
     // Exactly one map, open by default, so it visibly follows the lifts.
     await expect(page.getByTestId('plan-muscle-map')).toHaveCount(1);
@@ -111,9 +111,9 @@ test.describe('plans', () => {
     await signIn(page);
     await createPlan(page, 'Two Day Map Plan');
 
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
     await addExercise(page, 0, 'barbell bench press');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
     await addExercise(page, 1, 'barbell squat');
 
     // Still one map, now covering both days.
@@ -126,7 +126,7 @@ test.describe('plans', () => {
   test('the body diagram exposes a path per muscle and is decorative', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'SVG Plan');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
     await addExercise(page, 0, 'barbell bench press');
 
     const chestPath = page.locator('svg [data-muscle="chest"]').first();
@@ -140,7 +140,7 @@ test.describe('plans', () => {
   test('adding the same exercise twice marks the second occurrence', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'Duplicate Plan');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
 
     await addExercise(page, 0, 'barbell bench press');
     await addExercise(page, 0, 'barbell bench press');
@@ -154,7 +154,7 @@ test.describe('plans', () => {
   }) => {
     await signIn(page);
     await createPlan(page, 'Versioned Plan');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
     await renameWorkout(page, 0, 'CHEST');
     await addExercise(page, 0, 'barbell bench press');
 
@@ -196,7 +196,7 @@ test.describe('plans', () => {
   test('a prescription can be edited and shows in the slot summary', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'Prescription Plan');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
     await addExercise(page, 0, 'barbell bench press');
 
     await expect(page.getByText('3 x 8-12 @ 1-2 RIR')).toBeVisible();
@@ -225,7 +225,7 @@ test.describe('plans', () => {
   test('raising the bottom of a range carries the top with it', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'Range Plan');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
     await addExercise(page, 0, 'barbell bench press');
     await page.getByText('3 x 8-12 @ 1-2 RIR').click();
 
@@ -255,7 +255,7 @@ test.describe('plans', () => {
   test('lowering the top of a range pushes the bottom, keeping the gap', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'Range Down Plan');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
     await addExercise(page, 0, 'barbell bench press');
     await page.getByText('3 x 8-12 @ 1-2 RIR').click();
 
@@ -278,7 +278,7 @@ test.describe('plans', () => {
   test('a per-exercise rest falls back to the profile default', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'Rest Plan');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
     await addExercise(page, 0, 'barbell bench press');
     await page.getByText('3 x 8-12 @ 1-2 RIR').click();
 
@@ -298,9 +298,9 @@ test.describe('plans', () => {
     await signIn(page);
     await createPlan(page, 'Reorder Plan');
 
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
     await renameWorkout(page, 0, 'FIRST');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
     await renameWorkout(page, 1, 'SECOND');
 
     await page.getByRole('button', { name: 'Move SECOND up' }).click();
@@ -312,7 +312,7 @@ test.describe('plans', () => {
   test('exercise slots can be reordered within a workout', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'Slot Order Plan');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
 
     await addExercise(page, 0, 'barbell bench press');
     await addExercise(page, 0, 'barbell squat');

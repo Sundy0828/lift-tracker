@@ -68,7 +68,7 @@ async function groupWithAbove(page: Page, name: string, onto: string, expectMemb
 
 /** Warm-up plus the three exercises that will become the circuit. */
 async function buildBodyweightWorkout(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Add workout' }).click();
+  await page.getByRole('button', { name: '+ Add another day' }).click();
   const nameField = page.getByRole('textbox', { name: 'Workout 1 name' });
   await nameField.fill('ABS + BODYWEIGHT');
   await nameField.blur();
@@ -155,7 +155,7 @@ test.describe('discarding plan edits', () => {
   test('discard reverts the working copy to the last published version', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'Discard Plan');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
     const nameField = page.getByRole('textbox', { name: 'Workout 1 name' });
     await nameField.fill('PUSH');
     await nameField.blur();
@@ -186,7 +186,7 @@ test.describe('discarding plan edits', () => {
     // keeps the work and backing out stays an explicit choice.
     await signIn(page);
     await createPlan(page, 'Autosave Plan');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
     await addExercise(page, 'barbell squat');
 
     // In-app navigation, which is how leaving the screen actually happens.
@@ -205,7 +205,7 @@ test.describe('discarding plan edits', () => {
   test('an unpublished plan discards to empty, and says so', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'Never Published');
-    await page.getByRole('button', { name: 'Add workout' }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
     await addExercise(page, 'barbell squat');
 
     await page.getByRole('button', { name: 'Discard all' }).click();

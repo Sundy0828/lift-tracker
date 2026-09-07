@@ -177,7 +177,6 @@ export function WorkoutEditor({
         <Group>
           <Button
             variant="light"
-            size="compact-sm"
             onClick={() => {
               setPicking({ afterSlotId: null });
             }}

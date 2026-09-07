@@ -299,9 +299,15 @@ export default function PlanEditorScreen() {
         ))}
       </Stack>
 
-      <Button variant="light" onClick={addWorkout}>
-        Add workout
-      </Button>
+      {/* Quiet and sized to its label: adding a *day* is a rare action, and as
+          a full-width filled bar it was the loudest control on the screen —
+          louder than "Add exercise", which is what you actually reach for. The
+          wording says up front that it makes a separate day. */}
+      <Group>
+        <Button variant="subtle" size="compact-sm" onClick={addWorkout}>
+          + Add another day
+        </Button>
+      </Group>
 
       <Accordion variant="separated" defaultValue="muscles">
         <Accordion.Item value="muscles">

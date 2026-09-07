@@ -32,7 +32,7 @@ async function buildWorkout(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name: 'New', exact: true }).click();
   await page.getByRole('textbox', { name: 'Plan name' }).fill(name);
   await page.getByRole('button', { name: 'Create', exact: true }).click();
-  await page.getByRole('button', { name: 'Add workout' }).click();
+  await page.getByRole('button', { name: '+ Add another day' }).click();
 
   await addExercise(page, 'bench jump');
   await addExercise(page, 'pushups');

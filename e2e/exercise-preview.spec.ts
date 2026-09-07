@@ -21,7 +21,7 @@ async function openPicker(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'New', exact: true }).click();
   await page.getByRole('textbox', { name: 'Plan name' }).fill('Preview Plan');
   await page.getByRole('button', { name: 'Create', exact: true }).click();
-  await page.getByRole('button', { name: 'Add workout' }).click();
+  await page.getByRole('button', { name: '+ Add another day' }).click();
 
   const nameField = page.getByRole('textbox', { name: 'Workout 1 name' });
   await nameField.fill('DELTS');
