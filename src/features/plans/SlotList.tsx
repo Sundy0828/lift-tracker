@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Group, NumberInput, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Group, NumberInput, Text, Tooltip } from '@mantine/core';
 import type { PlanExerciseSlot, PlanWorkout } from '@/domain/plans';
 import { MAX_SETS, formatPrescription, formatRestSeconds, groupRounds } from '@/domain/plans';
 import { SortableList, SortableRow } from './SortableList';
@@ -19,8 +19,12 @@ type Props = {
   defaultRestSeconds: number;
   onReorder: (from: number, to: number) => void;
   onEditSlot: (slot: PlanExerciseSlot) => void;
-  onLink: (slotId: string) => void;
+  onGroup: (activeSlotId: string, targetSlotId: string) => void;
   onUnlink: (slotId: string) => void;
+  /** Opens the picker to insert directly after this slot. */
+  onAddAfter: (slotId: string) => void;
+  /** Rest after this exercise, within a round. */
+  onSlotRest: (slotId: string, seconds: number | null) => void;
   onRounds: (groupId: string, rounds: number) => void;
   onGroupRest: (groupId: string, seconds: number | null) => void;
 };
@@ -58,6 +62,32 @@ function segment(slots: readonly PlanExerciseSlot[]): Segment[] {
   );
 }
 
+function AddAfterButton({
+  slotId,
+  label,
+  onAddAfter,
+}: {
+  slotId: string;
+  label: string;
+  onAddAfter: (slotId: string) => void;
+}) {
+  return (
+    <Tooltip label="Add an exercise after this one" withArrow>
+      <ActionIcon
+        variant="subtle"
+        color="gray"
+        size="lg"
+        aria-label={`Add an exercise after ${label}`}
+        onClick={() => {
+          onAddAfter(slotId);
+        }}
+      >
+        ＋
+      </ActionIcon>
+    </Tooltip>
+  );
+}
+
 function SlotButton({
   slot,
   inCircuit,
@@ -75,7 +105,7 @@ function SlotButton({
         onEditSlot(slot);
       }}
     >
-      <Text size="sm" fw={550} lineClamp={1}>
+      <Text size="sm" fw={550} lineClamp={1} data-testid="slot-name">
         {slot.exerciseName}
         {slot.occurrenceIndex > 0 ? (
           <Text component="span" size="xs" c="dimmed">
@@ -84,18 +114,11 @@ function SlotButton({
           </Text>
         ) : null}
       </Text>
-      <Group gap={6}>
-        <Text size="xs" c="dimmed">
-          {inCircuit
-            ? `${formatRange(slot)} @ ${String(slot.prescription.rirRange.min)}-${String(slot.prescription.rirRange.max)} RIR`
-            : formatPrescription(slot.prescription)}
-        </Text>
-        {inCircuit && (slot.prescription.restSeconds ?? 0) > 0 ? (
-          <Badge size="xs" variant="light" color="gray">
-            then {formatRestSeconds(slot.prescription.restSeconds ?? 0)}
-          </Badge>
-        ) : null}
-      </Group>
+      <Text size="xs" c="dimmed">
+        {inCircuit
+          ? `${formatRange(slot)} @ ${String(slot.prescription.rirRange.min)}-${String(slot.prescription.rirRange.max)} RIR`
+          : formatPrescription(slot.prescription)}
+      </Text>
     </button>
   );
 }
@@ -111,16 +134,31 @@ export function SlotList({
   defaultRestSeconds,
   onReorder,
   onEditSlot,
-  onLink,
+  onGroup,
   onUnlink,
+  onAddAfter,
+  onSlotRest,
   onRounds,
   onGroupRest,
 }: Props) {
   const slotIds = workout.slots.map((slot) => slot.slotId);
   const segments = segment(workout.slots);
 
+  const groupOf = (slotId: string): string | null =>
+    workout.slots.find((slot) => slot.slotId === slotId)?.supersetGroup ?? null;
+
   return (
-    <SortableList ids={slotIds} onReorder={onReorder}>
+    <SortableList
+      ids={slotIds}
+      onReorder={onReorder}
+      onGroup={onGroup}
+      // Two rows already in the same circuit have nothing to join, so no
+      // intent is offered and the drag stays a plain reorder.
+      canGroup={(activeId, targetId) => {
+        const active = groupOf(activeId);
+        return active === null || active !== groupOf(targetId);
+      }}
+    >
       {segments.map((item) => {
         if (item.kind === 'single') {
           const { slot, index } = item;
@@ -133,21 +171,11 @@ export function SlotList({
               label={slot.exerciseName}
               onMove={onReorder}
               extraControls={
-                index === 0 ? null : (
-                  <Tooltip label="Group with the exercise above" withArrow>
-                    <ActionIcon
-                      variant="subtle"
-                      color="gray"
-                      size="lg"
-                      aria-label={`Group ${slot.exerciseName} with the exercise above`}
-                      onClick={() => {
-                        onLink(slot.slotId);
-                      }}
-                    >
-                      ⊕
-                    </ActionIcon>
-                  </Tooltip>
-                )
+                <AddAfterButton
+                  slotId={slot.slotId}
+                  label={slot.exerciseName}
+                  onAddAfter={onAddAfter}
+                />
               }
             >
               <SlotButton slot={slot} inCircuit={false} onEditSlot={onEditSlot} />
@@ -212,24 +240,63 @@ export function SlotList({
                 label={slot.exerciseName}
                 onMove={onReorder}
                 extraControls={
-                  <Tooltip label="Remove from the circuit" withArrow>
-                    <ActionIcon
-                      variant="subtle"
-                      color="gray"
-                      size="lg"
-                      aria-label={`Remove ${slot.exerciseName} from the circuit`}
-                      onClick={() => {
-                        onUnlink(slot.slotId);
-                      }}
-                    >
-                      ⊖
-                    </ActionIcon>
-                  </Tooltip>
+                  <>
+                    <AddAfterButton
+                      slotId={slot.slotId}
+                      label={slot.exerciseName}
+                      onAddAfter={onAddAfter}
+                    />
+                    <Tooltip label="Remove from the circuit" withArrow>
+                      <ActionIcon
+                        variant="subtle"
+                        color="gray"
+                        size="lg"
+                        aria-label={`Remove ${slot.exerciseName} from the circuit`}
+                        onClick={() => {
+                          onUnlink(slot.slotId);
+                        }}
+                      >
+                        ⊖
+                      </ActionIcon>
+                    </Tooltip>
+                  </>
                 }
               >
                 <SlotButton slot={slot} inCircuit onEditSlot={onEditSlot} />
               </SortableRow>
             ))}
+
+            {/* Rest after each exercise, so a round need not be evenly paced:
+                a short pause after the 400 and a long one after the 2k. This
+                is the only place these are shown, so the row above stays
+                readable. */}
+            <div className={classes.memberRests}>
+              <Text size="xs" c="dimmed" className={classes.restsTitle}>
+                rest inside a round
+              </Text>
+              {item.members.map(({ slot }) => (
+                <Group key={slot.slotId} gap={4} wrap="nowrap">
+                  <Text size="xs" c="dimmed" className={classes.restLabel}>
+                    after {slot.exerciseName}
+                  </Text>
+                  <NumberInput
+                    size="xs"
+                    w={78}
+                    min={0}
+                    max={3600}
+                    step={15}
+                    allowDecimal={false}
+                    suffix="s"
+                    aria-label={`Rest after ${slot.exerciseName}`}
+                    placeholder="0"
+                    value={slot.prescription.restSeconds ?? ''}
+                    onChange={(value) => {
+                      onSlotRest(slot.slotId, typeof value === 'number' ? value : null);
+                    }}
+                  />
+                </Group>
+              ))}
+            </div>
 
             <Text size="xs" c="dimmed" className={classes.circuitFoot}>
               {rounds === null

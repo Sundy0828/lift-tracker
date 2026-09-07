@@ -5,9 +5,13 @@ import {
   MAX_SETS,
   activeGroupIds,
   groupRounds,
+  groupWithSlot,
+  insertSlotAfter,
   linkToPrevious,
   parseGroupRest,
   pruneGroupRest,
+  reconcileGroups,
+  reorder,
   supersetGroups,
   totalSets,
   unlink,
@@ -248,5 +252,230 @@ describe('supersetGroups over a real circuit', () => {
     expect(
       supersetGroups(asWorkout(slots)).map((group) => group.map((item) => item.slotId)),
     ).toEqual([['warm'], ['a', 'b', 'c']]);
+  });
+});
+
+describe('groupWithSlot', () => {
+  it('groups two slots that are not adjacent, moving the dragged one', () => {
+    // Drag Pull-ups (last) onto Push-ups (second): it lands directly after.
+    const slots = groupWithSlot(base(), 'c', 'a', 'g1');
+    expect(slots.map((item) => item.slotId)).toEqual(['warm', 'a', 'c', 'b']);
+    expect(find(slots, 'a')?.supersetGroup).toBe('g1');
+    expect(find(slots, 'c')?.supersetGroup).toBe('g1');
+    expect(find(slots, 'b')?.supersetGroup).toBeNull();
+  });
+
+  it('appends to an existing circuit, after its last member', () => {
+    const two = linkToPrevious(base(), 'b', 'g1');
+    const three = groupWithSlot(two, 'warm', 'a', 'unused');
+
+    expect(three.map((item) => item.slotId)).toEqual(['a', 'b', 'warm', 'c']);
+    expect(find(three, 'warm')?.supersetGroup).toBe('g1');
+  });
+
+  it('adopts the target round count and drops its own rest', () => {
+    const slots = base().map((item) =>
+      item.slotId === 'a' ? { ...item, prescription: { ...item.prescription, sets: 5 } } : item,
+    );
+    const grouped = groupWithSlot(slots, 'c', 'a', 'g1');
+    expect(find(grouped, 'c')?.prescription.sets).toBe(5);
+    expect(find(grouped, 'c')?.prescription.restSeconds).toBe(0);
+  });
+
+  it('never nests: a member of one circuit moves into the other', () => {
+    // Two circuits, then drag a member of the second onto the first.
+    let slots = linkToPrevious(base(), 'b', 'g1'); // a + b
+    slots = [
+      ...slots,
+      slot({ slotId: 'd', exerciseId: 'dip', exerciseName: 'Dips' }),
+      slot({ slotId: 'e', exerciseId: 'row', exerciseName: 'Rows' }),
+    ];
+    slots = linkToPrevious(slots, 'e', 'g2'); // d + e
+
+    const moved = groupWithSlot(slots, 'e', 'a', 'unused');
+
+    // e left g2 and joined g1; only ever one level of grouping.
+    expect(find(moved, 'e')?.supersetGroup).toBe('g1');
+    const groups = new Set(
+      moved.filter((item) => item.supersetGroup !== null).map((item) => item.supersetGroup),
+    );
+    expect(groups).toEqual(new Set(['g1']));
+    // g2 was left with one member, so it dissolved.
+    expect(find(moved, 'd')?.supersetGroup).toBeNull();
+    expect(find(moved, 'd')?.prescription.restSeconds).toBeNull();
+  });
+
+  it('keeps a circuit contiguous after the move', () => {
+    let slots = linkToPrevious(base(), 'b', 'g1');
+    slots = groupWithSlot(slots, 'c', 'a', 'unused');
+
+    const positions = slots
+      .map((item, index) => ({ index, group: item.supersetGroup }))
+      .filter((item) => item.group === 'g1')
+      .map((item) => item.index);
+    // Indices form an unbroken run.
+    expect(positions).toEqual(
+      Array.from({ length: positions.length }, (_, offset) => (positions[0] ?? 0) + offset),
+    );
+  });
+
+  it('does nothing when both slots are already in the same circuit', () => {
+    const two = linkToPrevious(base(), 'b', 'g1');
+    expect(groupWithSlot(two, 'b', 'a', 'unused')).toEqual(two);
+  });
+
+  it('does nothing for the same slot, or an unknown one', () => {
+    const slots = base();
+    expect(groupWithSlot(slots, 'a', 'a', 'g1')).toEqual(slots);
+    expect(groupWithSlot(slots, 'nope', 'a', 'g1')).toEqual(slots);
+    expect(groupWithSlot(slots, 'a', 'nope', 'g1')).toEqual(slots);
+  });
+
+  it('leaves the input array alone', () => {
+    const slots = base();
+    groupWithSlot(slots, 'c', 'a', 'g1');
+    expect(slots.map((item) => item.slotId)).toEqual(['warm', 'a', 'b', 'c']);
+    expect(find(slots, 'a')?.supersetGroup).toBeNull();
+  });
+
+  it('agrees with linkToPrevious when the target is the slot above', () => {
+    const viaDrag = groupWithSlot(base(), 'b', 'a', 'g1');
+    const viaButton = linkToPrevious(base(), 'b', 'g1');
+    expect(viaDrag).toEqual(viaButton);
+  });
+});
+
+describe('reconcileGroups', () => {
+  const circuitOf = (): PlanExerciseSlot[] =>
+    linkToPrevious(linkToPrevious(base(), 'b', 'g1'), 'c', 'g1');
+
+  it('leaves an intact circuit alone', () => {
+    const slots = circuitOf();
+    expect(reconcileGroups(slots)).toEqual(slots);
+  });
+
+  it('leaves a circuit alone when an outsider moves past it entirely', () => {
+    // Moving the warm-up to the end does not split anything.
+    const settled = reconcileGroups(reorder(circuitOf(), 0, 3));
+    expect(settled.filter((item) => item.supersetGroup === 'g1')).toHaveLength(3);
+  });
+
+  it('drops a member dragged above the circuit', () => {
+    // warm, a, b, c with a+b+c grouped. Move c to the very top.
+    const moved = reorder(circuitOf(), 3, 0);
+    const settled = reconcileGroups(moved);
+
+    expect(find(settled, 'c')?.supersetGroup).toBeNull();
+    expect(find(settled, 'c')?.prescription.restSeconds).toBeNull();
+    // The rest of the circuit survives.
+    expect(find(settled, 'a')?.supersetGroup).toBe('g1');
+    expect(find(settled, 'b')?.supersetGroup).toBe('g1');
+  });
+
+  it('drops a member dragged below the circuit', () => {
+    let slots = circuitOf();
+    slots = [...slots, slot({ slotId: 'z', exerciseId: 'z', exerciseName: 'Z' })];
+    // a(1) b(2) c(3) z(4) -> move a to the end.
+    const settled = reconcileGroups(reorder(slots, 1, 4));
+
+    expect(find(settled, 'a')?.supersetGroup).toBeNull();
+    expect(find(settled, 'b')?.supersetGroup).toBe('g1');
+    expect(find(settled, 'c')?.supersetGroup).toBe('g1');
+  });
+
+  it('dissolves the circuit when dragging out leaves one member', () => {
+    const two = linkToPrevious(base(), 'b', 'g1'); // a + b
+    const settled = reconcileGroups(reorder(two, 2, 0)); // move b to the top
+
+    expect(settled.every((item) => item.supersetGroup === null)).toBe(true);
+    expect(find(settled, 'a')?.prescription.restSeconds).toBeNull();
+  });
+
+  it('keeps the longest run when an outsider splits a circuit', () => {
+    // a b c grouped; drop the warm-up between b and c, so the runs are [a,b]
+    // and [c]. The pair wins and c is detached, rather than one group living
+    // in two places.
+    const settled = reconcileGroups(reorder(circuitOf(), 0, 2));
+
+    const grouped = settled
+      .filter((item) => item.supersetGroup === 'g1')
+      .map((item) => item.slotId);
+    expect(grouped).toEqual(['a', 'b']);
+    expect(find(settled, 'c')?.supersetGroup).toBeNull();
+  });
+
+  it('never leaves one group id in two separate runs', () => {
+    const settled = reconcileGroups(reorder(circuitOf(), 0, 2));
+    const runs: string[] = [];
+    for (const [index, item] of settled.entries()) {
+      const previous = settled[index - 1]?.supersetGroup ?? null;
+      if (item.supersetGroup !== null && item.supersetGroup !== previous) {
+        runs.push(item.supersetGroup);
+      }
+    }
+    expect(new Set(runs).size).toBe(runs.length);
+  });
+
+  it('is idempotent', () => {
+    const once = reconcileGroups(reorder(circuitOf(), 3, 0));
+    expect(reconcileGroups(once)).toEqual(once);
+  });
+
+  it('leaves a list with no groups untouched', () => {
+    const slots = base();
+    expect(reconcileGroups(slots)).toEqual(slots);
+  });
+});
+
+describe('insertSlotAfter', () => {
+  const fresh = (): PlanExerciseSlot =>
+    slot({ slotId: 'new', exerciseId: 'dip', exerciseName: 'Dips' });
+
+  it('appends at the end when no anchor is given', () => {
+    const slots = insertSlotAfter(base(), null, fresh());
+    expect(slots.map((item) => item.slotId)).toEqual(['warm', 'a', 'b', 'c', 'new']);
+    expect(find(slots, 'new')?.supersetGroup).toBeNull();
+  });
+
+  it('inserts directly after a plain slot, ungrouped', () => {
+    const slots = insertSlotAfter(base(), 'a', fresh());
+    expect(slots.map((item) => item.slotId)).toEqual(['warm', 'a', 'new', 'b', 'c']);
+    expect(find(slots, 'new')?.supersetGroup).toBeNull();
+  });
+
+  it('joins the circuit when added after a member', () => {
+    // + on a circuit member should add another member, not drop a loose
+    // exercise into the middle of the block.
+    const circuit = withGroupRounds(linkToPrevious(base(), 'b', 'g1'), 'g1', 4);
+    const slots = insertSlotAfter(circuit, 'a', fresh());
+
+    expect(find(slots, 'new')?.supersetGroup).toBe('g1');
+    expect(find(slots, 'new')?.prescription.sets).toBe(4);
+    expect(find(slots, 'new')?.prescription.restSeconds).toBe(0);
+    expect(slots.map((item) => item.slotId)).toEqual(['warm', 'a', 'new', 'b', 'c']);
+  });
+
+  it('keeps the circuit contiguous when inserting mid-block', () => {
+    const circuit = linkToPrevious(linkToPrevious(base(), 'b', 'g1'), 'c', 'g1');
+    const slots = insertSlotAfter(circuit, 'b', fresh());
+
+    const grouped = slots
+      .map((item, index) => ({ index, group: item.supersetGroup }))
+      .filter((item) => item.group === 'g1')
+      .map((item) => item.index);
+    expect(grouped).toEqual([1, 2, 3, 4]);
+    // Still one run, so reconciling changes nothing.
+    expect(reconcileGroups(slots)).toEqual(slots);
+  });
+
+  it('appends when the anchor is unknown', () => {
+    const slots = insertSlotAfter(base(), 'nope', fresh());
+    expect(slots.at(-1)?.slotId).toBe('new');
+  });
+
+  it('leaves the input array alone', () => {
+    const slots = base();
+    insertSlotAfter(slots, 'a', fresh());
+    expect(slots).toHaveLength(4);
   });
 });

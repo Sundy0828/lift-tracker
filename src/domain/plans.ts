@@ -194,6 +194,44 @@ export function createSlot(
 }
 
 /**
+ * Inserts a slot directly after `afterSlotId`, adopting that slot's circuit
+ * when it has one — pressing + on a circuit member adds another member rather
+ * than dropping a loose exercise into the middle of the block.
+ *
+ * Pass null to append at the end, ungrouped.
+ */
+export function insertSlotAfter(
+  slots: readonly PlanExerciseSlot[],
+  afterSlotId: string | null,
+  slot: PlanExerciseSlot,
+): PlanExerciseSlot[] {
+  if (afterSlotId === null) return [...slots, slot];
+
+  const position = slots.findIndex((item) => item.slotId === afterSlotId);
+  if (position === -1) return [...slots, slot];
+
+  const host = slots[position];
+  const groupId = host?.supersetGroup ?? null;
+
+  const joined: PlanExerciseSlot =
+    groupId === null
+      ? slot
+      : {
+          ...slot,
+          supersetGroup: groupId,
+          prescription: {
+            ...slot.prescription,
+            sets: host?.prescription.sets ?? slot.prescription.sets,
+            restSeconds: 0,
+          },
+        };
+
+  const next = [...slots];
+  next.splice(position + 1, 0, joined);
+  return next;
+}
+
+/**
  * Workouts in display order. Driven by `workoutOrder`, with any workout the
  * order does not mention appended, so a partially-written order never hides a
  * workout.
@@ -258,6 +296,87 @@ export function formatPrescription(prescription: Prescription): string {
     `${String(prescription.sets)} x ${formatRange(prescription.repRange)}` +
     ` @ ${formatRange(prescription.rirRange)} RIR`
   );
+}
+
+/**
+ * Rough time model for a set: a fixed cost to set up and unrack, plus time
+ * under tension proportional to the rep target.
+ *
+ * Deliberately crude — the honest precision here is "about 45 minutes", not
+ * "44:20" — but it responds to the things that actually move a session's
+ * length: how many sets, how many reps, and how long you rest.
+ */
+export const SET_OVERHEAD_SECONDS = 12;
+export const SECONDS_PER_REP = 3;
+
+/** Working time for one set of this prescription, excluding rest. */
+export function estimateSetSeconds(prescription: Prescription): number {
+  const midReps = (prescription.repRange.min + prescription.repRange.max) / 2;
+  return SET_OVERHEAD_SECONDS + midReps * SECONDS_PER_REP;
+}
+
+/**
+ * Estimated wall-clock seconds for a workout.
+ *
+ * Circuit members are counted per round, their own rest is the pause inside a
+ * round, and the group's rest is added once per round. The very last rest of
+ * the workout is dropped: you finish on a set, not on a stopwatch.
+ */
+export function estimateWorkoutSeconds(workout: PlanWorkout, defaultRestSeconds: number): number {
+  let total = 0;
+  let trailingRest = 0;
+
+  for (const group of supersetGroups(workout)) {
+    const first = group[0];
+    if (first === undefined) continue;
+
+    if (first.supersetGroup === null) {
+      // A plain exercise: every set, each followed by its rest.
+      const rest = first.prescription.restSeconds ?? defaultRestSeconds;
+      const sets = first.prescription.sets;
+      total += sets * (estimateSetSeconds(first.prescription) + rest);
+      trailingRest = rest;
+      continue;
+    }
+
+    const rounds = groupRounds(group) ?? Math.max(...group.map((s) => s.prescription.sets));
+    const roundRest = workout.groupRest[first.supersetGroup] ?? defaultRestSeconds;
+
+    let perRound = 0;
+    for (const member of group) {
+      // Inside a circuit a member's own rest is the pause before the next
+      // exercise, and defaults to none rather than the profile default.
+      perRound += estimateSetSeconds(member.prescription) + (member.prescription.restSeconds ?? 0);
+    }
+
+    total += rounds * perRound + rounds * roundRest;
+    trailingRest = roundRest;
+  }
+
+  return Math.max(0, Math.round(total - trailingRest));
+}
+
+/** Estimated seconds across a plan — one pass through every workout. */
+export function estimatePlanSeconds(
+  workouts: readonly PlanWorkout[],
+  defaultRestSeconds: number,
+): number {
+  return workouts.reduce(
+    (total, workout) => total + estimateWorkoutSeconds(workout, defaultRestSeconds),
+    0,
+  );
+}
+
+/** A duration as `45 min` or `1 h 20`, for an at-a-glance estimate. */
+export function formatEstimate(seconds: number): string {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${String(minutes)} min`;
+
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder === 0
+    ? `${String(hours)} h`
+    : `${String(hours)} h ${remainder.toString().padStart(2, '0')}`;
 }
 
 /** Total prescribed sets in a workout. */
@@ -327,29 +446,142 @@ export function linkToPrevious(
   });
 }
 
+/** Detaches a slot from any group, restoring its own rest. */
+function detach(slot: PlanExerciseSlot): PlanExerciseSlot {
+  return {
+    ...slot,
+    supersetGroup: null,
+    prescription: { ...slot.prescription, restSeconds: null },
+  };
+}
+
+/**
+ * Dissolves any group down to a single member, since a circuit of one is just
+ * an exercise. Run after every grouping change.
+ */
+function dissolveSingletons(slots: readonly PlanExerciseSlot[]): PlanExerciseSlot[] {
+  const counts = new Map<string, number>();
+  for (const slot of slots) {
+    if (slot.supersetGroup !== null) {
+      counts.set(slot.supersetGroup, (counts.get(slot.supersetGroup) ?? 0) + 1);
+    }
+  }
+  return slots.map((slot) =>
+    slot.supersetGroup !== null && (counts.get(slot.supersetGroup) ?? 0) < 2 ? detach(slot) : slot,
+  );
+}
+
+/**
+ * Groups one slot with another, wherever the two sit in the list.
+ *
+ * The dragged slot moves to sit directly after the target's group, because
+ * circuits are contiguous runs — that is what lets the logger walk a round in
+ * order. It adopts the target's round count and drops its own rest to 0, since
+ * inside a circuit the pause belongs to `groupRest`.
+ *
+ * Groups never nest: `supersetGroup` is a single id, so dragging a member of
+ * one circuit onto another *moves* it between them rather than building a
+ * hierarchy. Any group left with one member dissolves.
+ */
+export function groupWithSlot(
+  slots: readonly PlanExerciseSlot[],
+  activeSlotId: string,
+  targetSlotId: string,
+  newGroupId: string,
+): PlanExerciseSlot[] {
+  if (activeSlotId === targetSlotId) return [...slots];
+
+  const active = slots.find((slot) => slot.slotId === activeSlotId);
+  const target = slots.find((slot) => slot.slotId === targetSlotId);
+  if (active === undefined || target === undefined) return [...slots];
+
+  // Already in the same group: nothing to join.
+  if (active.supersetGroup !== null && active.supersetGroup === target.supersetGroup) {
+    return [...slots];
+  }
+
+  const groupId = target.supersetGroup ?? newGroupId;
+  const rounds = target.prescription.sets;
+
+  const without = slots.filter((slot) => slot.slotId !== activeSlotId);
+
+  // Insert after the last member of the target's group, so the run stays
+  // contiguous whether the target was already a circuit or not.
+  let insertAt = without.length;
+  for (const [index, slot] of without.entries()) {
+    const inTargetGroup =
+      slot.slotId === targetSlotId ||
+      (slot.supersetGroup !== null && slot.supersetGroup === groupId);
+    if (inTargetGroup) insertAt = index + 1;
+  }
+
+  const joined: PlanExerciseSlot = {
+    ...active,
+    supersetGroup: groupId,
+    prescription: { ...active.prescription, sets: rounds, restSeconds: 0 },
+  };
+
+  const next = without.map((slot) =>
+    slot.slotId === targetSlotId ? { ...slot, supersetGroup: groupId } : slot,
+  );
+  next.splice(insertAt, 0, joined);
+
+  return dissolveSingletons(next);
+}
+
+/**
+ * Re-establishes the "a circuit is one contiguous run" invariant after a
+ * reorder, which is what makes dragging out of a circuit remove you from it.
+ *
+ * For each group, the longest run of adjacent members wins and anything
+ * stranded elsewhere is detached. Dragging a member above or below the block
+ * therefore drops it from the circuit, and dropping an outsider into the
+ * middle splits the smaller half out rather than leaving one group in two
+ * places. Groups down to one member dissolve.
+ */
+export function reconcileGroups(slots: readonly PlanExerciseSlot[]): PlanExerciseSlot[] {
+  // Longest contiguous run per group, earliest run winning a tie.
+  const best = new Map<string, { start: number; length: number }>();
+
+  let index = 0;
+  while (index < slots.length) {
+    const groupId = slots[index]?.supersetGroup ?? null;
+    if (groupId === null) {
+      index += 1;
+      continue;
+    }
+
+    let end = index;
+    while (end + 1 < slots.length && slots[end + 1]?.supersetGroup === groupId) end += 1;
+
+    const length = end - index + 1;
+    const current = best.get(groupId);
+    if (current === undefined || length > current.length) {
+      best.set(groupId, { start: index, length });
+    }
+    index = end + 1;
+  }
+
+  return dissolveSingletons(
+    slots.map((slot, position) => {
+      if (slot.supersetGroup === null) return slot;
+      const run = best.get(slot.supersetGroup);
+      const inside =
+        run !== undefined && position >= run.start && position < run.start + run.length;
+      return inside ? slot : detach(slot);
+    }),
+  );
+}
+
 /**
  * Removes a slot from its group. A group left with one member is dissolved,
  * since a circuit of one is just an exercise.
  */
 export function unlink(slots: readonly PlanExerciseSlot[], slotId: string): PlanExerciseSlot[] {
   const target = slots.find((slot) => slot.slotId === slotId);
-  const groupId = target?.supersetGroup ?? null;
-  if (groupId === null) return [...slots];
+  if (target?.supersetGroup === undefined || target.supersetGroup === null) return [...slots];
 
-  const detached = slots.map((slot) =>
-    slot.slotId === slotId
-      ? { ...slot, supersetGroup: null, prescription: { ...slot.prescription, restSeconds: null } }
-      : slot,
-  );
-
-  const remaining = detached.filter((slot) => slot.supersetGroup === groupId);
-  if (remaining.length > 1) return detached;
-
-  return detached.map((slot) =>
-    slot.supersetGroup === groupId
-      ? { ...slot, supersetGroup: null, prescription: { ...slot.prescription, restSeconds: null } }
-      : slot,
-  );
+  return dissolveSingletons(slots.map((slot) => (slot.slotId === slotId ? detach(slot) : slot)));
 }
 
 /** Group ids still in use by at least two slots. */

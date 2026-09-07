@@ -29,19 +29,44 @@ async function addExercise(page: Page, query: string): Promise<void> {
   const confirm = page.getByRole('button', { name: /^Add to /u });
   await confirm.click();
   await expect(confirm).toBeHidden();
+  // Both picker modals must finish closing: while an overlay is still painted
+  // it swallows the pointer, so any drag that follows goes nowhere.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
-/** Warm-up plus the three exercises that will become the circuit. */
-/** Groups a slot into the one above it, waiting for the re-render to settle. */
-async function groupWithAbove(page: Page, name: string, expectMembers: number): Promise<void> {
-  await page
-    .getByRole('button', { name: new RegExp(`^Group ${name} with the exercise above$`, 'u') })
-    .click();
+/** Picks up `name`'s handle and holds it over `onto`'s, without releasing. */
+async function dragOnto(page: Page, name: string, onto: string): Promise<void> {
+  const handle = page.getByRole('button', { name: new RegExp(`^Reorder or group ${name}$`, 'u') });
+  const target = page.getByRole('button', { name: new RegExp(`^Reorder or group ${onto}$`, 'u') });
+
+  const from = await handle.boundingBox();
+  const to = await target.boundingBox();
+  expect(from, `no box for ${name}`).not.toBeNull();
+  expect(to, `no box for ${onto}`).not.toBeNull();
+  if (from === null || to === null) return;
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  // Clear the 6px activation threshold first, then travel to the target.
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 - 10, { steps: 5 });
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+}
+
+/**
+ * Groups a slot into the one above it with the real gesture: drag, hold until
+ * the target offers to group, release.
+ */
+async function groupWithAbove(page: Page, name: string, onto: string, expectMembers: number) {
+  await dragOnto(page, name, onto);
+  await expect(page.getByText('release to group')).toBeVisible();
+  await page.mouse.up();
+
   await expect(
     page.getByText(new RegExp(`rounds of these ${String(expectMembers)}, in order`, 'u')),
   ).toBeVisible();
 }
 
+/** Warm-up plus the three exercises that will become the circuit. */
 async function buildBodyweightWorkout(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Add workout' }).click();
   const nameField = page.getByRole('textbox', { name: 'Workout 1 name' });
@@ -66,10 +91,10 @@ test.describe('circuits', () => {
     await expect(page.getByTestId('circuit-block')).toHaveCount(0);
 
     // Group the 2nd into the 1st, then pull the 3rd into the same group.
-    await groupWithAbove(page, 'Crunches', 2);
+    await groupWithAbove(page, 'Crunches', 'Pushups', 2);
     await expect(page.getByTestId('circuit-block')).toHaveCount(1);
 
-    await groupWithAbove(page, 'Pullups', 3);
+    await groupWithAbove(page, 'Pullups', 'Crunches', 3);
 
     // Still ONE circuit with three members — not three separate groups, which
     // is what the old superset toggle produced.
@@ -80,8 +105,8 @@ test.describe('circuits', () => {
     await signIn(page);
     await createPlan(page, 'Rounds Plan');
     await buildBodyweightWorkout(page);
-    await groupWithAbove(page, 'Crunches', 2);
-    await groupWithAbove(page, 'Pullups', 3);
+    await groupWithAbove(page, 'Crunches', 'Pushups', 2);
+    await groupWithAbove(page, 'Pullups', 'Crunches', 3);
 
     const rounds = page.getByRole('textbox', { name: /^Rounds for the circuit/u });
     await rounds.fill('4');
@@ -97,7 +122,7 @@ test.describe('circuits', () => {
     await signIn(page);
     await createPlan(page, 'Flow Plan');
     await buildBodyweightWorkout(page);
-    await groupWithAbove(page, 'Crunches', 2);
+    await groupWithAbove(page, 'Crunches', 'Pushups', 2);
 
     // Joining drops the member rest to 0, so the round flows straight through
     // rather than pausing after each exercise.
@@ -116,8 +141,8 @@ test.describe('circuits', () => {
     await signIn(page);
     await createPlan(page, 'Unlink Plan');
     await buildBodyweightWorkout(page);
-    await groupWithAbove(page, 'Crunches', 2);
-    await groupWithAbove(page, 'Pullups', 3);
+    await groupWithAbove(page, 'Crunches', 'Pushups', 2);
+    await groupWithAbove(page, 'Pullups', 'Crunches', 3);
 
     await page.getByRole('button', { name: /^Remove Pullups from the circuit$/u }).click();
     await expect(page.getByText(/3 rounds of these 2/u)).toBeVisible();
@@ -132,7 +157,7 @@ test.describe('circuits', () => {
     await signIn(page);
     await createPlan(page, 'Persist Plan');
     await buildBodyweightWorkout(page);
-    await groupWithAbove(page, 'Crunches', 2);
+    await groupWithAbove(page, 'Crunches', 'Pushups', 2);
 
     const roundRest = page.getByRole('textbox', { name: /^Rest between rounds/u });
     await roundRest.fill('45');

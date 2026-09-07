@@ -22,6 +22,34 @@
   opacity: 0.95;
 }
 
+/* The dwell has settled: releasing here groups rather than reorders, so the
+   target has to look like a drop target rather than a neighbour. */
+.row[data-group-target='true'] {
+  border-color: light-dark(var(--mantine-color-amber-6), var(--mantine-color-amber-5));
+  background: light-dark(var(--mantine-color-amber-0), rgba(255, 166, 4, 0.12));
+  box-shadow: 0 0 0 2px light-dark(var(--mantine-color-amber-2), rgba(255, 166, 4, 0.25));
+}
+
+.groupHint {
+  /* Overlaid rather than laid out: as a flex child it squeezed the row's
+     contents into a broken column mid-drag. */
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  pointer-events: none;
+  padding: 2px 6px;
+  border-radius: var(--mantine-radius-sm);
+  background: light-dark(var(--mantine-color-amber-6), var(--mantine-color-amber-5));
+  color: light-dark(var(--mantine-color-white), var(--mantine-color-black));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .body {
   flex: 1;
   min-width: 0;

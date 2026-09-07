@@ -32,8 +32,12 @@ import { diffPlans } from '@/domain/planDiff';
 import type { PlanExerciseSlot, PlanWorkout } from '@/domain/plans';
 import {
   createSlot,
-  linkToPrevious,
+  estimatePlanSeconds,
+  formatEstimate,
+  groupWithSlot,
+  insertSlotAfter,
   orderedWorkouts,
+  reconcileGroups,
   pruneGroupRest,
   reorder,
   totalSets,
@@ -110,17 +114,29 @@ export default function PlanEditorScreen() {
     ]);
   };
 
-  const addExercise = (workoutId: string, exercise: Exercise): void => {
+  const addExercise = (workoutId: string, exercise: Exercise, afterSlotId: string | null): void => {
     mapWorkout(workoutId, (workout) => ({
       ...workout,
-      slots: [
-        ...workout.slots,
+      slots: insertSlotAfter(
+        workout.slots,
+        afterSlotId,
         createSlot(workout.slots, {
           slotId: newId(),
           exerciseId: exercise.id,
           exerciseName: exercise.name,
         }),
-      ],
+      ),
+    }));
+  };
+
+  const setSlotRest = (workoutId: string, slotId: string, seconds: number | null): void => {
+    mapWorkout(workoutId, (workout) => ({
+      ...workout,
+      slots: workout.slots.map((slot) =>
+        slot.slotId === slotId
+          ? { ...slot, prescription: { ...slot.prescription, restSeconds: seconds } }
+          : slot,
+      ),
     }));
   };
 
@@ -192,6 +208,11 @@ export default function PlanEditorScreen() {
             <Badge variant="light" color="gray" size="sm">
               {workouts.reduce((sum, workout) => sum + totalSets(workout), 0)} sets / week
             </Badge>
+            {workouts.length === 0 ? null : (
+              <Badge variant="light" color="gray" size="sm">
+                ~{formatEstimate(estimatePlanSeconds(workouts, profile.defaultRestSeconds))} / week
+              </Badge>
+            )}
             <Badge variant="light" color={plan.currentVersion === 0 ? 'gray' : 'amber'} size="sm">
               {plan.currentVersion === 0 ? 'unpublished' : `v${String(plan.currentVersion)}`}
             </Badge>
@@ -235,17 +256,20 @@ export default function PlanEditorScreen() {
               commit(reorder(workouts, from, to));
             }}
             onAddExercise={addExercise}
+            onSlotRest={setSlotRest}
             onReorderSlots={(workoutId, from, to) => {
               mapWorkout(workoutId, (current) => ({
                 ...current,
-                slots: reorder(current.slots, from, to),
+                // Reconciled after the move, which is what lets you drag a
+                // member out of a circuit to leave it.
+                slots: reconcileGroups(reorder(current.slots, from, to)),
               }));
             }}
             onEditSlot={setEditingSlot}
-            onLinkSlot={(workoutId, slotId) => {
+            onGroupSlots={(workoutId, activeSlotId, targetSlotId) => {
               mapWorkout(workoutId, (current) => ({
                 ...current,
-                slots: linkToPrevious(current.slots, slotId, newId()),
+                slots: groupWithSlot(current.slots, activeSlotId, targetSlotId, newId()),
               }));
             }}
             onUnlinkSlot={(workoutId, slotId) => {

@@ -12,7 +12,10 @@ import {
   createSlot,
   formatPrescription,
   formatRange,
+  estimateSetSeconds,
+  estimateWorkoutSeconds,
   formatDuration,
+  formatEstimate,
   formatRestSeconds,
   nextOccurrenceIndex,
   normalizePrescription,
@@ -452,5 +455,86 @@ describe('parseWorkoutOrder', () => {
 
   it('returns empty for a non-array', () => {
     expect(parseWorkoutOrder({})).toEqual([]);
+  });
+});
+
+describe('duration estimates', () => {
+  it('scales a set with its rep target', () => {
+    const five = estimateSetSeconds({ ...DEFAULT_PRESCRIPTION, repRange: { min: 5, max: 5 } });
+    const twenty = estimateSetSeconds({ ...DEFAULT_PRESCRIPTION, repRange: { min: 20, max: 20 } });
+    expect(twenty).toBeGreaterThan(five);
+  });
+
+  it('adds up sets and rest for a plain exercise', () => {
+    // 3 sets of 8-12 (mid 10): 3 x (12 + 30) work, plus rest after the first
+    // two sets only -- you finish on a set.
+    const workout: PlanWorkout = {
+      workoutId: 'w',
+      name: 'W',
+      groupRest: {},
+      slots: [
+        slot({
+          slotId: 'a',
+          prescription: { ...DEFAULT_PRESCRIPTION, sets: 3, restSeconds: 60 },
+        }),
+      ],
+    };
+    expect(estimateWorkoutSeconds(workout, 120)).toBe(3 * (12 + 30) + 2 * 60);
+  });
+
+  it('falls back to the profile rest when a slot has none', () => {
+    const workout: PlanWorkout = {
+      workoutId: 'w',
+      name: 'W',
+      groupRest: {},
+      slots: [slot({ slotId: 'a', prescription: { ...DEFAULT_PRESCRIPTION, sets: 2 } })],
+    };
+    const withShort = estimateWorkoutSeconds(workout, 60);
+    const withLong = estimateWorkoutSeconds(workout, 180);
+    expect(withLong).toBeGreaterThan(withShort);
+  });
+
+  it('grows with more sets', () => {
+    const build = (sets: number): PlanWorkout => ({
+      workoutId: 'w',
+      name: 'W',
+      groupRest: {},
+      slots: [slot({ slotId: 'a', prescription: { ...DEFAULT_PRESCRIPTION, sets } })],
+    });
+    expect(estimateWorkoutSeconds(build(5), 90)).toBeGreaterThan(
+      estimateWorkoutSeconds(build(3), 90),
+    );
+  });
+
+  it('is zero for an empty workout', () => {
+    expect(
+      estimateWorkoutSeconds({ workoutId: 'w', name: 'W', slots: [], groupRest: {} }, 120),
+    ).toBe(0);
+  });
+
+  it('never goes negative', () => {
+    const workout: PlanWorkout = {
+      workoutId: 'w',
+      name: 'W',
+      groupRest: {},
+      slots: [
+        slot({ slotId: 'a', prescription: { ...DEFAULT_PRESCRIPTION, sets: 1, restSeconds: 600 } }),
+      ],
+    };
+    expect(estimateWorkoutSeconds(workout, 120)).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('formatEstimate', () => {
+  it('uses minutes under an hour', () => {
+    expect(formatEstimate(0)).toBe('0 min');
+    expect(formatEstimate(45 * 60)).toBe('45 min');
+    expect(formatEstimate(59 * 60 + 20)).toBe('59 min');
+  });
+
+  it('uses hours and minutes above one', () => {
+    expect(formatEstimate(60 * 60)).toBe('1 h');
+    expect(formatEstimate(80 * 60)).toBe('1 h 20');
+    expect(formatEstimate(125 * 60)).toBe('2 h 05');
   });
 });

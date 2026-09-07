@@ -6,8 +6,10 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
-import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import {
   SortableContext,
   sortableKeyboardCoordinates,
@@ -16,18 +18,43 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ActionIcon, Group } from '@mantine/core';
-import type { ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import classes from './SortableList.module.css';
 
 /**
- * Vertical drag reordering that works with a thumb.
+ * Vertical drag reordering that works with a thumb, plus drag-to-group.
  *
  * HTML5 drag-and-drop does not fire on touch at all, so this uses dnd-kit's
  * pointer sensor (~11 kB gzipped for core + sortable + modifiers). Its
  * keyboard sensor also makes reordering reachable without a pointer, and the
- * explicit up/down buttons below give a third route on small screens where
- * dragging inside a scrolling list is fiddly.
+ * explicit up/down buttons give a third route on small screens where dragging
+ * inside a scrolling list is fiddly.
+ *
+ * **Grouping** reuses the same gesture: hold a dragged row over another for a
+ * moment and the drop becomes "join that one's circuit" instead of "move
+ * here" — the folder-drop pattern, so a normal reorder is unaffected. The
+ * target says so before you release, and pressing `g` mid-drag skips the wait
+ * (which is also the keyboard route: focus the handle, Space, arrow to the
+ * target, `g`, Space).
  */
+
+/** How long a dragged row must hover before the drop means "group". */
+const GROUP_DWELL_MS = 600;
+
+type GroupIntent = { activeId: string; targetId: string } | null;
+
+const GroupIntentContext = createContext<GroupIntent>(null);
+
+/**
+ * The row a dragged row is about to be grouped with, if any.
+ *
+ * eslint-disable-next-line react-refresh/only-export-components -- consumed
+ * by SortableRow in this same file; splitting it out buys nothing.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useGroupIntent(): GroupIntent {
+  return useContext(GroupIntentContext);
+}
 
 type SortableRowProps = {
   id: string;
@@ -60,14 +87,24 @@ export function SortableRow({
     isDragging,
   } = useSortable({ id });
 
+  const intent = useGroupIntent();
+  const isGroupTarget = intent?.targetId === id;
+
   return (
     <div
       ref={setNodeRef}
       className={classes.row}
       data-dragging={isDragging ? 'true' : undefined}
+      data-group-target={isGroupTarget ? 'true' : undefined}
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
       <div className={classes.body}>{children}</div>
+
+      {isGroupTarget ? (
+        <span className={classes.groupHint} aria-hidden="true">
+          release to group
+        </span>
+      ) : null}
 
       <Group gap={2} wrap="nowrap">
         {extraControls}
@@ -101,7 +138,8 @@ export function SortableRow({
           color="gray"
           size="lg"
           className={classes.handle}
-          aria-label={`Reorder ${label}`}
+          aria-label={`Reorder or group ${label}`}
+          aria-description="Hold over another exercise to group them, or press g while dragging."
           {...attributes}
           {...listeners}
         >
@@ -116,22 +154,122 @@ type SortableListProps = {
   /** Stable ids, in current display order. */
   ids: readonly string[];
   onReorder: (from: number, to: number) => void;
+  /** Omit to disable grouping for this list. */
+  onGroup?: (activeId: string, targetId: string) => void;
+  /** Rejects pairs that cannot be grouped, so no intent is offered. */
+  canGroup?: (activeId: string, targetId: string) => boolean;
   children: ReactNode;
 };
 
-export function SortableList({ ids, onReorder, children }: SortableListProps) {
+export function SortableList({ ids, onReorder, onGroup, canGroup, children }: SortableListProps) {
   const sensors = useSensors(
     // A small distance threshold so a tap on a row still registers as a tap.
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  const [intent, setIntent] = useState<GroupIntent>(null);
+  /**
+   * The current drop target, in a ref rather than state.
+   *
+   * `g` has to act on whatever is under the cursor *now*. Reading it from
+   * state would mean the key listener closes over whichever value existed when
+   * the effect last ran, so pressing `g` straight after an arrow key — or
+   * quickly after a drag move — would use a stale target, or none at all.
+   * Nothing renders from it, so a ref is both safer and cheaper.
+   */
+  const hover = useRef<GroupIntent>(null);
+  const dwell = useRef<number | null>(null);
+  /**
+   * Only a pointer drag can "hover". During a keyboard drag the target simply
+   * stays wherever the last arrow key left it, so a dwell timer would turn any
+   * pause into a group — arrow, hesitate, drop, and the reorder silently
+   * became a circuit. Keyboard grouping is `g`, deliberately.
+   */
+  const pointerDrag = useRef(false);
+
+  const stopDwell = (): void => {
+    if (dwell.current !== null) {
+      window.clearTimeout(dwell.current);
+      dwell.current = null;
+    }
+  };
+
+  const groupable = (activeId: string, targetId: string): boolean =>
+    onGroup !== undefined && activeId !== targetId && (canGroup?.(activeId, targetId) ?? true);
+
+  // `g` commits the intent straight away, which is the only route open to the
+  // keyboard sensor — there is no hovering without a pointer. Registered once
+  // for the component's life and gated on the ref, so it can never miss a
+  // target because an effect had not re-run yet.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'g' && event.key !== 'G') return;
+      const target = hover.current;
+      if (target === null) return;
+      event.preventDefault();
+      setIntent(target);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      stopDwell();
+    };
+  }, []);
+
+  const handleDragStart = (event: DragStartEvent): void => {
+    pointerDrag.current = !(event.activatorEvent instanceof KeyboardEvent);
+    stopDwell();
+    setIntent(null);
+    hover.current = null;
+  };
+
+  const handleDragOver = ({ active, over }: DragOverEvent): void => {
+    // The target changed, so any pending or settled intent is stale.
+    stopDwell();
+    setIntent(null);
+
+    const activeId = String(active.id);
+    const targetId = over === null ? null : String(over.id);
+
+    if (targetId === null || !groupable(activeId, targetId)) {
+      hover.current = null;
+      return;
+    }
+
+    hover.current = { activeId, targetId };
+    if (!pointerDrag.current) return;
+
+    dwell.current = window.setTimeout(() => {
+      setIntent({ activeId, targetId });
+    }, GROUP_DWELL_MS);
+  };
+
+  const finish = (): void => {
+    stopDwell();
+    setIntent(null);
+    hover.current = null;
+  };
+
   const handleDragEnd = (event: DragEndEvent): void => {
     const { active, over } = event;
-    if (over === null || active.id === over.id) return;
+    const settled = intent;
+    finish();
 
-    const from = ids.indexOf(String(active.id));
-    const to = ids.indexOf(String(over.id));
+    if (over === null || active.id === over.id) return;
+    const activeId = String(active.id);
+    const targetId = String(over.id);
+
+    // Grouping wins over reordering: groupWithSlot does its own positioning,
+    // so running both would move the row twice.
+    if (settled !== null && settled.activeId === activeId && settled.targetId === targetId) {
+      onGroup?.(activeId, targetId);
+      return;
+    }
+
+    const from = ids.indexOf(activeId);
+    const to = ids.indexOf(targetId);
     if (from !== -1 && to !== -1) onReorder(from, to);
   };
 
@@ -139,11 +277,19 @@ export function SortableList({ ids, onReorder, children }: SortableListProps) {
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
-      modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+      // Vertical only, but deliberately NOT restricted to the parent element:
+      // a circuit member's parent *is* the circuit block, so clamping to it
+      // would make dragging out of a circuit impossible.
+      modifiers={[restrictToVerticalAxis]}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
+      onDragCancel={finish}
     >
       <SortableContext items={[...ids]} strategy={verticalListSortingStrategy}>
-        <div className={classes.list}>{children}</div>
+        <GroupIntentContext.Provider value={intent}>
+          <div className={classes.list}>{children}</div>
+        </GroupIntentContext.Provider>
       </SortableContext>
     </DndContext>
   );

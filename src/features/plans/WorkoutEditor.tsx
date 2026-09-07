@@ -13,11 +13,12 @@ import { useState } from 'react';
 import { MuscleMap } from '@/components/MuscleMap';
 import type { Exercise } from '@/domain/exercises';
 import type { PlanExerciseSlot, PlanWorkout } from '@/domain/plans';
-import { totalSets } from '@/domain/plans';
+import { estimateWorkoutSeconds, formatEstimate, totalSets } from '@/domain/plans';
 import type { MuscleLookup } from '@/domain/volume';
 import { SESSION_STOPS, workoutVolume } from '@/domain/volume';
 import { ExercisePicker } from './ExercisePicker';
 import { SlotList } from './SlotList';
+import classes from './WorkoutEditor.module.css';
 
 type Props = {
   workout: PlanWorkout;
@@ -27,10 +28,12 @@ type Props = {
   onRename: (workoutId: string, name: string) => void;
   onRemove: (workoutId: string) => void;
   onMoveWorkout: (from: number, to: number) => void;
-  onAddExercise: (workoutId: string, exercise: Exercise) => void;
+  /** `afterSlotId` is null when appending at the end of the workout. */
+  onAddExercise: (workoutId: string, exercise: Exercise, afterSlotId: string | null) => void;
+  onSlotRest: (workoutId: string, slotId: string, seconds: number | null) => void;
   onReorderSlots: (workoutId: string, from: number, to: number) => void;
   onEditSlot: (slot: PlanExerciseSlot) => void;
-  onLinkSlot: (workoutId: string, slotId: string) => void;
+  onGroupSlots: (workoutId: string, activeSlotId: string, targetSlotId: string) => void;
   onUnlinkSlot: (workoutId: string, slotId: string) => void;
   onRounds: (workoutId: string, groupId: string, rounds: number) => void;
   onGroupRest: (workoutId: string, groupId: string, seconds: number | null) => void;
@@ -46,9 +49,10 @@ export function WorkoutEditor({
   onRemove,
   onMoveWorkout,
   onAddExercise,
+  onSlotRest,
   onReorderSlots,
   onEditSlot,
-  onLinkSlot,
+  onGroupSlots,
   onUnlinkSlot,
   onRounds,
   onGroupRest,
@@ -63,7 +67,11 @@ export function WorkoutEditor({
   const [draftName, setDraftName] = useState<{ base: string; value: string } | null>(null);
   const name = draftName?.base === workout.name ? draftName.value : workout.name;
 
-  const [picking, setPicking] = useState(false);
+  /**
+   * Where a newly picked exercise lands: after this slot, or at the end when
+   * null. Set by the + on a row, so an addition needs no follow-up drag.
+   */
+  const [picking, setPicking] = useState<{ afterSlotId: string | null } | null>(null);
   const [showMap, setShowMap] = useState(false);
 
   const volume = workoutVolume(workout, lookup);
@@ -132,6 +140,11 @@ export function WorkoutEditor({
           <Badge variant="light" color="gray" size="sm">
             {totalSets(workout)} sets
           </Badge>
+          {workout.slots.length === 0 ? null : (
+            <Badge variant="light" color="gray" size="sm">
+              ~{formatEstimate(estimateWorkoutSeconds(workout, defaultRestSeconds))}
+            </Badge>
+          )}
         </Group>
 
         {workout.slots.length === 0 ? (
@@ -146,11 +159,17 @@ export function WorkoutEditor({
               onReorderSlots(workout.workoutId, from, to);
             }}
             onEditSlot={onEditSlot}
-            onLink={(slotId) => {
-              onLinkSlot(workout.workoutId, slotId);
+            onGroup={(activeSlotId, targetSlotId) => {
+              onGroupSlots(workout.workoutId, activeSlotId, targetSlotId);
             }}
             onUnlink={(slotId) => {
               onUnlinkSlot(workout.workoutId, slotId);
+            }}
+            onAddAfter={(slotId) => {
+              setPicking({ afterSlotId: slotId });
+            }}
+            onSlotRest={(slotId, seconds) => {
+              onSlotRest(workout.workoutId, slotId, seconds);
             }}
             onRounds={(groupId, rounds) => {
               onRounds(workout.workoutId, groupId, rounds);
@@ -161,12 +180,19 @@ export function WorkoutEditor({
           />
         )}
 
+        {workout.slots.length > 1 ? (
+          <Text size="xs" c="dimmed">
+            Drag an exercise onto another and hold for a moment to make them a circuit, or press{' '}
+            <kbd className={classes.kbd}>g</kbd> while dragging.
+          </Text>
+        ) : null}
+
         <Group>
           <Button
             variant="light"
             size="compact-sm"
             onClick={() => {
-              setPicking(true);
+              setPicking({ afterSlotId: null });
             }}
           >
             Add exercise
@@ -193,14 +219,14 @@ export function WorkoutEditor({
       </Stack>
 
       <ExercisePicker
-        opened={picking}
+        opened={picking !== null}
         workoutName={workout.name}
         onClose={() => {
-          setPicking(false);
+          setPicking(null);
         }}
         onPick={(exercise) => {
-          onAddExercise(workout.workoutId, exercise);
-          setPicking(false);
+          onAddExercise(workout.workoutId, exercise, picking?.afterSlotId ?? null);
+          setPicking(null);
         }}
       />
     </Card>

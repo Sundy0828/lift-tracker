@@ -15,13 +15,15 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '@/data/hooks/useAuth';
 import { usePlans } from '@/data/hooks/usePlans';
+import { useProfile } from '@/data/hooks/useProfile';
 import { archivePlan, createPlan, deletePlan, newId } from '@/data/mutations/plans';
-import { orderedWorkouts, totalSets } from '@/domain/plans';
+import { estimatePlanSeconds, formatEstimate, orderedWorkouts, totalSets } from '@/domain/plans';
 
 export default function PlansScreen() {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const { plans, isPending } = usePlans();
+  const { profile } = useProfile();
   const navigate = useNavigate();
 
   const [creating, setCreating] = useState(false);
@@ -100,6 +102,12 @@ export default function PlansScreen() {
                     <Badge variant="light" color="gray" size="sm">
                       {weeklySets} sets / week
                     </Badge>
+                    {workouts.length === 0 ? null : (
+                      <Badge variant="light" color="gray" size="sm">
+                        ~{formatEstimate(estimatePlanSeconds(workouts, profile.defaultRestSeconds))}{' '}
+                        / week
+                      </Badge>
+                    )}
                     <Badge
                       variant="light"
                       color={plan.currentVersion === 0 ? 'gray' : 'amber'}

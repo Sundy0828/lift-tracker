@@ -173,6 +173,14 @@ one block. Its **rounds** are the members' shared set count, so three rounds of
 four exercises is four slots at three sets each — which is also why volume math
 needed no changes: supersets alter rest, not work.
 
+Build one by **dragging an exercise onto another and holding** — the folder-drop
+pattern, so a plain reorder is unaffected. The target says "release to group"
+before you commit, and `g` mid-drag skips the wait (also the keyboard route:
+focus the handle, Space, arrow to the target, `g`, Space). **Dragging a member
+clear of the block removes it** — `reconcileGroups` re-establishes the
+one-contiguous-run invariant after any reorder, so leaving is the same gesture
+as arriving. The explicit remove control stays for the keyboard.
+
 The two rests are deliberately separate:
 
 | Rest                | Stored on                       | In a circuit                     |
@@ -184,6 +192,18 @@ The two rests are deliberately separate:
 member: putting it on a slot would mean reordering the circuit silently moved
 the round rest into the middle of it. `pruneGroupRest` drops entries for
 dissolved groups so a later circuit cannot inherit a stale pause.
+
+## Time estimates
+
+`estimateWorkoutSeconds` models a set as a fixed setup cost plus time
+proportional to the rep target, then adds the rest that actually applies —
+per-slot, per-circuit-member, or the profile default. The last rest of a
+workout is dropped, since you finish on a set. Circuit members count once per
+round, plus the round rest per round.
+
+Deliberately crude: the honest precision is "about 45 minutes". It responds to
+the things that move a session's length — sets, reps and rest — and shows as a
+badge on the workout, the plan header and the plans list.
 
 ## Discarding plan edits
 

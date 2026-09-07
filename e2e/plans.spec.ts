@@ -37,6 +37,9 @@ async function addExercise(page: Page, cardIndex: number, query: string): Promis
   const confirm = page.getByRole('button', { name: /^Add to /u });
   await confirm.click();
   await expect(confirm).toBeHidden();
+  // Both picker modals must finish closing: while an overlay is still
+  // painted it swallows the pointer, so any drag that follows goes nowhere.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
 async function renameWorkout(page: Page, index: number, name: string): Promise<void> {
