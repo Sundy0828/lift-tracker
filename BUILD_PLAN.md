@@ -539,11 +539,14 @@ per §2.5 including `domain/workoutDiff.ts`, generated change summaries, and a v
 view.
 
 Gestures, because this is a phone-first editor: a `+` insert row in every gap (including above
-the first exercise) so an addition never needs a follow-up drag; drag on a left-hand handle,
-armed on a short hold; hold one row over another to make them a **circuit** (a contiguous
-`supersetGroup` run whose set count is its round count), and drag a member clear to leave; swipe
-a row left to delete. A **rest row** is a slot kind you place between exercises, so a circuit's
-pauses can be uneven; it contributes no volume, no sets and no PRs.
+the first exercise, and below a circuit block where it deliberately does *not* join) so an
+addition never needs a follow-up drag; drag on a left-hand handle, armed on a short hold; hold
+one row over another to make them a **circuit** (a contiguous `supersetGroup` run whose set count
+is its round count); swipe a row left to delete. Leaving a circuit needs two routes — drag a
+member clear of the block, or swipe it right, which is the only one that works when the whole
+workout *is* the circuit and there is no outside to drag to. A **rest row** is a slot kind you
+place between exercises, so a circuit's pauses can be uneven; it contributes no volume, no sets
+and no PRs.
 
 Build `components/MuscleMap`: inline front/back body SVG with a `<path>` per muscle group, each
 carrying `data-muscle`. Renders a heat map from `domain/volume.ts`, which computes

@@ -269,11 +269,17 @@ export function createSlot(slots: readonly ExerciseSlot[], input: NewSlotInput):
  * `null` means the **start** of the workout, which is what the insert row
  * above the first exercise uses. For an empty workout the start is also the
  * end, so the same call adds the first exercise.
+ *
+ * `join: false` places the slot in the same position but leaves it ungrouped,
+ * which is the insert row *below* a circuit block: without it a circuit at the
+ * end of a workout could only ever grow, because every insertion point inside
+ * it joins it.
  */
 export function insertSlotAfter(
   slots: readonly ExerciseSlot[],
   afterSlotId: string | null,
   slot: ExerciseSlot,
+  join = true,
 ): ExerciseSlot[] {
   if (afterSlotId === null) return [slot, ...slots];
 
@@ -281,7 +287,7 @@ export function insertSlotAfter(
   if (position === -1) return [...slots, slot];
 
   const host = slots[position];
-  const groupId = host?.supersetGroup ?? null;
+  const groupId = join ? (host?.supersetGroup ?? null) : null;
 
   // A rest row joins the group but keeps its own prescription: adopting the
   // host's round count and zeroing its rest would erase the pause it exists

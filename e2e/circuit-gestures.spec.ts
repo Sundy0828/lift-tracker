@@ -234,7 +234,9 @@ test.describe('adding in place, and uneven rests', () => {
     await buildWorkout(page, 'Insert Circuit Workout');
     await group(page, 'Crunches', 'Pushups', 2);
 
-    await page.getByRole('button', { name: /^Add an exercise after Pushups$/u }).click();
+    await page
+      .getByRole('button', { name: /^Add an exercise after Pushups, in the circuit$/u })
+      .click();
     await page.getByRole('textbox', { name: 'Search exercises to add' }).fill('barbell squat');
     await page.getByTestId('exercise-list').getByRole('button').first().click();
     await page.getByRole('button', { name: /^Add to /u }).click();
@@ -252,10 +254,12 @@ test.describe('adding in place, and uneven rests', () => {
     await group(page, 'Pullups', 'Crunches', 3);
 
     // The 400-then-2k case: a short pause after the first, a long one later.
-    await page.getByRole('button', { name: /^Add a rest after Pushups$/u }).click();
+    await page.getByRole('button', { name: /^Add a rest after Pushups, in the circuit$/u }).click();
     await page.getByRole('textbox', { name: 'Rest length' }).first().fill('15');
 
-    await page.getByRole('button', { name: /^Add a rest after Crunches$/u }).click();
+    await page
+      .getByRole('button', { name: /^Add a rest after Crunches, in the circuit$/u })
+      .click();
     const lengths = page.getByRole('textbox', { name: 'Rest length' });
     await expect(lengths).toHaveCount(2);
     await lengths.nth(1).fill('90');
@@ -342,9 +346,9 @@ test.describe('deleting rows', () => {
 });
 
 /**
- * Drags `name`'s row body left by `dx` and releases. Pressing the body rather
- * than the handle is the point: the drag sensor is armed only on the handle,
- * so a horizontal pull anywhere else can only be a swipe.
+ * Drags `name`'s row body sideways by `dx`, without releasing. Pressing the
+ * body rather than the handle is the point: the drag sensor is armed only on
+ * the handle, so a horizontal pull anywhere else can only be a swipe.
  */
 async function swipeRow(page: Page, name: string, dx: number): Promise<void> {
   const row = page.getByTestId('slot-name').filter({ hasText: name });
@@ -443,5 +447,114 @@ test.describe('row layout', () => {
     if (handleBox === null || nameBox === null) return;
 
     expect(handleBox.x + handleBox.width).toBeLessThanOrEqual(nameBox.x);
+  });
+});
+
+test.describe('leaving a circuit', () => {
+  /**
+   * The case drag cannot cover. With two exercises both in the circuit there
+   * is no position outside the block to drag to, so reordering only ever
+   * swaps them and the group survives. Swipe right is the way out.
+   */
+  test('a two-exercise workout that is all circuit can still be broken up', async ({ page }) => {
+    await signIn(page);
+    await createWorkout(page, 'Pair Workout');
+    await addExercise(page, 'pushups');
+    await addExercise(page, 'crunches');
+
+    await group(page, 'Crunches', 'Pushups', 2);
+    await expect(page.getByTestId('circuit-block')).toHaveCount(1);
+
+    await swipeRow(page, 'Crunches', 140);
+    // The action names itself before you let go.
+    await expect(page.getByText('Leave circuit', { exact: true })).toBeVisible();
+    await page.mouse.up();
+
+    // A circuit of one is just an exercise, so the whole block dissolves.
+    await expect(page.getByTestId('circuit-block')).toHaveCount(0);
+    await expect(page.getByText('2 exercises')).toBeVisible();
+  });
+
+  test('swiping a member right leaves the rest of the circuit intact', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Leave Workout');
+    await group(page, 'Crunches', 'Pushups', 2);
+    await group(page, 'Pullups', 'Crunches', 3);
+
+    await swipeRow(page, 'Pullups', 140);
+    await page.mouse.up();
+
+    // Down to two members, still one block, and nothing deleted.
+    await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
+    await expect(page.getByTestId('circuit-block')).toHaveCount(1);
+    await expect(page.getByText('4 exercises')).toBeVisible();
+  });
+
+  test('a short right swipe springs back and stays in the circuit', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Leave Back Workout');
+    await group(page, 'Crunches', 'Pushups', 2);
+
+    await swipeRow(page, 'Crunches', 40);
+    await page.mouse.up();
+
+    await expect(page.getByTestId('circuit-block')).toHaveCount(1);
+    await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
+  });
+
+  test('a row outside a circuit has nothing to reveal on the right', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'No Leave Workout');
+
+    await swipeRow(page, 'Pushups', 140);
+    await expect(page.getByText('Leave circuit', { exact: true })).toHaveCount(0);
+    await page.mouse.up();
+
+    await expect(page.getByText('4 exercises')).toBeVisible();
+  });
+});
+
+test.describe('adding after a circuit', () => {
+  test('the insert row below the block adds outside it', async ({ page }) => {
+    // A circuit at the end of a workout used to be a dead end: every
+    // insertion point inside the block joins the circuit.
+    await signIn(page);
+    await buildWorkout(page, 'After Circuit Workout');
+    await group(page, 'Pullups', 'Crunches', 2);
+
+    await page.getByRole('button', { name: /^Add an exercise after the circuit$/u }).click();
+    await page.getByRole('textbox', { name: 'Search exercises to add' }).fill('barbell squat');
+    await page.getByTestId('exercise-list').getByRole('button').first().click();
+    await page.getByRole('button', { name: /^Add to /u }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // Landed loose after the block, so the circuit is unchanged.
+    await expect(page.getByText(/2 rounds of these 2, in order/u)).toBeVisible();
+    await expect(page.getByTestId('circuit-block')).toHaveCount(1);
+    await expect(page.getByText('5 exercises')).toBeVisible();
+
+    const names = await page.getByTestId('slot-name').allTextContents();
+    expect(names.at(-1)).toContain('Barbell Squat');
+    // Not inside the block: the block lists only its own members.
+    const inBlock = await page
+      .getByTestId('circuit-block')
+      .getByTestId('slot-name')
+      .allTextContents();
+    expect(inBlock).toHaveLength(2);
+  });
+
+  test('a rest can be placed after a circuit rather than inside it', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Rest After Circuit Workout');
+    await group(page, 'Pullups', 'Crunches', 2);
+
+    await page.getByRole('button', { name: /^Add a rest after the circuit$/u }).click();
+
+    await expect(page.getByRole('textbox', { name: 'Rest length' })).toHaveCount(1);
+    // Outside the block, so the round count is untouched.
+    await expect(page.getByText(/2 rounds of these 2, in order/u)).toBeVisible();
+    await expect(
+      page.getByTestId('circuit-block').getByRole('textbox', { name: 'Rest length' }),
+    ).toHaveCount(0);
   });
 });

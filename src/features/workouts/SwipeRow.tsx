@@ -1,10 +1,10 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import classes from './SwipeToDelete.module.css';
+import classes from './SwipeRow.module.css';
 
 /**
- * Swipe a row left to delete it.
+ * Swipe a row sideways to act on it: left to delete, right to leave a circuit.
  *
- * Hand-rolled on pointer events rather than pulled from a library: it is ~60
+ * Hand-rolled on pointer events rather than pulled from a library: it is ~90
  * lines, and the two things that make it behave are both specific to this list
  * — `touch-action: pan-y` so the page still scrolls vertically, and swallowing
  * the click that a swipe would otherwise fire on the row underneath.
@@ -12,21 +12,33 @@ import classes from './SwipeToDelete.module.css';
  * It shares the row with dnd-kit without fighting it. Dragging is armed only
  * on the handle, and only after a hold; a horizontal move inside that hold
  * cancels the drag, which leaves the gesture to this.
+ *
+ * Rightwards exists because **dragging out of a circuit is impossible when the
+ * whole list is the circuit** — there is no "outside" to drag to. A gesture
+ * works at any member count, which a drag cannot.
  */
 
-/** How far left the row must travel to count as a delete. */
+/** How far the row must travel to count as a commit. */
 const COMMIT_PX = 96;
 /** Movement before a gesture is claimed as a horizontal swipe. */
 const CLAIM_PX = 12;
 
-type Props = {
-  onDelete: () => void;
-  /** Named in the revealed action, e.g. "Delete Bench Press". */
+export type SwipeAction = {
+  /** Named in the revealed panel, e.g. "Delete Bench Press". */
   label: string;
+  tone: 'danger' | 'neutral';
+  onCommit: () => void;
+};
+
+type Props = {
+  /** Revealed by swiping left. Omit to disable that direction. */
+  left?: SwipeAction;
+  /** Revealed by swiping right. Omit to disable that direction. */
+  right?: SwipeAction;
   children: ReactNode;
 };
 
-export function SwipeToDelete({ onDelete, label, children }: Props) {
+export function SwipeRow({ left, right, children }: Props) {
   const [offset, setOffset] = useState(0);
   const start = useRef<{ x: number; y: number } | null>(null);
   const swiping = useRef(false);
@@ -66,27 +78,40 @@ export function SwipeToDelete({ onDelete, label, children }: Props) {
       event.currentTarget.setPointerCapture(event.pointerId);
     }
 
-    // Left only: there is nothing revealed on the other side.
-    setOffset(Math.min(0, dx));
+    // Clamped to the directions that have somewhere to go, so a row with only
+    // one action cannot be dragged towards an empty reveal.
+    const lower = left === undefined ? 0 : -Infinity;
+    const upper = right === undefined ? 0 : Infinity;
+    setOffset(Math.min(upper, Math.max(lower, dx)));
   };
 
   const onPointerUp = (): void => {
-    if (swiping.current && offset <= -COMMIT_PX) {
-      swallowClick.current = true;
+    if (!swiping.current) {
       reset();
-      onDelete();
       return;
     }
-    if (swiping.current) swallowClick.current = true;
+
+    // A swipe always swallows its click, committed or not: the row underneath
+    // opens the prescription editor, which is not what a swipe asked for.
+    swallowClick.current = true;
+    const committed = offset <= -COMMIT_PX ? left : offset >= COMMIT_PX ? right : undefined;
     reset();
+    committed?.onCommit();
   };
 
-  const revealed = offset <= -CLAIM_PX;
+  const revealed = offset <= -CLAIM_PX ? left : offset >= CLAIM_PX ? right : undefined;
+  const armed = offset <= -COMMIT_PX || offset >= COMMIT_PX;
 
   return (
     <div className={classes.wrap}>
-      <div className={classes.behind} aria-hidden="true" data-armed={offset <= -COMMIT_PX}>
-        <span className={classes.behindLabel}>{revealed ? label : ''}</span>
+      <div
+        className={classes.behind}
+        aria-hidden="true"
+        data-side={offset > 0 ? 'left' : 'right'}
+        data-tone={revealed?.tone}
+        data-armed={armed ? 'true' : undefined}
+      >
+        <span className={classes.behindLabel}>{revealed?.label ?? ''}</span>
       </div>
 
       <div

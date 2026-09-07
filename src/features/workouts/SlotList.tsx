@@ -8,7 +8,7 @@ import {
   restSlotSeconds,
 } from '@/domain/workouts';
 import { SortableList, SortableRow } from './SortableList';
-import { SwipeToDelete } from './SwipeToDelete';
+import { SwipeRow, type SwipeAction } from './SwipeRow';
 import classes from './SlotList.module.css';
 
 /**
@@ -21,9 +21,12 @@ import classes from './SlotList.module.css';
  * rest, 800, rest — rather than hiding a number on the exercise before it.
  * The block's own rest is the pause after a whole round.
  *
- * Grouping and ungrouping are both the drag gesture, so there is no button for
- * either: hold a row over another to join it, drag one clear of the block to
- * leave.
+ * Joining a circuit is the drag gesture — hold a row over another — and there
+ * is no button for it. Leaving has two routes, because drag alone is not
+ * enough: dragging a member clear of the block works when there is somewhere
+ * clear to go, and **swiping the row right** works always, including the case
+ * that has no outside at all (a two-exercise workout that is entirely one
+ * circuit).
  */
 
 type Props = {
@@ -33,10 +36,17 @@ type Props = {
   onEditSlot: (slot: ExerciseSlot) => void;
   onRemoveSlot: (slotId: string) => void;
   onGroup: (activeSlotId: string, targetSlotId: string) => void;
-  /** Opens the picker to insert directly after this slot. */
-  onAddAfter: (slotId: string | null) => void;
-  /** Inserts a rest row directly after this slot; null for the start. */
-  onAddRestAfter: (slotId: string | null) => void;
+  /** Takes one slot out of its circuit, dissolving a group left with one. */
+  onLeaveCircuit: (slotId: string) => void;
+  /**
+   * Opens the picker to insert after this slot; null for the start.
+   *
+   * `join` is false for the insert row *below* a circuit block, which places
+   * the new slot after the block rather than inside it.
+   */
+  onAddAfter: (slotId: string | null, join: boolean) => void;
+  /** Inserts a rest row after this slot; null for the start. */
+  onAddRestAfter: (slotId: string | null, join: boolean) => void;
   onRounds: (groupId: string, rounds: number) => void;
   onGroupRest: (groupId: string, seconds: number | null) => void;
   onRestSeconds: (slotId: string, seconds: number) => void;
@@ -167,23 +177,29 @@ function RemoveButton({
 
 /**
  * The insertion point between rows: its own row rather than a control on an
- * exercise, because it acts on the gap. One sits above the first exercise too,
- * which is the only way to add something at the top — and the only control an
- * empty workout needs.
+ * exercise, because it acts on the gap.
+ *
+ * One sits above the first exercise, which is the only way to add something at
+ * the top — and the only control an empty workout needs. One sits below a
+ * circuit block too, with `join` false: every insertion point *inside* a block
+ * joins the circuit, so without it a circuit at the end of a workout could
+ * only ever grow.
  */
 function InsertRow({
-  slot,
+  slotId,
+  where,
+  join = true,
   onAddAfter,
   onAddRestAfter,
 }: {
   /** null for the row above the first exercise, i.e. the start. */
-  slot: ExerciseSlot | null;
-  onAddAfter: (slotId: string | null) => void;
-  onAddRestAfter: (slotId: string | null) => void;
+  slotId: string | null;
+  /** Completes "Add an exercise …", e.g. "after Pushups". */
+  where: string;
+  join?: boolean;
+  onAddAfter: (slotId: string | null, join: boolean) => void;
+  onAddRestAfter: (slotId: string | null, join: boolean) => void;
 }) {
-  const where = slot === null ? 'at the start' : `after ${slot.exerciseName}`;
-  const slotId = slot?.slotId ?? null;
-
   return (
     <div className={classes.insertRow}>
       <span className={classes.insertRule} aria-hidden="true" />
@@ -195,7 +211,7 @@ function InsertRow({
           data-testid="insert-exercise"
           aria-label={`Add an exercise ${where}`}
           onClick={() => {
-            onAddAfter(slotId);
+            onAddAfter(slotId, join);
           }}
         >
           ＋
@@ -209,7 +225,7 @@ function InsertRow({
           data-testid="insert-rest"
           aria-label={`Add a rest ${where}`}
           onClick={() => {
-            onAddRestAfter(slotId);
+            onAddRestAfter(slotId, join);
           }}
         >
           ⏱
@@ -227,6 +243,7 @@ export function SlotList({
   onEditSlot,
   onRemoveSlot,
   onGroup,
+  onLeaveCircuit,
   onAddAfter,
   onAddRestAfter,
   onRounds,
@@ -236,8 +253,30 @@ export function SlotList({
   const slotIds = workout.slots.map((slot) => slot.slotId);
   const segments = segment(workout.slots);
 
-  const swipeLabel = (slot: ExerciseSlot): string =>
-    slot.kind === 'rest' ? 'Delete rest' : `Delete ${slot.exerciseName}`;
+  const nameOf = (slot: ExerciseSlot): string =>
+    slot.kind === 'rest' ? 'rest' : slot.exerciseName;
+
+  /** Swipe left deletes; swipe right leaves the circuit, when in one. */
+  const swipeActions = (slot: ExerciseSlot, inCircuit: boolean) => {
+    const left: SwipeAction = {
+      label: `Delete ${nameOf(slot)}`,
+      tone: 'danger',
+      onCommit: () => {
+        onRemoveSlot(slot.slotId);
+      },
+    };
+    if (!inCircuit) return { left };
+    return {
+      left,
+      right: {
+        label: 'Leave circuit',
+        tone: 'neutral',
+        onCommit: () => {
+          onLeaveCircuit(slot.slotId);
+        },
+      } satisfies SwipeAction,
+    };
+  };
 
   const groupOf = (slotId: string): string | null =>
     workout.slots.find((slot) => slot.slotId === slotId)?.supersetGroup ?? null;
@@ -254,7 +293,12 @@ export function SlotList({
         return active === null || active !== groupOf(targetId);
       }}
     >
-      <InsertRow slot={null} onAddAfter={onAddAfter} onAddRestAfter={onAddRestAfter} />
+      <InsertRow
+        slotId={null}
+        where="at the start"
+        onAddAfter={onAddAfter}
+        onAddRestAfter={onAddRestAfter}
+      />
 
       {segments.map((item) => {
         if (item.kind === 'single') {
@@ -269,14 +313,7 @@ export function SlotList({
                 onMove={onReorder}
                 extraControls={<RemoveButton slot={slot} onRemoveSlot={onRemoveSlot} />}
                 surface={(rowContent) => (
-                  <SwipeToDelete
-                    label={swipeLabel(slot)}
-                    onDelete={() => {
-                      onRemoveSlot(slot.slotId);
-                    }}
-                  >
-                    {rowContent}
-                  </SwipeToDelete>
+                  <SwipeRow {...swipeActions(slot, false)}>{rowContent}</SwipeRow>
                 )}
               >
                 <SlotBody
@@ -286,7 +323,12 @@ export function SlotList({
                   onRestSeconds={onRestSeconds}
                 />
               </SortableRow>
-              <InsertRow slot={slot} onAddAfter={onAddAfter} onAddRestAfter={onAddRestAfter} />
+              <InsertRow
+                slotId={slot.slotId}
+                where={`after ${nameOf(slot)}`}
+                onAddAfter={onAddAfter}
+                onAddRestAfter={onAddRestAfter}
+              />
             </div>
           );
         }
@@ -296,89 +338,103 @@ export function SlotList({
         const lead = item.members[0]?.slot.exerciseName ?? '';
         const exerciseCount = item.members.filter(({ slot }) => slot.kind === 'exercise').length;
 
+        const last = item.members.at(-1)?.slot;
+
         return (
-          <div key={item.groupId} className={classes.circuit} data-testid="circuit-block">
-            <Group justify="space-between" align="center" wrap="nowrap" gap="xs">
-              <Group gap={6} wrap="nowrap">
-                <Text size="xs" fw={700} className={classes.circuitLabel}>
-                  Circuit
-                </Text>
-                <NumberInput
-                  size="xs"
-                  w={72}
-                  min={1}
-                  max={MAX_SETS}
-                  allowDecimal={false}
-                  clampBehavior="strict"
-                  suffix="x"
-                  aria-label={`Rounds for the circuit starting with ${lead}`}
-                  value={rounds ?? ''}
-                  placeholder="mixed"
-                  onChange={(value) => {
-                    if (typeof value === 'number') onRounds(item.groupId, value);
-                  }}
-                />
-              </Group>
-              <Group gap={4} wrap="nowrap">
-                <Tooltip label="Pause after a whole round, on top of any rest rows" withArrow>
-                  <Text size="xs" c="dimmed" className={classes.roundRestLabel}>
-                    round rest
+          <div key={item.groupId}>
+            <div className={classes.circuit} data-testid="circuit-block">
+              <Group justify="space-between" align="center" wrap="nowrap" gap="xs">
+                <Group gap={6} wrap="nowrap">
+                  <Text size="xs" fw={700} className={classes.circuitLabel}>
+                    Circuit
                   </Text>
-                </Tooltip>
-                <NumberInput
-                  size="xs"
-                  w={92}
-                  min={0}
-                  max={3600}
-                  step={15}
-                  allowDecimal={false}
-                  suffix="s"
-                  aria-label={`Rest between rounds for the circuit starting with ${lead}`}
-                  placeholder={formatRestSeconds(defaultRestSeconds)}
-                  value={roundRest ?? ''}
-                  onChange={(value) => {
-                    onGroupRest(item.groupId, typeof value === 'number' ? value : null);
-                  }}
-                />
-              </Group>
-            </Group>
-
-            {item.members.map(({ slot, index }) => (
-              <div key={slot.slotId}>
-                <SortableRow
-                  id={slot.slotId}
-                  index={index}
-                  total={workout.slots.length}
-                  label={slot.exerciseName}
-                  onMove={onReorder}
-                  extraControls={<RemoveButton slot={slot} onRemoveSlot={onRemoveSlot} />}
-                  surface={(rowContent) => (
-                    <SwipeToDelete
-                      label={swipeLabel(slot)}
-                      onDelete={() => {
-                        onRemoveSlot(slot.slotId);
-                      }}
-                    >
-                      {rowContent}
-                    </SwipeToDelete>
-                  )}
-                >
-                  <SlotBody
-                    slot={slot}
-                    inCircuit
-                    onEditSlot={onEditSlot}
-                    onRestSeconds={onRestSeconds}
+                  <NumberInput
+                    size="xs"
+                    w={72}
+                    min={1}
+                    max={MAX_SETS}
+                    allowDecimal={false}
+                    clampBehavior="strict"
+                    suffix="x"
+                    aria-label={`Rounds for the circuit starting with ${lead}`}
+                    value={rounds ?? ''}
+                    placeholder="mixed"
+                    onChange={(value) => {
+                      if (typeof value === 'number') onRounds(item.groupId, value);
+                    }}
                   />
-                </SortableRow>
-                <InsertRow slot={slot} onAddAfter={onAddAfter} onAddRestAfter={onAddRestAfter} />
-              </div>
-            ))}
+                </Group>
+                <Group gap={4} wrap="nowrap">
+                  <Tooltip label="Pause after a whole round, on top of any rest rows" withArrow>
+                    <Text size="xs" c="dimmed" className={classes.roundRestLabel}>
+                      round rest
+                    </Text>
+                  </Tooltip>
+                  <NumberInput
+                    size="xs"
+                    w={92}
+                    min={0}
+                    max={3600}
+                    step={15}
+                    allowDecimal={false}
+                    suffix="s"
+                    aria-label={`Rest between rounds for the circuit starting with ${lead}`}
+                    placeholder={formatRestSeconds(defaultRestSeconds)}
+                    value={roundRest ?? ''}
+                    onChange={(value) => {
+                      onGroupRest(item.groupId, typeof value === 'number' ? value : null);
+                    }}
+                  />
+                </Group>
+              </Group>
 
-            <Text size="xs" c="dimmed" className={classes.circuitFoot}>
-              {rounds === null
-                ? 'Members have different set counts — set the rounds to line them up.'
-                : `${String(rounds)} rounds of these ${String(exerciseCount)}, in order.`}
-            </Text>
+              {item.members.map(({ slot, index }) => (
+                <div key={slot.slotId}>
+                  <SortableRow
+                    id={slot.slotId}
+                    index={index}
+                    total={workout.slots.length}
+                    label={slot.exerciseName}
+                    onMove={onReorder}
+                    extraControls={<RemoveButton slot={slot} onRemoveSlot={onRemoveSlot} />}
+                    surface={(rowContent) => (
+                      <SwipeRow {...swipeActions(slot, true)}>{rowContent}</SwipeRow>
+                    )}
+                  >
+                    <SlotBody
+                      slot={slot}
+                      inCircuit
+                      onEditSlot={onEditSlot}
+                      onRestSeconds={onRestSeconds}
+                    />
+                  </SortableRow>
+                  <InsertRow
+                    slotId={slot.slotId}
+                    where={`after ${nameOf(slot)}, in the circuit`}
+                    onAddAfter={onAddAfter}
+                    onAddRestAfter={onAddRestAfter}
+                  />
+                </div>
+              ))}
+
+              <Text size="xs" c="dimmed" className={classes.circuitFoot}>
+                {rounds === null
+                  ? 'Members have different set counts — set the rounds to line them up.'
+                  : `${String(rounds)} rounds of these ${String(exerciseCount)}, in order.`}
+              </Text>
+            </div>
+
+            {/* Outside the block, and `join` false: this is how a workout that
+                ends in a circuit gets anything after it. */}
+            {last === undefined ? null : (
+              <InsertRow
+                slotId={last.slotId}
+                where="after the circuit"
+                join={false}
+                onAddAfter={onAddAfter}
+                onAddRestAfter={onAddRestAfter}
+              />
+            )}
           </div>
         );
       })}

@@ -134,6 +134,24 @@ describe('unlink', () => {
     const slots = base();
     expect(unlink(slots, 'warm')).toEqual(slots);
   });
+
+  it('is the only way out when the whole workout is one circuit', () => {
+    // Two exercises, both in the circuit: there is no position outside the
+    // block to drag to, so reordering can never leave it. This is why the
+    // swipe-right gesture exists.
+    const pair = [slot({ slotId: 'a' }), slot({ slotId: 'b', exerciseId: 'row' })];
+    const circuit = linkToPrevious(pair, 'b', 'g1');
+    expect(circuit.every((item) => item.supersetGroup === 'g1')).toBe(true);
+
+    // Any reorder keeps them adjacent, so the group survives reconciliation.
+    expect(reconcileGroups(reorder(circuit, 1, 0)).every((i) => i.supersetGroup === 'g1')).toBe(
+      true,
+    );
+
+    // unlink dissolves it, because a circuit of one is just an exercise.
+    const out = unlink(circuit, 'b');
+    expect(out.every((item) => item.supersetGroup === null)).toBe(true);
+  });
 });
 
 describe('groupRounds', () => {
@@ -480,6 +498,20 @@ describe('insertSlotAfter', () => {
     expect(grouped).toEqual([1, 2, 3, 4]);
     // Still one run, so reconciling changes nothing.
     expect(reconcileGroups(slots)).toEqual(slots);
+  });
+
+  it('stays out of the circuit when join is false', () => {
+    // The insert row *below* a circuit block. Without it a workout ending in a
+    // circuit could only ever grow the circuit.
+    const circuit = withGroupRounds(linkToPrevious(base(), 'b', 'g1'), 'g1', 4);
+    const slots = insertSlotAfter(circuit, 'b', fresh(), false);
+
+    expect(find(slots, 'new')?.supersetGroup).toBeNull();
+    // Positioned after the member it was anchored to, not appended blindly.
+    expect(slots.map((item) => item.slotId)).toEqual(['warm', 'a', 'b', 'new', 'c']);
+    // The circuit it sat next to is untouched.
+    expect(find(slots, 'a')?.supersetGroup).toBe('g1');
+    expect(find(slots, 'b')?.supersetGroup).toBe('g1');
   });
 
   it('appends when the anchor is unknown', () => {

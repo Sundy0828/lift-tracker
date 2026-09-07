@@ -199,13 +199,35 @@ needed no changes: supersets alter rest, not work.
 Build one by **dragging an exercise onto another and holding** — the folder-drop
 pattern, so a plain reorder is unaffected. The target dims to "hold to group"
 the moment you arrive and firms up to "release to group" once armed, so the
-wait is never silent; `g` mid-drag skips it. **Dragging a member clear of the
-block removes it** — `reconcileGroups` re-establishes the one-contiguous-run
-invariant after any reorder, so leaving is the same gesture as arriving.
+wait is never silent; `g` mid-drag skips it.
 
-There is no button for either direction. Without a pointer, both are still
-reachable: pick a row up with Space, arrow to a target and press `g` to join,
-or arrow clear of the block and drop to leave.
+Leaving has **two** routes, and needs both. Dragging a member clear of the
+block removes it — `reconcileGroups` re-establishes the one-contiguous-run
+invariant after any reorder, so leaving is the same gesture as arriving. But
+that only works when there is somewhere clear to go: a two-exercise workout
+that is entirely one circuit has no outside, and any reorder leaves the two
+members adjacent and still grouped. So **swiping a member right** calls
+`unlink` directly, which works at any member count. A circuit left with one
+member dissolves, since a circuit of one is just an exercise.
+
+There is no button for either direction. Without a pointer, joining and the
+drag route out are still reachable: pick a row up with Space, arrow to a target
+and press `g` to join, or arrow clear of the block and drop to leave.
+
+## Where the + rows go
+
+One insert row per **gap**, including above the first exercise — which is the
+only way to add something at the top, and the only control an empty workout
+needs.
+
+A circuit gets one extra. Every insertion point _inside_ the block joins the
+circuit (pressing + on a member should add a member, not drop a loose exercise
+into the middle of a round), so a circuit at the end of a workout would
+otherwise be a dead end — able only to grow. The row _below_ the block passes
+`join: false` to `insertSlotAfter`, which places the new slot in the same
+position but leaves it ungrouped. The amber border is what tells the two apart,
+and the labels say so: "after Pushups, in the circuit" against "after the
+circuit".
 
 The two rests are deliberately separate:
 

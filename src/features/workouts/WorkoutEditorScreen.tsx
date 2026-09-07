@@ -31,6 +31,7 @@ import type { Exercise } from '@/domain/exercises';
 import { diffWorkout } from '@/domain/workoutDiff';
 import type { ExerciseSlot, WorkoutBody } from '@/domain/workouts';
 import {
+  activeGroupIds,
   createRestSlot,
   createSlot,
   estimateWorkoutSeconds,
@@ -42,6 +43,7 @@ import {
   reconcileGroups,
   reorder,
   totalSets,
+  unlink,
   withGroupRounds,
 } from '@/domain/workouts';
 import { SESSION_STOPS, workoutVolume } from '@/domain/volume';
@@ -73,7 +75,14 @@ export default function WorkoutEditorScreen() {
   const { profile } = useProfile();
 
   const [editingSlot, setEditingSlot] = useState<ExerciseSlot | null>(null);
-  const [picking, setPicking] = useState<{ afterSlotId: string | null } | null>(null);
+  /**
+   * Where a newly picked exercise lands: after this slot, or at the start when
+   * null. `join` is false for the insert row below a circuit, which lands the
+   * exercise after the block rather than inside it.
+   */
+  const [picking, setPicking] = useState<{ afterSlotId: string | null; join: boolean } | null>(
+    null,
+  );
   const [name, setName] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
 
@@ -99,6 +108,7 @@ export default function WorkoutEditorScreen() {
   const pendingDiff = diffWorkout(published, body);
   const volume = workoutVolume(body, lookup);
   const exerciseCount = exerciseSlots(workout.slots).length;
+  const hasCircuit = activeGroupIds(workout.slots).length > 0;
 
   const commit = (next: WorkoutBody): void => {
     if (uid === null) return;
@@ -112,7 +122,7 @@ export default function WorkoutEditorScreen() {
     commit({ ...body, slots: change(workout.slots) });
   };
 
-  const addExercise = (exercise: Exercise, afterSlotId: string | null): void => {
+  const addExercise = (exercise: Exercise, afterSlotId: string | null, join: boolean): void => {
     mapSlots((slots) =>
       insertSlotAfter(
         slots,
@@ -122,6 +132,7 @@ export default function WorkoutEditorScreen() {
           exerciseId: exercise.id,
           exerciseName: exercise.name,
         }),
+        join,
       ),
     );
   };
@@ -251,11 +262,14 @@ export default function WorkoutEditorScreen() {
         onGroup={(activeSlotId, targetSlotId) => {
           mapSlots((slots) => groupWithSlot(slots, activeSlotId, targetSlotId, newId()));
         }}
-        onAddAfter={(slotId) => {
-          setPicking({ afterSlotId: slotId });
+        onLeaveCircuit={(slotId) => {
+          mapSlots((slots) => unlink(slots, slotId));
         }}
-        onAddRestAfter={(slotId) => {
-          mapSlots((slots) => insertSlotAfter(slots, slotId, createRestSlot(newId())));
+        onAddAfter={(slotId, join) => {
+          setPicking({ afterSlotId: slotId, join });
+        }}
+        onAddRestAfter={(slotId, join) => {
+          mapSlots((slots) => insertSlotAfter(slots, slotId, createRestSlot(newId()), join));
         }}
         onRestSeconds={setSlotRest}
         onRounds={(groupId, rounds) => {
@@ -266,8 +280,9 @@ export default function WorkoutEditorScreen() {
         }}
       />
 
-      {/* One hint line, not one per gesture: the circuit half only applies
-          once there is something to group with. */}
+      {/* One hint line, not one per gesture, and each half only appears once
+          it applies: grouping needs something to group with, leaving needs a
+          circuit to leave. */}
       {workout.slots.length === 0 ? null : (
         <Text size="xs" c="dimmed">
           Swipe a row left to delete it.
@@ -278,6 +293,7 @@ export default function WorkoutEditorScreen() {
               <kbd className={classes.kbd}>g</kbd> while dragging.
             </>
           ) : null}
+          {hasCircuit ? ' Swipe a circuit member right to take it back out.' : null}
         </Text>
       )}
 
@@ -347,7 +363,7 @@ export default function WorkoutEditorScreen() {
           setPicking(null);
         }}
         onPick={(exercise) => {
-          addExercise(exercise, picking?.afterSlotId ?? null);
+          addExercise(exercise, picking?.afterSlotId ?? null, picking?.join ?? true);
           setPicking(null);
         }}
       />

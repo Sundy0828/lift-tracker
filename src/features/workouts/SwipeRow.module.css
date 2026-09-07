@@ -1,0 +1,65 @@
+.wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--mantine-radius-md);
+}
+
+/* Revealed as the row travels. Anchored to the edge the row is uncovering, so
+   the label sits under the finger rather than across the row. */
+.behind {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding-inline: 14px;
+  border-radius: var(--mantine-radius-md);
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 700;
+}
+
+.behind[data-side='right'] {
+  justify-content: flex-end;
+}
+
+.behind[data-side='left'] {
+  justify-content: flex-start;
+}
+
+.behind[data-tone='danger'] {
+  background: light-dark(var(--mantine-color-red-1), var(--mantine-color-red-9));
+  color: light-dark(var(--mantine-color-red-9), var(--mantine-color-red-1));
+}
+
+.behind[data-tone='neutral'] {
+  background: light-dark(var(--mantine-color-amber-1), var(--mantine-color-amber-9));
+  color: light-dark(var(--mantine-color-amber-9), var(--mantine-color-amber-1));
+}
+
+/* Past the commit point, so it is obvious that releasing will act. */
+.behind[data-tone='danger'][data-armed='true'] {
+  background: light-dark(var(--mantine-color-red-6), var(--mantine-color-red-7));
+  color: var(--mantine-color-white);
+}
+
+.behind[data-tone='neutral'][data-armed='true'] {
+  background: light-dark(var(--mantine-color-amber-6), var(--mantine-color-amber-7));
+  color: light-dark(var(--mantine-color-white), var(--mantine-color-black));
+}
+
+.behindLabel {
+  white-space: nowrap;
+}
+
+.surface {
+  position: relative;
+  /* Vertical scrolling stays with the page; horizontal is ours. */
+  touch-action: pan-y;
+  background: light-dark(var(--mantine-color-white), var(--mantine-color-dark-6));
+  border-radius: var(--mantine-radius-md);
+}
+
+/* Springs back when released short of the commit point; no transition while
+   the finger is down, or the row would lag behind it. */
+.surface:not([data-swiping='true']) {
+  transition: transform 160ms ease;
+}
