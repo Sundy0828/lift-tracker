@@ -75,6 +75,12 @@ type SortableRowProps = {
   onMove: (from: number, to: number) => void;
   /** Row-specific actions, rendered before the move and drag controls. */
   extraControls?: ReactNode;
+  /**
+   * Wraps the row's visible surface. Used for swipe-to-delete, which has to
+   * sit inside the sortable node — that node carries the drag transform — but
+   * around the content it slides.
+   */
+  surface?: (row: ReactNode) => ReactNode;
   children: ReactNode;
 };
 
@@ -85,6 +91,7 @@ export function SortableRow({
   label,
   onMove,
   extraControls,
+  surface,
   children,
 }: SortableRowProps) {
   const {
@@ -101,15 +108,25 @@ export function SortableRow({
   const isGroupTarget = intent?.targetId === id;
   const isArming = !isGroupTarget && pending?.targetId === id;
 
-  return (
-    <div
-      ref={setNodeRef}
-      className={classes.row}
-      data-dragging={isDragging ? 'true' : undefined}
-      data-group-target={isGroupTarget ? 'true' : undefined}
-      data-group-arming={isArming ? 'true' : undefined}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-    >
+  const row = (
+    <div className={classes.rowInner}>
+      <ActionIcon
+        ref={setActivatorNodeRef}
+        variant="subtle"
+        color="gray"
+        size="md"
+        className={classes.handle}
+        // Marks this subtree as drag-only, so a horizontal pull starting here
+        // cannot also arm the swipe gesture wrapped around the row.
+        data-drag-handle="true"
+        aria-label={`Reorder or group ${label}`}
+        aria-description="Hold over another exercise to group them, or press g while dragging."
+        {...attributes}
+        {...listeners}
+      >
+        ⠿
+      </ActionIcon>
+
       <div className={classes.body}>{children}</div>
 
       {isGroupTarget ? (
@@ -148,20 +165,20 @@ export function SortableRow({
         >
           ↓
         </ActionIcon>
-        <ActionIcon
-          ref={setActivatorNodeRef}
-          variant="subtle"
-          color="gray"
-          size="md"
-          className={classes.handle}
-          aria-label={`Reorder or group ${label}`}
-          aria-description="Hold over another exercise to group them, or press g while dragging."
-          {...attributes}
-          {...listeners}
-        >
-          ⠿
-        </ActionIcon>
       </Group>
+    </div>
+  );
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={classes.row}
+      data-dragging={isDragging ? 'true' : undefined}
+      data-group-target={isGroupTarget ? 'true' : undefined}
+      data-group-arming={isArming ? 'true' : undefined}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+    >
+      {surface === undefined ? row : surface(row)}
     </div>
   );
 }
@@ -179,8 +196,13 @@ type SortableListProps = {
 
 export function SortableList({ ids, onReorder, onGroup, canGroup, children }: SortableListProps) {
   const sensors = useSensors(
-    // A small distance threshold so a tap on a row still registers as a tap.
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    /**
+     * A short hold rather than a distance threshold. Two reasons: a drag no
+     * longer starts from a stray twitch while scrolling, and a horizontal
+     * move inside the hold cancels activation, which is what leaves the
+     * swipe-to-delete gesture free to claim it.
+     */
+    useSensor(PointerSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 

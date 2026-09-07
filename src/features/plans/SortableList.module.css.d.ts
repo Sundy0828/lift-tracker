@@ -1,6 +1,7 @@
 declare const classes: {
   readonly list: string;
   readonly row: string;
+  readonly rowInner: string;
   readonly groupHint: string;
   readonly groupHintPending: string;
   readonly body: string;

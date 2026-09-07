@@ -31,7 +31,9 @@ async function createPlan(page: Page, name: string): Promise<void> {
  * a preview, so adding takes an explicit confirmation.
  */
 async function addExercise(page: Page, cardIndex: number, query: string): Promise<void> {
-  await page.getByRole('button', { name: 'Add exercise' }).nth(cardIndex).click();
+  const card = page.getByTestId('workout-card').nth(cardIndex);
+  // Appends: the last insert row in the card is the one below the last exercise.
+  await card.getByTestId('insert-exercise').last().click();
   await page.getByRole('textbox', { name: 'Search exercises to add' }).fill(query);
   await page.getByTestId('exercise-list').getByRole('button').first().click();
   const confirm = page.getByRole('button', { name: /^Add to /u });

@@ -257,14 +257,16 @@ export function createSlot(
  * when it has one — pressing + on a circuit member adds another member rather
  * than dropping a loose exercise into the middle of the block.
  *
- * Pass null to append at the end, ungrouped.
+ * `null` means the **start** of the workout, which is what the insert row
+ * above the first exercise uses. For an empty workout the start is also the
+ * end, so the same call adds the first exercise.
  */
 export function insertSlotAfter(
   slots: readonly PlanExerciseSlot[],
   afterSlotId: string | null,
   slot: PlanExerciseSlot,
 ): PlanExerciseSlot[] {
-  if (afterSlotId === null) return [...slots, slot];
+  if (afterSlotId === null) return [slot, ...slots];
 
   const position = slots.findIndex((item) => item.slotId === afterSlotId);
   if (position === -1) return [...slots, slot];

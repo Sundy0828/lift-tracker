@@ -8,6 +8,7 @@ import {
   restSlotSeconds,
 } from '@/domain/plans';
 import { SortableList, SortableRow } from './SortableList';
+import { SwipeToDelete } from './SwipeToDelete';
 import classes from './SlotList.module.css';
 
 /**
@@ -33,9 +34,9 @@ type Props = {
   onRemoveSlot: (slotId: string) => void;
   onGroup: (activeSlotId: string, targetSlotId: string) => void;
   /** Opens the picker to insert directly after this slot. */
-  onAddAfter: (slotId: string) => void;
-  /** Inserts a rest row directly after this slot. */
-  onAddRestAfter: (slotId: string) => void;
+  onAddAfter: (slotId: string | null) => void;
+  /** Inserts a rest row directly after this slot; null for the start. */
+  onAddRestAfter: (slotId: string | null) => void;
   onRounds: (groupId: string, rounds: number) => void;
   onGroupRest: (groupId: string, seconds: number | null) => void;
   onRestSeconds: (slotId: string, seconds: number) => void;
@@ -165,42 +166,50 @@ function RemoveButton({
 }
 
 /**
- * The insertion point below a row: its own row rather than a control on the
- * exercise, because it acts on the gap, not on the exercise above it.
+ * The insertion point between rows: its own row rather than a control on an
+ * exercise, because it acts on the gap. One sits above the first exercise too,
+ * which is the only way to add something at the top — and the only control an
+ * empty workout needs.
  */
 function InsertRow({
   slot,
   onAddAfter,
   onAddRestAfter,
 }: {
-  slot: PlanExerciseSlot;
-  onAddAfter: (slotId: string) => void;
-  onAddRestAfter: (slotId: string) => void;
+  /** null for the row above the first exercise, i.e. the start. */
+  slot: PlanExerciseSlot | null;
+  onAddAfter: (slotId: string | null) => void;
+  onAddRestAfter: (slotId: string | null) => void;
 }) {
+  const where = slot === null ? 'at the start' : `after ${slot.exerciseName}`;
+  const slotId = slot?.slotId ?? null;
+
   return (
     <div className={classes.insertRow}>
       <span className={classes.insertRule} aria-hidden="true" />
-      <Tooltip label={`Add an exercise after ${slot.exerciseName}`} withArrow>
+      <Tooltip label={`Add an exercise ${where}`} withArrow>
         <ActionIcon
           variant="subtle"
           color="gray"
           size="sm"
-          aria-label={`Add an exercise after ${slot.exerciseName}`}
+          data-testid="insert-exercise"
+          aria-label={`Add an exercise ${where}`}
           onClick={() => {
-            onAddAfter(slot.slotId);
+            onAddAfter(slotId);
           }}
         >
           ＋
         </ActionIcon>
       </Tooltip>
-      <Tooltip label={`Add a rest after ${slot.exerciseName}`} withArrow>
+      <Tooltip label={`Add a rest ${where}`} withArrow>
         <ActionIcon
           variant="subtle"
           color="gray"
           size="sm"
-          aria-label={`Add a rest after ${slot.exerciseName}`}
+          data-testid="insert-rest"
+          aria-label={`Add a rest ${where}`}
           onClick={() => {
-            onAddRestAfter(slot.slotId);
+            onAddRestAfter(slotId);
           }}
         >
           ⏱
@@ -227,6 +236,9 @@ export function SlotList({
   const slotIds = workout.slots.map((slot) => slot.slotId);
   const segments = segment(workout.slots);
 
+  const swipeLabel = (slot: PlanExerciseSlot): string =>
+    slot.kind === 'rest' ? 'Delete rest' : `Delete ${slot.exerciseName}`;
+
   const groupOf = (slotId: string): string | null =>
     workout.slots.find((slot) => slot.slotId === slotId)?.supersetGroup ?? null;
 
@@ -242,6 +254,8 @@ export function SlotList({
         return active === null || active !== groupOf(targetId);
       }}
     >
+      <InsertRow slot={null} onAddAfter={onAddAfter} onAddRestAfter={onAddRestAfter} />
+
       {segments.map((item) => {
         if (item.kind === 'single') {
           const { slot, index } = item;
@@ -254,6 +268,16 @@ export function SlotList({
                 label={slot.exerciseName}
                 onMove={onReorder}
                 extraControls={<RemoveButton slot={slot} onRemoveSlot={onRemoveSlot} />}
+                surface={(rowContent) => (
+                  <SwipeToDelete
+                    label={swipeLabel(slot)}
+                    onDelete={() => {
+                      onRemoveSlot(slot.slotId);
+                    }}
+                  >
+                    {rowContent}
+                  </SwipeToDelete>
+                )}
               >
                 <SlotBody
                   slot={slot}
@@ -328,6 +352,16 @@ export function SlotList({
                   label={slot.exerciseName}
                   onMove={onReorder}
                   extraControls={<RemoveButton slot={slot} onRemoveSlot={onRemoveSlot} />}
+                  surface={(rowContent) => (
+                    <SwipeToDelete
+                      label={swipeLabel(slot)}
+                      onDelete={() => {
+                        onRemoveSlot(slot.slotId);
+                      }}
+                    >
+                      {rowContent}
+                    </SwipeToDelete>
+                  )}
                 >
                   <SlotBody
                     slot={slot}

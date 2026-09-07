@@ -4,6 +4,14 @@ import { expect, test, type Page } from '@playwright/test';
  * Circuits and discarding plan edits.
  */
 
+/**
+ * The pointer sensor arms on a hold, not on distance, so a drag has to wait
+ * with the button down before it moves. A move inside the hold cancels
+ * activation — that is what leaves the horizontal swipe gesture free — so this
+ * has to sit between mouse.down() and the first move.
+ */
+const DRAG_HOLD_MS = 260;
+
 async function signIn(page: Page): Promise<void> {
   const email = `ci-${String(Date.now())}-${String(Math.floor(Math.random() * 100000))}@example.com`;
   await page.goto('/sign-in');
@@ -23,7 +31,8 @@ async function createPlan(page: Page, name: string): Promise<void> {
 }
 
 async function addExercise(page: Page, query: string): Promise<void> {
-  await page.getByRole('button', { name: 'Add exercise' }).first().click();
+  // Appends: with an insert row under every exercise, the last one is the end.
+  await page.getByTestId('insert-exercise').last().click();
   await page.getByRole('textbox', { name: 'Search exercises to add' }).fill(query);
   await page.getByTestId('exercise-list').getByRole('button').first().click();
   const confirm = page.getByRole('button', { name: /^Add to /u });
@@ -47,7 +56,8 @@ async function dragOnto(page: Page, name: string, onto: string): Promise<void> {
 
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
-  // Clear the 6px activation threshold first, then travel to the target.
+  await page.waitForTimeout(DRAG_HOLD_MS);
+  // Nudge clear of the row, then travel to the target.
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 - 10, { steps: 5 });
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
 }

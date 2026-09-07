@@ -439,10 +439,16 @@ describe('insertSlotAfter', () => {
   const fresh = (): PlanExerciseSlot =>
     slot({ slotId: 'new', exerciseId: 'dip', exerciseName: 'Dips' });
 
-  it('appends at the end when no anchor is given', () => {
+  it('inserts at the start when no anchor is given', () => {
+    // What the insert row above the first exercise uses.
     const slots = insertSlotAfter(base(), null, fresh());
-    expect(slots.map((item) => item.slotId)).toEqual(['warm', 'a', 'b', 'c', 'new']);
+    expect(slots.map((item) => item.slotId)).toEqual(['new', 'warm', 'a', 'b', 'c']);
     expect(find(slots, 'new')?.supersetGroup).toBeNull();
+  });
+
+  it('adds the first exercise to an empty workout', () => {
+    const slots = insertSlotAfter([], null, fresh());
+    expect(slots.map((item) => item.slotId)).toEqual(['new']);
   });
 
   it('inserts directly after a plain slot, ungrouped', () => {

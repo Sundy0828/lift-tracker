@@ -27,7 +27,7 @@ async function openPicker(page: Page): Promise<void> {
   await nameField.fill('DELTS');
   await nameField.blur();
 
-  await page.getByRole('button', { name: 'Add exercise' }).click();
+  await page.getByTestId('insert-exercise').first().click();
   await expect(page.getByRole('textbox', { name: 'Search exercises to add' })).toBeVisible();
 }
 

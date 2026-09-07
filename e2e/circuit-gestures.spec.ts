@@ -5,6 +5,14 @@ import { expect, test, type Page } from '@playwright/test';
  * exercise in place, and pacing a round unevenly.
  */
 
+/**
+ * The pointer sensor arms on a hold, not on distance, so a drag has to wait
+ * with the button down before it moves. A move inside the hold cancels
+ * activation — that is what leaves the horizontal swipe gesture free — so this
+ * has to sit between mouse.down() and the first move.
+ */
+const DRAG_HOLD_MS = 260;
+
 async function signIn(page: Page): Promise<void> {
   const email = `cg-${String(Date.now())}-${String(Math.floor(Math.random() * 100000))}@example.com`;
   await page.goto('/sign-in');
@@ -16,7 +24,8 @@ async function signIn(page: Page): Promise<void> {
 }
 
 async function addExercise(page: Page, query: string): Promise<void> {
-  await page.getByRole('button', { name: 'Add exercise' }).first().click();
+  // Appends: with an insert row under every exercise, the last one is the end.
+  await page.getByTestId('insert-exercise').last().click();
   await page.getByRole('textbox', { name: 'Search exercises to add' }).fill(query);
   await page.getByTestId('exercise-list').getByRole('button').first().click();
   const confirm = page.getByRole('button', { name: /^Add to /u });
@@ -54,7 +63,8 @@ async function dragOnto(page: Page, name: string, onto: string): Promise<void> {
 
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
-  // Clear the 6px activation threshold first, then travel to the target.
+  await page.waitForTimeout(DRAG_HOLD_MS);
+  // Nudge clear of the row, then travel to the target.
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 - 10, { steps: 5 });
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
 }
@@ -104,6 +114,7 @@ test.describe('drag to group', () => {
 
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
+    await page.waitForTimeout(DRAG_HOLD_MS);
     await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 6 });
     await page.mouse.up();
 
@@ -165,6 +176,7 @@ test.describe('drag out of a circuit', () => {
 
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
+    await page.waitForTimeout(DRAG_HOLD_MS);
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 - 10, { steps: 5 });
     await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2 - 24, { steps: 12 });
     await page.mouse.up();
@@ -321,5 +333,114 @@ test.describe('deleting rows', () => {
     // Rendered width matches its content, so no ellipsis is applied.
     const overflowing = await label.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
     expect(overflowing).toBe(false);
+  });
+});
+
+/**
+ * Drags `name`'s row body left by `dx` and releases. Pressing the body rather
+ * than the handle is the point: the drag sensor is armed only on the handle,
+ * so a horizontal pull anywhere else can only be a swipe.
+ */
+async function swipeRow(page: Page, name: string, dx: number): Promise<void> {
+  const row = page.getByTestId('slot-name').filter({ hasText: name });
+  const box = await row.boundingBox();
+  expect(box, `no box for ${name}`).not.toBeNull();
+  if (box === null) return;
+
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + box.width / 2, y);
+  await page.mouse.down();
+  // Straight across: a move with any vertical bias is left to the page scroll.
+  await page.mouse.move(box.x + box.width / 2 + dx, y, { steps: 10 });
+}
+
+test.describe('swipe to delete', () => {
+  test('swiping a row far enough left deletes it', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Swipe Plan');
+
+    await swipeRow(page, 'Crunches', -140);
+    // The action is named under the row before you let go.
+    await expect(page.getByText('Delete Crunches', { exact: true })).toBeVisible();
+    await page.mouse.up();
+
+    await expect(page.getByTestId('slot-name').filter({ hasText: 'Crunches' })).toHaveCount(0);
+    await expect(page.getByText('3 exercises')).toBeVisible();
+  });
+
+  test('a short swipe springs back and deletes nothing', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Swipe Back Plan');
+
+    await swipeRow(page, 'Crunches', -40);
+    await page.mouse.up();
+
+    await expect(page.getByText('4 exercises')).toBeVisible();
+    await expect(page.getByTestId('slot-name').filter({ hasText: 'Crunches' })).toHaveCount(1);
+    // The swipe swallowed its own click, so the edit sheet never opened.
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
+  test('a circuit member can be swiped away too', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Swipe Circuit Plan');
+    await group(page, 'Crunches', 'Pushups', 2);
+    await group(page, 'Pullups', 'Crunches', 3);
+
+    await swipeRow(page, 'Pullups', -140);
+    await page.mouse.up();
+
+    await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
+  });
+});
+
+test.describe('adding at the start', () => {
+  test('the insert row above the first exercise adds at the top', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Start Insert Plan');
+
+    await page.getByRole('button', { name: /^Add an exercise at the start$/u }).click();
+    await page.getByRole('textbox', { name: 'Search exercises to add' }).fill('barbell squat');
+    await page.getByTestId('exercise-list').getByRole('button').first().click();
+    await page.getByRole('button', { name: /^Add to /u }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    const names = await page.getByTestId('slot-name').allTextContents();
+    expect(names[0]).toContain('Barbell Squat');
+    await expect(page.getByText('5 exercises')).toBeVisible();
+  });
+
+  test('an empty workout is filled from its insert row alone', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/plans');
+    await page.getByRole('button', { name: 'New', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Plan name' }).fill('Empty Insert Plan');
+    await page.getByRole('button', { name: 'Create', exact: true }).click();
+    await page.getByRole('button', { name: '+ Add another day' }).click();
+
+    // No separate "Add exercise" button any more: the one insert row is it.
+    await expect(page.getByText('No exercises yet.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add exercise' })).toHaveCount(0);
+    await expect(page.getByTestId('insert-exercise')).toHaveCount(1);
+
+    await addExercise(page, 'bench jump');
+    await expect(page.getByText('1 exercise')).toBeVisible();
+  });
+});
+
+test.describe('row layout', () => {
+  test('the drag handle sits left of the exercise name', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Handle Plan');
+
+    const handle = page.getByRole('button', { name: /^Reorder or group Pushups$/u });
+    const name = page.getByTestId('slot-name').filter({ hasText: 'Pushups' });
+    const handleBox = await handle.boundingBox();
+    const nameBox = await name.boundingBox();
+    expect(handleBox).not.toBeNull();
+    expect(nameBox).not.toBeNull();
+    if (handleBox === null || nameBox === null) return;
+
+    expect(handleBox.x + handleBox.width).toBeLessThanOrEqual(nameBox.x);
   });
 });

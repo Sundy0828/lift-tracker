@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Button, Card, Group, Stack, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Badge, Card, Group, Stack, Text, TextInput } from '@mantine/core';
 import { useState } from 'react';
 import type { Exercise } from '@/domain/exercises';
 import type { PlanExerciseSlot, PlanWorkout } from '@/domain/plans';
@@ -14,15 +14,15 @@ type Props = {
   onRename: (workoutId: string, name: string) => void;
   onRemove: (workoutId: string) => void;
   onMoveWorkout: (from: number, to: number) => void;
-  /** `afterSlotId` is null when appending at the end of the workout. */
+  /** `afterSlotId` is null for the start of the workout. */
   onAddExercise: (workoutId: string, exercise: Exercise, afterSlotId: string | null) => void;
   onSlotRest: (workoutId: string, slotId: string, seconds: number | null) => void;
   onReorderSlots: (workoutId: string, from: number, to: number) => void;
   onEditSlot: (slot: PlanExerciseSlot) => void;
   onRemoveSlot: (slotId: string) => void;
   onGroupSlots: (workoutId: string, activeSlotId: string, targetSlotId: string) => void;
-  /** Inserts a rest row after `afterSlotId`. */
-  onAddRest: (workoutId: string, afterSlotId: string) => void;
+  /** Inserts a rest row after `afterSlotId`, or at the start when null. */
+  onAddRest: (workoutId: string, afterSlotId: string | null) => void;
   onRounds: (workoutId: string, groupId: string, rounds: number) => void;
   onGroupRest: (workoutId: string, groupId: string, seconds: number | null) => void;
   defaultRestSeconds: number;
@@ -56,15 +56,15 @@ export function WorkoutEditor({
   const name = draftName?.base === workout.name ? draftName.value : workout.name;
 
   /**
-   * Where a newly picked exercise lands: after this slot, or at the end when
-   * null. Set by the + on a row, so an addition needs no follow-up drag.
+   * Where a newly picked exercise lands: after this slot, or at the start when
+   * null. Set by the + on an insert row, so an addition needs no follow-up drag.
    */
   const [picking, setPicking] = useState<{ afterSlotId: string | null } | null>(null);
 
   const exerciseCount = exerciseSlots(workout.slots).length;
 
   return (
-    <Card withBorder padding="sm">
+    <Card withBorder padding="sm" data-testid="workout-card">
       <Stack gap="sm">
         <Group gap="xs" wrap="nowrap" align="center">
           <TextInput
@@ -137,53 +137,55 @@ export function WorkoutEditor({
           <Text size="sm" c="dimmed">
             No exercises yet.
           </Text>
-        ) : (
-          <SlotList
-            workout={workout}
-            defaultRestSeconds={defaultRestSeconds}
-            onReorder={(from, to) => {
-              onReorderSlots(workout.workoutId, from, to);
-            }}
-            onEditSlot={onEditSlot}
-            onRemoveSlot={onRemoveSlot}
-            onGroup={(activeSlotId, targetSlotId) => {
-              onGroupSlots(workout.workoutId, activeSlotId, targetSlotId);
-            }}
-            onAddAfter={(slotId) => {
-              setPicking({ afterSlotId: slotId });
-            }}
-            onAddRestAfter={(slotId) => {
-              onAddRest(workout.workoutId, slotId);
-            }}
-            onRestSeconds={(slotId, seconds) => {
-              onSlotRest(workout.workoutId, slotId, seconds);
-            }}
-            onRounds={(groupId, rounds) => {
-              onRounds(workout.workoutId, groupId, rounds);
-            }}
-            onGroupRest={(groupId, seconds) => {
-              onGroupRest(workout.workoutId, groupId, seconds);
-            }}
-          />
-        )}
-
-        {exerciseCount > 1 ? (
-          <Text size="xs" c="dimmed">
-            Drag an exercise onto another and hold for a moment to make them a circuit, or press{' '}
-            <kbd className={classes.kbd}>g</kbd> while dragging.
-          </Text>
         ) : null}
 
-        <Group>
-          <Button
-            variant="light"
-            onClick={() => {
-              setPicking({ afterSlotId: null });
-            }}
-          >
-            Add exercise
-          </Button>
-        </Group>
+        {/*
+          Rendered even when the workout is empty: the list's top insert row is
+          the only way to add the first exercise, now that the separate "Add
+          exercise" button is gone.
+        */}
+        <SlotList
+          workout={workout}
+          defaultRestSeconds={defaultRestSeconds}
+          onReorder={(from, to) => {
+            onReorderSlots(workout.workoutId, from, to);
+          }}
+          onEditSlot={onEditSlot}
+          onRemoveSlot={onRemoveSlot}
+          onGroup={(activeSlotId, targetSlotId) => {
+            onGroupSlots(workout.workoutId, activeSlotId, targetSlotId);
+          }}
+          onAddAfter={(slotId) => {
+            setPicking({ afterSlotId: slotId });
+          }}
+          onAddRestAfter={(slotId) => {
+            onAddRest(workout.workoutId, slotId);
+          }}
+          onRestSeconds={(slotId, seconds) => {
+            onSlotRest(workout.workoutId, slotId, seconds);
+          }}
+          onRounds={(groupId, rounds) => {
+            onRounds(workout.workoutId, groupId, rounds);
+          }}
+          onGroupRest={(groupId, seconds) => {
+            onGroupRest(workout.workoutId, groupId, seconds);
+          }}
+        />
+
+        {/* One hint line, not one per gesture: the circuit half only applies
+            once there is something to group with. */}
+        {workout.slots.length === 0 ? null : (
+          <Text size="xs" c="dimmed">
+            Swipe a row left to delete it.
+            {exerciseCount > 1 ? (
+              <>
+                {' '}
+                Drag an exercise onto another and hold for a moment to make them a circuit, or press{' '}
+                <kbd className={classes.kbd}>g</kbd> while dragging.
+              </>
+            ) : null}
+          </Text>
+        )}
       </Stack>
 
       <ExercisePicker

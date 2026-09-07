@@ -5,15 +5,19 @@
 }
 
 .row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 6px 6px 10px;
+  /* The outer node carries dnd-kit's transform and the border; the inner one
+     is what a swipe slides, so the border stays put while the content moves. */
+  position: relative;
   border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
   border-radius: var(--mantine-radius-md);
   background: light-dark(var(--mantine-color-white), var(--mantine-color-dark-6));
-  /* dnd-kit sets transform inline; keep it from being clipped mid-drag. */
-  position: relative;
+}
+
+.rowInner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 6px 6px 4px;
 }
 
 .row[data-dragging='true'] {
