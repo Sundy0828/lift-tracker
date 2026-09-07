@@ -249,7 +249,6 @@ export default function PlanEditorScreen() {
             workout={workout}
             index={index}
             total={workouts.length}
-            lookup={lookup}
             onRename={(workoutId, nextName) => {
               mapWorkout(workoutId, (current) => ({ ...current, name: nextName }));
             }}
@@ -304,14 +303,14 @@ export default function PlanEditorScreen() {
         Add workout
       </Button>
 
-      <Accordion variant="separated" defaultValue={null}>
-        <Accordion.Item value="week">
-          <Accordion.Control>What this plan hits per week</Accordion.Control>
+      <Accordion variant="separated" defaultValue="muscles">
+        <Accordion.Item value="muscles">
+          <Accordion.Control>Muscle map</Accordion.Control>
           <Accordion.Panel>
             <MuscleMap
               volume={volume}
               stops={WEEKLY_STOPS}
-              scopeLabel="per week"
+              scopeLabel="across this plan"
               testId="plan-muscle-map"
             />
           </Accordion.Panel>

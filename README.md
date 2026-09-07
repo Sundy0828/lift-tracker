@@ -146,6 +146,14 @@ script and the app import the domain the same way, with no second copy of it.
 
 ## The muscle map
 
+There is **one** map, on the plan screen, open by default and covering every
+workout — the lift-to-muscle mapping is deterministic, so a second per-workout
+copy only ever restated it. It updates as lifts are added.
+
+The genuinely different view is _actual_ volume from logged sessions — "what
+have I really hit lately" rather than "what does this plan claim to hit". That
+needs sessions, so it arrives with history in phase 4.
+
 `src/components/MuscleMap/bodyPolygons.ts` holds the front and back figures,
 adapted from [body-highlighter](https://github.com/lahaxearnaud/body-highlighter)
 (MIT — see [LICENSES.md](LICENSES.md)). Vendored rather than imported: the

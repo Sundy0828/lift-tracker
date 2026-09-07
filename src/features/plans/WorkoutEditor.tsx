@@ -1,21 +1,8 @@
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Card,
-  Collapse,
-  Group,
-  Stack,
-  Text,
-  TextInput,
-} from '@mantine/core';
+import { ActionIcon, Badge, Button, Card, Group, Stack, Text, TextInput } from '@mantine/core';
 import { useState } from 'react';
-import { MuscleMap } from '@/components/MuscleMap';
 import type { Exercise } from '@/domain/exercises';
 import type { PlanExerciseSlot, PlanWorkout } from '@/domain/plans';
 import { estimateWorkoutSeconds, exerciseSlots, formatEstimate, totalSets } from '@/domain/plans';
-import type { MuscleLookup } from '@/domain/volume';
-import { SESSION_STOPS, workoutVolume } from '@/domain/volume';
 import { ExercisePicker } from './ExercisePicker';
 import { SlotList } from './SlotList';
 import classes from './WorkoutEditor.module.css';
@@ -24,7 +11,6 @@ type Props = {
   workout: PlanWorkout;
   index: number;
   total: number;
-  lookup: MuscleLookup;
   onRename: (workoutId: string, name: string) => void;
   onRemove: (workoutId: string) => void;
   onMoveWorkout: (from: number, to: number) => void;
@@ -46,7 +32,6 @@ export function WorkoutEditor({
   workout,
   index,
   total,
-  lookup,
   onRename,
   onRemove,
   onMoveWorkout,
@@ -75,9 +60,7 @@ export function WorkoutEditor({
    * null. Set by the + on a row, so an addition needs no follow-up drag.
    */
   const [picking, setPicking] = useState<{ afterSlotId: string | null } | null>(null);
-  const [showMap, setShowMap] = useState(false);
 
-  const volume = workoutVolume(workout, lookup);
   const exerciseCount = exerciseSlots(workout.slots).length;
 
   return (
@@ -201,25 +184,7 @@ export function WorkoutEditor({
           >
             Add exercise
           </Button>
-          <Button
-            variant="subtle"
-            size="compact-sm"
-            onClick={() => {
-              setShowMap((open) => !open);
-            }}
-          >
-            {showMap ? 'Hide' : 'What this session hits'}
-          </Button>
         </Group>
-
-        <Collapse expanded={showMap}>
-          <MuscleMap
-            volume={volume}
-            stops={SESSION_STOPS}
-            scopeLabel="this session"
-            testId="session-muscle-map"
-          />
-        </Collapse>
       </Stack>
 
       <ExercisePicker

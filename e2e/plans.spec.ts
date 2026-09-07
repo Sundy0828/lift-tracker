@@ -85,20 +85,20 @@ test.describe('plans', () => {
     await expect(page.getByText('Cache Visible Plan')).toBeVisible();
   });
 
-  test('the muscle map updates as exercises are added', async ({ page }) => {
+  test('one muscle map, updating as exercises are added', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'Map Plan');
     await page.getByRole('button', { name: 'Add workout' }).click();
 
-    await page.getByRole('button', { name: 'What this session hits' }).click();
+    // Exactly one map, open by default, so it visibly follows the lifts.
+    await expect(page.getByTestId('plan-muscle-map')).toHaveCount(1);
     await expect(
-      page.getByText('No exercises yet — add one to see what this session hits'),
+      page.getByText('No exercises yet — add one to see what across this plan hits'),
     ).toBeVisible();
 
     await addExercise(page, 0, 'barbell bench press');
 
-    // Scoped to the session map: the plan-week map renders a chest row too.
-    const chestRow = page.getByTestId('session-muscle-map').locator('[data-muscle-row="chest"]');
+    const chestRow = page.getByTestId('plan-muscle-map').locator('[data-muscle-row="chest"]');
     await expect(chestRow).toBeVisible();
     await expect(chestRow).toContainText('3');
 
@@ -107,12 +107,27 @@ test.describe('plans', () => {
     await expect(chestRow).toContainText('6');
   });
 
+  test('a second workout folds into the same map', async ({ page }) => {
+    await signIn(page);
+    await createPlan(page, 'Two Day Map Plan');
+
+    await page.getByRole('button', { name: 'Add workout' }).click();
+    await addExercise(page, 0, 'barbell bench press');
+    await page.getByRole('button', { name: 'Add workout' }).click();
+    await addExercise(page, 1, 'barbell squat');
+
+    // Still one map, now covering both days.
+    await expect(page.getByTestId('plan-muscle-map')).toHaveCount(1);
+    const map = page.getByTestId('plan-muscle-map');
+    await expect(map.locator('[data-muscle-row="chest"]')).toBeVisible();
+    await expect(map.locator('[data-muscle-row="quadriceps"]')).toBeVisible();
+  });
+
   test('the body diagram exposes a path per muscle and is decorative', async ({ page }) => {
     await signIn(page);
     await createPlan(page, 'SVG Plan');
     await page.getByRole('button', { name: 'Add workout' }).click();
     await addExercise(page, 0, 'barbell bench press');
-    await page.getByRole('button', { name: 'What this session hits' }).click();
 
     const chestPath = page.locator('svg [data-muscle="chest"]').first();
     await expect(chestPath).toBeAttached();
