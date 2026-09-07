@@ -4,7 +4,7 @@ import { RequireAuth } from './RequireAuth';
 import { RouteError } from './RouteError';
 
 /**
- * Every feature area is a lazy route so plan editing, history, and sharing stay
+ * Every feature area is a lazy route so workout editing, history, and sharing stay
  * out of the entry bundle (§3). `lazy` resolves the module on navigation and
  * the layout's <Suspense> covers the gap.
  */
@@ -41,16 +41,16 @@ const routes: RouteObject[] = [
         },
       },
       {
-        path: 'plans',
+        path: 'workouts',
         lazy: async () => {
-          const { default: Component } = await import('@/features/plans/PlansScreen');
+          const { default: Component } = await import('@/features/workouts/WorkoutsScreen');
           return { Component };
         },
       },
       {
-        path: 'plans/:planId',
+        path: 'workouts/:workoutId',
         lazy: async () => {
-          const { default: Component } = await import('@/features/plans/PlanEditorScreen');
+          const { default: Component } = await import('@/features/workouts/WorkoutEditorScreen');
           return { Component };
         },
       },

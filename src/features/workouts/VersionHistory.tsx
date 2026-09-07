@@ -1,10 +1,10 @@
-import { Badge, Card, Group, Modal, Stack, Text, Timeline } from '@mantine/core';
+import { Badge, Group, Modal, Stack, Text, Timeline } from '@mantine/core';
 import { useState } from 'react';
-import type { PlanVersion } from '@/domain/plans';
-import { formatPrescription, totalSets } from '@/domain/plans';
+import type { WorkoutVersion } from '@/domain/workouts';
+import { exerciseSlots, formatPrescription, totalSets } from '@/domain/workouts';
 
 type Props = {
-  versions: readonly PlanVersion[];
+  versions: readonly WorkoutVersion[];
   currentVersion: number;
 };
 
@@ -20,18 +20,19 @@ function formatDate(iso: string | null): string {
 /**
  * The version list, and a read-only view of any snapshot.
  *
- * Opening an old version renders that snapshot's own workouts, never the live
- * plan — which is the mechanism behind "edit the plan and week 1 still reads
- * correctly" (§2.5).
+ * Opening an old version renders that snapshot's own exercises, never the live
+ * workout — which is the mechanism behind "edit the workout and week 1 still
+ * reads correctly" (§2.5). The snapshot carries its own name too, so a
+ * renamed workout's old versions still read under the name they had.
  */
 export function VersionHistory({ versions, currentVersion }: Props) {
-  const [viewing, setViewing] = useState<PlanVersion | null>(null);
+  const [viewing, setViewing] = useState<WorkoutVersion | null>(null);
 
   if (versions.length === 0) {
     return (
       <Text size="sm" c="dimmed">
-        No versions published yet. Publishing snapshots the plan so sessions logged against it stay
-        readable after you edit it.
+        No versions published yet. Publishing snapshots the workout so sessions logged against it
+        stay readable after you edit it.
       </Text>
     );
   }
@@ -71,9 +72,10 @@ export function VersionHistory({ versions, currentVersion }: Props) {
             </Text>
             <Text size="xs" c="dimmed">
               {formatDate(version.createdAt)} ·{' '}
-              {version.workouts.length === 1
-                ? '1 workout'
-                : `${String(version.workouts.length)} workouts`}
+              {exerciseSlots(version.slots).length === 1
+                ? '1 exercise'
+                : `${String(exerciseSlots(version.slots).length)} exercises`}{' '}
+              · {totalSets(version)} sets
             </Text>
           </Timeline.Item>
         ))}
@@ -89,48 +91,36 @@ export function VersionHistory({ versions, currentVersion }: Props) {
       >
         {viewing === null ? null : (
           <Stack>
+            <Group justify="space-between" wrap="nowrap">
+              <Text fw={600}>{viewing.name}</Text>
+              <Text size="xs" c="dimmed">
+                {totalSets(viewing)} sets
+              </Text>
+            </Group>
             <Text size="sm" c="dimmed">
               {viewing.changeSummary} · {formatDate(viewing.createdAt)}
             </Text>
             <Text size="xs" c="dimmed">
-              This is an immutable snapshot. Editing the plan never changes it.
+              This is an immutable snapshot. Editing the workout never changes it.
             </Text>
 
-            {viewing.workouts.length === 0 ? (
+            {viewing.slots.length === 0 ? (
               <Text size="sm" c="dimmed">
-                This version had no workouts.
+                This version had no exercises.
               </Text>
             ) : (
-              viewing.workouts.map((workout) => (
-                <Card key={workout.workoutId} withBorder padding="sm">
-                  <Stack gap={6}>
-                    <Group justify="space-between">
-                      <Text fw={600} size="sm">
-                        {workout.name}
-                      </Text>
-                      <Text size="xs" c="dimmed">
-                        {totalSets(workout)} sets
-                      </Text>
-                    </Group>
-                    {workout.slots.length === 0 ? (
-                      <Text size="xs" c="dimmed">
-                        No exercises.
-                      </Text>
-                    ) : (
-                      workout.slots.map((slot) => (
-                        <Group key={slot.slotId} justify="space-between" gap="xs" wrap="nowrap">
-                          <Text size="sm" lineClamp={1}>
-                            {slot.exerciseName}
-                          </Text>
-                          <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                            {formatPrescription(slot.prescription)}
-                          </Text>
-                        </Group>
-                      ))
-                    )}
-                  </Stack>
-                </Card>
-              ))
+              <Stack gap={6}>
+                {viewing.slots.map((slot) => (
+                  <Group key={slot.slotId} justify="space-between" gap="xs" wrap="nowrap">
+                    <Text size="sm" lineClamp={1}>
+                      {slot.exerciseName}
+                    </Text>
+                    <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                      {formatPrescription(slot.prescription)}
+                    </Text>
+                  </Group>
+                ))}
+              </Stack>
             )}
           </Stack>
         )}

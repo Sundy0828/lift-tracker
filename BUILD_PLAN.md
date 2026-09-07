@@ -1,7 +1,7 @@
 # Lift Tracker — Build Plan
 
-A phased implementation plan for a React + TypeScript PWA that tracks lifting plans,
-workouts, and set-by-set history with previous-session overlays.
+A phased implementation plan for a React + TypeScript PWA that tracks reusable workouts and
+set-by-set history with previous-session overlays.
 
 **How to use this document:** paste the "Ground Rules" section plus one Phase at a time
 into Claude. Do not hand over the whole file and say "build this" — the phases are ordered
@@ -11,18 +11,33 @@ so each one leaves the app in a working, deployable state.
 
 ## 0. Product Summary
 
-A single-user-per-account (with optional plan sharing) hypertrophy/strength log.
+A single-user-per-account (with optional workout sharing) hypertrophy/strength log.
 
 1. Build **exercises** — search a bundled public catalog or define custom ones with muscle groups.
-2. Build **plans** — a plan contains named **workouts** (PUSH / PULL / CHEST+DELTS / ARMS+LEGS).
-   Each workout contains ordered **exercise slots** with prescriptions: sets, a rep range,
-   and a target RIR (reps in reserve) range.
-3. **Log** a workout — pick a plan workout (or go ad-hoc), enter weight/reps/RIR per set, with
-   last time's numbers overlaid inline on every set row so progression is obvious.
+2. Build **workouts** — a workout is one named, reusable list: PUSH, PULL, ABS, CHEST+DELTS. It
+   contains ordered **exercise slots** with prescriptions: sets, a rep range, and a target RIR
+   (reps in reserve) range. **There is no plan container and no week.** A workout is the unit you
+   build, publish, perform and share.
+3. **Log** a workout — pick one (or go ad-hoc), enter weight/reps/RIR per set, with last time's
+   numbers overlaid inline on every set row so progression is obvious. One session performs one
+   workout: doing PUSH and then ABS on the same day is two sessions, which is also what keeps
+   each one's history clean.
 4. **Review** history — a date-ordered timeline of completed sessions. Each session is an
-   immutable snapshot: opening an old session shows the plan _as it was then_, with the weights
-   and reps actually performed.
-5. **Share** a plan via link; import it as a new plan or merge it into an existing one.
+   immutable snapshot: opening an old session shows the workout _as it was then_, with the
+   weights and reps actually performed.
+5. **Share** a workout via link; import it as a new workout or merge it into an existing one.
+
+### Why workouts, and not plans containing workouts
+
+An earlier draft nested workouts inside a plan. It made two things wrong. Sharing a list across
+days — ABS on Monday with PUSH, on Wednesday with PULL — meant typing it twice, and because
+overlay history keys on the workout, the two copies then accumulated **two divergent ABS
+histories** that never met. Promoting the workout to the top level fixes both: there is exactly
+one ABS, so it has exactly one history, and it costs a nesting level rather than adding one.
+
+What a plan used to provide — "these are my four days" — is now emergent. You start whichever
+workouts a day calls for, and `sessions` records what you actually did, which is a more honest
+answer than a stored intention anyway.
 
 ### Confirmed decisions
 
@@ -35,10 +50,10 @@ A single-user-per-account (with optional plan sharing) hypertrophy/strength log.
 | Offline             | Full offline logging with background sync                                                                                           |
 | Hosting             | Firebase Hosting                                                                                                                    |
 | Scheduling          | **No repeating schedules.** Sessions are date-stamped automatically so history is always in correct time order; backdating allowed. |
-| Day variants        | One workout per day type. Overlap between day types is expected and handled by the two-tier overlay (§2.6).                         |
+| Day variants        | One workout per day type, each top-level and reusable. Overlap between them is expected and handled by the two-tier overlay (§2.6). |
 | Units               | lb/kg toggle                                                                                                                        |
 | Extras in scope     | Rest timer with notification; bodyweight logging; PR tracking                                                                       |
-| Extras out of scope | Plate calculator; automatic weight suggestions                                                                                      |
+| Extras out of scope | Plate calculator; automatic weight suggestions; repeating weekly schedules                                                          |
 | SEO                 | Out of scope. See Appendix B if a public landing page is added later.                                                               |
 
 ---
@@ -58,7 +73,7 @@ current directory.
 - **Performance is a stated requirement.** Respect the budgets in §3. Do not add a dependency
   over ~15 kB gzipped without stating what it costs and why nothing lighter works.
 - **All domain logic lives in pure, unit-tested functions** under `src/domain/` with no React
-  and no Firebase imports. Volume math, e1RM, overlay resolution, unit conversion, plan diffing,
+  and no Firebase imports. Volume math, e1RM, overlay resolution, unit conversion, workout diffing,
   and PR detection are all pure functions over plain data. This is the layer to test hardest.
 - **Firestore access is confined to `src/data/`.** Components never import `firebase/firestore`
   directly; they consume hooks from `src/data/hooks/`.
@@ -77,7 +92,7 @@ src/
     volume.ts     # set-equivalents per muscle group
     strength.ts   # e1RM, RIR-adjusted comparison, PR detection
     overlay.ts    # two-tier previous-performance resolution
-    planDiff.ts   # compare imported plan vs existing plan
+    workoutDiff.ts # compare two snapshots of one workout
   data/           # firebase: converters, hooks, mutations
     firebase.ts
     converters/
@@ -85,7 +100,7 @@ src/
     mutations/
   features/
     exercises/
-    plans/
+    workouts/
     logging/
     history/
     sharing/
@@ -119,7 +134,7 @@ color-scheme manager so dark mode costs nothing at runtime.
 
 ### 2.2 Exercise catalog — bundle it, don't call an API
 
-The plan uses **[free-exercise-db](https://github.com/yuhonas/free-exercise-db)**: ~800
+The build uses **[free-exercise-db](https://github.com/yuhonas/free-exercise-db)**: ~800
 exercises, Unlicense (public domain), with exactly the fields this app needs.
 
 ```ts
@@ -184,24 +199,24 @@ users/{uid}
   customExercises/{exerciseId}
     name, primaryMuscles[], secondaryMuscles[], equipment, isCustom: true
 
-  plans/{planId}
-    name                           # "PPL + Upper"
-    notes
+  workouts/{workoutId}             # the reusable unit: PUSH, PULL, ABS
+    name                           # "CHEST + DELTS"
+    notes                          # NOT versioned: a running scratchpad
     currentVersion: number
-    workoutOrder: string[]         # workoutIds in display order
+    slots: ExerciseSlot[]          # the working copy's exercises, in order
+    groupRest: { [groupId]: number | null }
     archivedAt: Timestamp | null
     createdAt, updatedAt
 
-  plans/{planId}/versions/{versionNumber}     # IMMUTABLE snapshots
+  workouts/{workoutId}/versions/{versionNumber}   # IMMUTABLE snapshots
     versionNumber: number
     createdAt
-    changeSummary: string          # generated by planDiff
-    workouts: PlanWorkout[]        # full denormalized snapshot
+    changeSummary: string          # generated by workoutDiff
+    name, slots, groupRest         # the whole WorkoutBody, denormalized
 
   sessions/{sessionId}
-    planId: string | null          # null for fully ad-hoc
-    planVersion: number | null     # which snapshot this was performed against
-    workoutId: string | null       # STABLE across plan versions; null if ad-hoc
+    workoutId: string | null       # the workout performed; null if ad-hoc
+    workoutVersion: number | null  # which snapshot this was performed against
     workoutName: string            # denormalized: "CHEST + DELTS"
     status: 'active' | 'completed' | 'abandoned'
     performedOn: string            # 'YYYY-MM-DD' local date — the calendar key
@@ -213,7 +228,7 @@ users/{uid}
   # --- DENORMALIZED OVERLAY INDEXES (see §2.6) ---
 
   workoutStats/{workoutId}         # TIER 1: last performance *within this workout*
-    workoutId, workoutName
+    workoutId, workoutName         # same id as workouts/{workoutId}
     lastSessionId, lastPerformedOn
     byOccurrence: {                # key: `${exerciseId}#${occurrenceIndex}`
       [key: string]: LastPerformance
@@ -228,9 +243,9 @@ users/{uid}
     bestSet: LoggedSet             # the actual set that produced the PR
     totalSessions: number
 
-sharedPlans/{shareId}              # top-level, public read
+sharedWorkouts/{shareId}           # top-level, public read
   ownerUid, ownerDisplayName
-  plan: SharedPlanPayload          # self-contained snapshot + inlined custom exercises
+  workout: SharedWorkoutPayload    # self-contained snapshot + inlined custom exercises
   createdAt, revoked: boolean, importCount: number
 ```
 
@@ -247,20 +262,34 @@ type Prescription = {
   loadHint: string | null; // free text, e.g. "same as last + 5"
 };
 
-type PlanExerciseSlot = {
+type SlotKind = 'exercise' | 'rest'; // a rest row is a placed pause, not an exercise
+
+type ExerciseSlot = {
   slotId: string; // stable uuid, survives reordering
+  kind: SlotKind;
   exerciseId: string;
   exerciseName: string; // denormalized for offline/shared rendering
   occurrenceIndex: number; // 0, or 1+ if this exercise appears twice in the workout
-  prescription: Prescription;
-  supersetGroup: string | null;
+  prescription: Prescription; // for a rest row only restSeconds carries meaning
+  supersetGroup: string | null; // contiguous runs form a circuit
   notes: string;
 };
 
-type PlanWorkout = {
-  workoutId: string; // STABLE uuid across plan versions — overlay depends on this
+// The versioned part of a workout: what you would actually perform. The name
+// is in here so an old snapshot renders under the name it had at the time.
+type WorkoutBody = {
   name: string; // "CHEST + DELTS"
-  slots: PlanExerciseSlot[];
+  slots: ExerciseSlot[];
+  groupRest: Record<string, number | null>; // pause after a whole circuit round
+};
+
+type Workout = WorkoutBody & {
+  workoutId: string; // the document id. STABLE for the workout's whole life.
+  notes: string;
+  currentVersion: number;
+  archivedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 type LoggedSet = {
@@ -293,31 +322,46 @@ type LastPerformance = {
 };
 ```
 
-### 2.5 Plan versioning — the core of the history requirement
+Naming note: the word **workout** is the template — the thing you build and reuse — and
+**session** is one performance of it. That split is used consistently throughout.
 
-The mechanism behind "modify plan A for week 2 and week 1 still reads correctly."
+### 2.5 Workout versioning — the core of the history requirement
 
-1. `plans/{planId}` holds the **editable working copy** plus a `currentVersion` pointer.
+The mechanism behind "modify PUSH for week 2 and week 1 still reads correctly."
+
+1. `workouts/{workoutId}` holds the **editable working copy** plus a `currentVersion` pointer.
 2. Editing mutates the working copy freely (drafts are cheap). On **publish** — or
-   automatically the first time a session starts against a changed plan — write a new
+   automatically the first time a session starts against a changed workout — write a new
    immutable `versions/{n}` snapshot and bump `currentVersion`.
-3. A session records `planId` + `planVersion`. Rendering an old session reads that snapshot,
-   never the live plan. Old sessions are therefore permanently correct.
-4. `changeSummary` comes from `domain/planDiff.ts` so the version list is readable:
-   _"Added Incline DB Press, removed Cable Fly, Bench Press 3→4 sets."_
-5. **`workoutId` is stable across versions.** Renaming CHEST → CHEST + DELTS, reordering it, or
-   changing its exercises keeps the same `workoutId`, which is what preserves that workout's
-   overlay history. Only creating a genuinely new day type mints a new `workoutId`.
+3. A session records `workoutId` + `workoutVersion`. Rendering an old session reads that
+   snapshot, never the live workout. Old sessions are therefore permanently correct.
+4. `changeSummary` comes from `domain/workoutDiff.ts` so the version list is readable:
+   _"Added Incline DB Press, removed Cable Fly, Bench Press 3→4 sets."_ A first publish reads as
+   one event — _"Created PUSH with 6 exercises"_ — rather than one clause per exercise.
+5. **`workoutId` is stable for the workout's whole life**, and it is the document id, so that is
+   structural rather than a rule to remember. Renaming CHEST → CHEST + DELTS, reordering its
+   exercises or swapping them all out keeps the same id, which is what preserves its overlay
+   history. Only creating a genuinely new workout mints a new id.
+6. **The name is versioned; the notes are not.** A snapshot has to record what the workout was
+   called at the time or an old session renders under a name that did not exist yet. Notes are a
+   running scratchpad, not part of the prescription.
+7. Discard is only offered once something is published: with no snapshot there is nothing to
+   revert *to*, and a button that emptied the exercise list instead would be a destructive action
+   wearing an undo's clothes. Deleting the workout is the way to abandon an unpublished one.
 
 **Never** delete or rewrite a version document. Anything that would require it is a new version.
 
 ### 2.6 The previous-session overlay — two tiers
 
 **The problem this solves.** With PUSH, PULL, CHEST+DELTS, and ARMS+LEGS, bench press appears
-on more than one day. Bench on PUSH is done fresh; bench on CHEST+DELTS is done alongside
+in more than one workout. Bench on PUSH is done fresh; bench on CHEST+DELTS is done alongside
 different surrounding work, at different loads. Overlaying "the last time you benched anywhere"
-would compare PUSH-day bench against CHEST-day bench and produce a meaningless delta. So the
-overlay resolves in two tiers:
+would compare PUSH bench against CHEST-day bench and produce a meaningless delta. So the
+overlay resolves in two tiers.
+
+This is also the reason a workout is top-level rather than a copy inside a plan. Tier 1 keys on
+`workoutId`, so one ABS document means one ABS history no matter what it was paired with that
+day; two copies of ABS would have meant two histories that never met.
 
 **Tier 1 — same workout (primary).** Look up
 `workoutStats/{workoutId}.byOccurrence[exerciseId#occurrenceIndex]`. This is the last time you
@@ -339,7 +383,7 @@ Resolution lives in `domain/overlay.ts` as a pure function:
 
 ```ts
 resolveOverlay(
-  slot: PlanExerciseSlot,
+  slot: ExerciseSlot,
   workoutStats: WorkoutStats | null,
   exerciseStats: ExerciseStats | null,
 ): { kind: 'same-workout'; data: LastPerformance }
@@ -410,17 +454,17 @@ initializeFirestore(app, {
 
 ### 2.9 Sharing
 
-- Publishing writes `sharedPlans/{shareId}` with a **self-contained** payload: the plan version
-  snapshot plus full definitions of any custom exercises it references (a recipient won't have
-  them). Catalog exercises are referenced by id only.
+- Publishing writes `sharedWorkouts/{shareId}` with a **self-contained** payload: the workout
+  version snapshot plus full definitions of any custom exercises it references (a recipient won't
+  have them). Catalog exercises are referenced by id only.
 - The share route is public-read, no auth needed to view.
 - Import offers two paths:
-  - **Import as new plan** — straight copy; custom exercises created under the importer's
-    account, deduped by normalized name. New `workoutId`s are minted, so the importer's overlay
+  - **Import as a new workout** — straight copy; custom exercises created under the importer's
+    account, deduped by normalized name. A new `workoutId` is minted, so the importer's overlay
     history starts clean.
-  - **Merge into existing plan** — `planDiff` preview (added / removed / changed prescriptions,
-    per workout) with per-change checkboxes, then publish the result as a new version of the
-    target plan. **Merging preserves existing `workoutId`s**, so overlay history survives the
+  - **Merge into an existing workout** — `workoutDiff` preview (added / removed / changed
+    prescriptions) with per-change checkboxes, then publish the result as a new version of the
+    target. **Merging keeps the target's `workoutId`**, so its overlay history survives the
     merge. Merging must never mutate an existing version.
 
 ---
@@ -439,7 +483,7 @@ Stated targets, enforced in CI:
 
 Non-negotiable rules:
 
-- Route-level `React.lazy` for every feature area. Plan editing, history, and sharing must not
+- Route-level `React.lazy` for every feature area. Workout editing, history, and sharing must not
   be in the entry bundle.
 - Import only the Mantine packages actually used; don't pull `@mantine/charts` (it wraps
   Recharts) — the one trend line is hand-rolled SVG.
@@ -464,7 +508,7 @@ acceptance criteria pass.
 Scaffold Vite + React 19 + TS with the folder structure from §1. Configure strict TS, ESLint,
 Prettier, Vitest, Playwright, and the four npm gates. Mantine theme with light/dark following
 `prefers-color-scheme`, and a mobile-first layout shell with bottom navigation
-(Today / Plans / History / Settings). Firebase init with Auth (Google + email) and Firestore
+(Today / Workouts / History / Settings). Firebase init with Auth (Google + email) and Firestore
 with persistent multi-tab cache. `vite-plugin-pwa` with `injectManifest`, a real manifest, and
 maskable icons. Firebase emulator suite for local dev. Firebase Hosting deploy target.
 Settings screen with the lb/kg toggle wired to `profile.displayUnit`, and `domain/units.ts`
@@ -486,29 +530,39 @@ custom exercises on the catalog.
 found in search alongside catalog results, and `domain/` has tests for the resolver and search
 index.
 
-### Phase 2 — Plans, prescriptions, and the muscle map
+### Phase 2 — Workouts, prescriptions, and the muscle map
 
-Plan CRUD: create a plan, add named workouts, add exercise slots with drag-reordering, set the
+Workout CRUD: create a named workout, add exercise slots with drag-reordering, set the
 prescription per slot (sets count, rep range, RIR range, rest seconds, notes). Adding the same
-exercise twice in one workout assigns `occurrenceIndex` correctly. Implement plan versioning per
-§2.5 including `domain/planDiff.ts`, generated change summaries, stable `workoutId` handling,
-and a version-history view.
+exercise twice in one workout assigns `occurrenceIndex` correctly. Implement workout versioning
+per §2.5 including `domain/workoutDiff.ts`, generated change summaries, and a version-history
+view.
+
+Gestures, because this is a phone-first editor: a `+` insert row in every gap (including above
+the first exercise) so an addition never needs a follow-up drag; drag on a left-hand handle,
+armed on a short hold; hold one row over another to make them a **circuit** (a contiguous
+`supersetGroup` run whose set count is its round count), and drag a member clear to leave; swipe
+a row left to delete. A **rest row** is a slot kind you place between exercises, so a circuit's
+pauses can be uneven; it contributes no volume, no sets and no PRs.
 
 Build `components/MuscleMap`: inline front/back body SVG with a `<path>` per muscle group, each
 carrying `data-muscle`. Renders a heat map from `domain/volume.ts`, which computes
 set-equivalents per muscle group (primary = 1.0 per set, secondary = 0.5) on a 5-stop scale.
-Show it live while editing a workout ("what this session hits") and aggregated across the plan
-("what this plan hits per week"), with a per-muscle set-count readout so imbalances are visible.
-Accessible: the SVG is decorative, the numbers are the real content in a table.
+One map, in the workout editor, banded per session — with no plan above a workout nothing here
+knows your week, and a weekly number belongs to phase 4 where real logged sessions can supply
+it. A per-muscle set-count readout makes imbalances visible. Accessible: the SVG is decorative,
+the numbers are the real content in a table.
 
-**Done when:** a 4-day plan can be built end to end, editing it produces a new version with a
-readable summary while keeping `workoutId`s stable, old versions are viewable and unchanged, and
-the muscle map updates as exercises are added. `volume.ts` and `planDiff.ts` are unit-tested
-including superset, duplicate-exercise, and multi-muscle cases.
+**Done when:** a workout can be built end to end, editing it produces a new version with a
+readable summary while its id stays stable, old versions are viewable and unchanged under the
+name they had, and the muscle map updates as exercises are added. `volume.ts` and
+`workoutDiff.ts` are unit-tested including superset, duplicate-exercise, rest-row and
+multi-muscle cases.
 
 ### Phase 3 — Logging with the two-tier overlay
 
-The active-session screen. Start a session from a plan workout or ad-hoc. Per exercise, render
+The active-session screen. Start a session from a workout or ad-hoc; one session performs one
+workout, so a PUSH-then-ABS day is two sessions. Per exercise, render
 prescribed set rows with weight / reps / RIR inputs, a per-set complete toggle, and the ability
 to add or skip sets mid-session. Log bodyweight for the session.
 
@@ -528,22 +582,28 @@ logged the next morning) but never require it.
 **Done when:** a full workout can be logged in under a minute of tapping; the second time the
 same workout is logged every row shows that workout's own last numbers with correct deltas;
 benching on CHEST+DELTS after having benched on PUSH shows the PUSH numbers as a labeled
-secondary reference with no delta; a newly-added exercise shows NEW; the rest timer notifies
-with the screen off. `overlay.ts` and `strength.ts` are unit-tested — the two-tier fallback, the
+secondary reference with no delta; ABS logged after PUSH one day and after PULL the next shows a
+single continuous ABS history; a newly-added exercise shows NEW; the rest timer notifies with
+the screen off. `overlay.ts` and `strength.ts` are unit-tested — the two-tier fallback, the
 duplicate-occurrence case, RIR-adjusted comparison, PR detection, mixed units, and the
-plan-changed-between-weeks case.
+workout-changed-between-weeks case.
 
 ### Phase 4 — History and timeline
 
 A date-ordered list/calendar of sessions keyed on `performedOn`, grouped by week with volume and
-set totals. Session detail renders the session against its recorded `planVersion` snapshot — the
-archaeology view. Per-exercise history: every performance of one lift over time with a
+set totals. Session detail renders the session against its recorded `workoutVersion` snapshot —
+the archaeology view. Per-exercise history: every performance of one lift over time with a
 hand-rolled e1RM trend line and a PR list, loaded lazily, filterable to a single workout or all
-days. A PR feed across all lifts.
+of them. A PR feed across all lifts.
 
-**Done when:** week 1's session opens showing the week-1 plan definition and week-1 weights after
-the plan has been edited twice; per-exercise history spans plan versions correctly; the
-workout filter separates PUSH bench from CHEST-day bench.
+This is also where a weekly muscle map belongs, banded with `WEEKLY_STOPS`: rolled up from the
+sessions actually logged in a week rather than from a stored intention, which is the only
+version of that number that is true.
+
+**Done when:** week 1's session opens showing the week-1 workout definition and week-1 weights
+after the workout has been edited twice; per-exercise history spans versions correctly; the
+workout filter separates PUSH bench from CHEST-day bench; the weekly map reflects sessions
+logged, not workouts defined.
 
 ### Phase 5 — Offline hardening and PWA polish
 
@@ -555,15 +615,15 @@ crash or reload.
 **Done when:** the offline Playwright test passes, and airplane mode on a real phone allows a
 cold start, a full logged workout with a working rest timer, and a clean sync on reconnect.
 
-### Phase 6 — Plan sharing and import
+### Phase 6 — Workout sharing and import
 
-Publish a plan version to `sharedPlans` with inlined custom exercises. Public share route (no
-auth to view, sign-in to import). Import-as-new (mints fresh `workoutId`s) and
-merge-into-existing (preserves `workoutId`s) with the diff preview per §2.9. Firestore security
-rules for public read + owner-only write, plus a revoke action.
+Publish a workout version to `sharedWorkouts` with inlined custom exercises. Public share route
+(no auth to view, sign-in to import). Import-as-new (mints a fresh `workoutId`) and
+merge-into-existing (keeps the target's `workoutId`) with the diff preview per §2.9. Firestore
+security rules for public read + owner-only write, plus a revoke action.
 
-**Done when:** a plan shared from one account imports into another that lacks the custom
-exercises; merging into an existing plan produces a new version with a correct change summary
+**Done when:** a workout shared from one account imports into another that lacks the custom
+exercises; merging into an existing workout produces a new version with a correct change summary
 and the target's overlay history still resolves; rules tests confirm nobody can write another
 user's data.
 
@@ -584,7 +644,7 @@ read on first paint.
 match /users/{uid}/{document=**} {
   allow read, write: if request.auth.uid == uid;
 }
-match /sharedPlans/{shareId} {
+match /sharedWorkouts/{shareId} {
   allow read: if resource.data.revoked == false;
   allow create: if request.auth.uid == request.resource.data.ownerUid;
   allow update, delete: if request.auth.uid == resource.data.ownerUid;

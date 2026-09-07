@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MuscleGroup } from './muscles';
-import type { PlanExerciseSlot, PlanWorkout, Prescription } from './plans';
-import { DEFAULT_PRESCRIPTION } from './plans';
+import type { ExerciseSlot, Prescription, WorkoutBody } from './workouts';
+import { DEFAULT_PRESCRIPTION } from './workouts';
 import type { ExerciseMuscles, MuscleLookup } from './volume';
 import {
   SESSION_STOPS,
@@ -9,7 +9,6 @@ import {
   formatSetEquivalents,
   heatByRegion,
   heatStop,
-  planVolume,
   rollUpToBase,
   totalSetEquivalents,
   volumeRows,
@@ -32,7 +31,7 @@ const lookup: MuscleLookup = (id) => EXERCISES[id] ?? null;
 
 let slotCounter = 0;
 
-function slot(exerciseId: string, sets: number, overrides: Partial<PlanExerciseSlot> = {}) {
+function slot(exerciseId: string, sets: number, overrides: Partial<ExerciseSlot> = {}) {
   slotCounter += 1;
   const prescription: Prescription = { ...DEFAULT_PRESCRIPTION, sets };
   return {
@@ -45,11 +44,11 @@ function slot(exerciseId: string, sets: number, overrides: Partial<PlanExerciseS
     supersetGroup: null,
     notes: '',
     ...overrides,
-  } satisfies PlanExerciseSlot;
+  } satisfies ExerciseSlot;
 }
 
-function workout(name: string, slots: PlanExerciseSlot[]): PlanWorkout {
-  return { workoutId: `w-${name}`, name, slots, groupRest: {} };
+function workout(name: string, slots: ExerciseSlot[]): WorkoutBody {
+  return { name, slots, groupRest: {} };
 }
 
 const get = (volume: ReadonlyMap<MuscleGroup, number>, muscle: MuscleGroup): number =>
@@ -109,7 +108,7 @@ describe('workoutVolume', () => {
   });
 
   it('ignores slots whose exercise cannot be resolved', () => {
-    // A deleted custom exercise must not break the plan screen.
+    // A deleted custom exercise must not break the workout screen.
     const volume = workoutVolume(workout('PUSH', [slot('fly', 4), slot('gone', 5)]), lookup);
     expect(get(volume, 'chest')).toBe(4);
     expect(volume.size).toBe(1);
@@ -124,14 +123,16 @@ describe('workoutVolume', () => {
   });
 });
 
-describe('planVolume', () => {
-  it('sums a multi-day plan', () => {
-    const volume = planVolume(
-      [
-        workout('PUSH', [slot('bench', 4), slot('incline', 3)]),
-        workout('PULL', [slot('row', 4), slot('facepull', 3)]),
-        workout('LEGS', [slot('squat', 5)]),
-      ],
+describe('workoutVolume across many exercises', () => {
+  it('accumulates primary and secondary roles over a whole workout', () => {
+    const volume = workoutVolume(
+      workout('FULL', [
+        slot('bench', 4),
+        slot('incline', 3),
+        slot('row', 4),
+        slot('facepull', 3),
+        slot('squat', 5),
+      ]),
       lookup,
     );
 
@@ -145,20 +146,14 @@ describe('planVolume', () => {
     expect(get(volume, 'quadriceps')).toBe(5);
     expect(get(volume, 'glutes')).toBe(2.5);
   });
-
-  it('counts the same workout listed twice, twice', () => {
-    const push = workout('PUSH', [slot('fly', 4)]);
-    expect(get(planVolume([push, push], lookup), 'chest')).toBe(8);
-  });
-
-  it('returns empty for no workouts', () => {
-    expect(planVolume([], lookup).size).toBe(0);
-  });
 });
 
 describe('rollUpToBase', () => {
   it('folds fine-grained muscles into the group the diagram paints', () => {
-    const volume = planVolume([workout('PUSH', [slot('incline', 3), slot('facepull', 4)])], lookup);
+    const volume = workoutVolume(
+      workout('PUSH', [slot('incline', 3), slot('facepull', 4)]),
+      lookup,
+    );
     const base = rollUpToBase(volume);
 
     // upper chest -> chest, front delts + rear delts -> shoulders
@@ -168,8 +163,8 @@ describe('rollUpToBase', () => {
   });
 
   it('adds a base muscle and its children together', () => {
-    const volume = planVolume(
-      [workout('PUSH', [slot('bench', 4), slot('incline', 2), slot('facepull', 2)])],
+    const volume = workoutVolume(
+      workout('PUSH', [slot('bench', 4), slot('incline', 2), slot('facepull', 2)]),
       lookup,
     );
     const base = rollUpToBase(volume);
@@ -181,8 +176,8 @@ describe('rollUpToBase', () => {
   });
 
   it('preserves the grand total', () => {
-    const volume = planVolume(
-      [workout('PUSH', [slot('bench', 4), slot('incline', 3), slot('facepull', 2)])],
+    const volume = workoutVolume(
+      workout('PUSH', [slot('bench', 4), slot('incline', 3), slot('facepull', 2)]),
       lookup,
     );
     expect(totalSetEquivalents(rollUpToBase(volume))).toBe(totalSetEquivalents(volume));
@@ -223,7 +218,7 @@ describe('heatStop', () => {
 
 describe('volumeRows', () => {
   it('sorts heaviest first so imbalances read top-down', () => {
-    const volume = planVolume([workout('PUSH', [slot('bench', 6), slot('facepull', 2)])], lookup);
+    const volume = workoutVolume(workout('PUSH', [slot('bench', 6), slot('facepull', 2)]), lookup);
     const rows = volumeRows(volume);
     expect(rows[0]?.muscle).toBe('chest');
     expect(rows[0]?.setEquivalents).toBe(6);
@@ -233,13 +228,13 @@ describe('volumeRows', () => {
   });
 
   it('omits muscles with no volume', () => {
-    const rows = volumeRows(planVolume([workout('PUSH', [slot('fly', 3)])], lookup));
+    const rows = volumeRows(workoutVolume(workout('PUSH', [slot('fly', 3)]), lookup));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.muscle).toBe('chest');
   });
 
   it('tags each row with its heat stop', () => {
-    const volume = planVolume([workout('PUSH', [slot('fly', 20)])], lookup);
+    const volume = workoutVolume(workout('PUSH', [slot('fly', 20)]), lookup);
     expect(volumeRows(volume)[0]?.stop).toBe(4);
   });
 

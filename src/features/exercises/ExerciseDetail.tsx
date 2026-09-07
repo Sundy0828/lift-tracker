@@ -8,7 +8,7 @@ import classes from './ExerciseDetail.module.css';
 
 /**
  * The body of an exercise detail view: both movement frames, the muscles it
- * works, and its instructions. Shared by the browse drawer and the plan
+ * works, and its instructions. Shared by the browse drawer and the workout
  * picker's preview so the two can never drift.
  *
  * The two images are the start and end position of the lift, which is the

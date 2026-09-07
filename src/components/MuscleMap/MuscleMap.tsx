@@ -68,7 +68,7 @@ export type MuscleMapProps = {
   volume: VolumeByMuscle;
   /** Band thresholds — session or weekly (see domain/volume). */
   stops?: readonly [number, number, number, number];
-  /** Describes what the numbers cover, e.g. "this session" or "per week". */
+  /** A noun phrase for what the numbers cover, e.g. "this workout". */
   scopeLabel: string;
   /** Hide the readout table when several maps share one table. */
   withTable?: boolean;
@@ -129,8 +129,8 @@ export function MuscleMap({
             captionSide="top"
           >
             <Table.Caption>
-              Set-equivalents {scopeLabel} — {formatSetEquivalents(total)} total. A set counts 1 for
-              each primary muscle and 0.5 for each secondary.
+              Set-equivalents in {scopeLabel} — {formatSetEquivalents(total)} total. A set counts 1
+              for each primary muscle and 0.5 for each secondary.
             </Table.Caption>
             <Table.Thead>
               <Table.Tr>

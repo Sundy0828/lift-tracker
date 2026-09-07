@@ -7,8 +7,8 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
-    // Shared plans are public-read; hardened with rules tests in phase 6.
-    match /sharedPlans/{shareId} {
+    // Shared workouts are public-read; hardened with rules tests in phase 6.
+    match /sharedWorkouts/{shareId} {
       allow read: if resource.data.revoked == false;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerUid;
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;

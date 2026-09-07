@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * Picking an exercise for a plan previews the movement first: the catalog has
+ * Picking an exercise for a workout previews the movement first: the catalog has
  * ten near-identical lateral raises and the name alone does not say which is
  * which.
  */
@@ -17,15 +17,12 @@ async function signIn(page: Page): Promise<void> {
 }
 
 async function openPicker(page: Page): Promise<void> {
-  await page.goto('/plans');
+  await page.goto('/workouts');
   await page.getByRole('button', { name: 'New', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Plan name' }).fill('Preview Plan');
+  // Scoped to the dialog: the editor's own name field shares this label.
+  await page.getByRole('dialog').getByRole('textbox', { name: 'Workout name' }).fill('DELTS');
   await page.getByRole('button', { name: 'Create', exact: true }).click();
-  await page.getByRole('button', { name: '+ Add another day' }).click();
-
-  const nameField = page.getByRole('textbox', { name: 'Workout 1 name' });
-  await nameField.fill('DELTS');
-  await nameField.blur();
+  await expect(page.getByRole('textbox', { name: 'Workout name' })).toHaveValue('DELTS');
 
   await page.getByTestId('insert-exercise').first().click();
   await expect(page.getByRole('textbox', { name: 'Search exercises to add' })).toBeVisible();

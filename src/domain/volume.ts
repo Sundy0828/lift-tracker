@@ -1,6 +1,6 @@
 import type { BaseMuscleGroup, MuscleGroup } from './muscles';
 import { baseMuscleOf } from './muscles';
-import type { PlanWorkout } from './plans';
+import type { WorkoutBody } from './workouts';
 
 /**
  * Set-equivalent volume per muscle group.
@@ -40,9 +40,9 @@ function add(into: Map<MuscleGroup, number>, muscle: MuscleGroup, amount: number
  * nothing — supersets alter rest, not work done.
  *
  * Slots whose exercise cannot be resolved contribute nothing rather than
- * throwing: a deleted custom exercise must not break the plan screen.
+ * throwing: a deleted custom exercise must not break the workout screen.
  */
-export function workoutVolume(workout: PlanWorkout, lookup: MuscleLookup): VolumeByMuscle {
+export function workoutVolume(workout: WorkoutBody, lookup: MuscleLookup): VolumeByMuscle {
   const totals = new Map<MuscleGroup, number>();
 
   for (const slot of workout.slots) {
@@ -63,19 +63,6 @@ export function workoutVolume(workout: PlanWorkout, lookup: MuscleLookup): Volum
     const primary = new Set<MuscleGroup>(exercise.primaryMuscles);
     for (const muscle of new Set(exercise.secondaryMuscles)) {
       if (!primary.has(muscle)) add(totals, muscle, sets * SECONDARY_WEIGHT);
-    }
-  }
-
-  return totals;
-}
-
-/** Volume across several workouts — "what this plan hits per week". */
-export function planVolume(workouts: readonly PlanWorkout[], lookup: MuscleLookup): VolumeByMuscle {
-  const totals = new Map<MuscleGroup, number>();
-
-  for (const workout of workouts) {
-    for (const [muscle, amount] of workoutVolume(workout, lookup)) {
-      add(totals, muscle, amount);
     }
   }
 
@@ -120,15 +107,19 @@ export type HeatStop = 0 | 1 | 2 | 3 | 4;
 /**
  * Lower bounds for stops 1-4 on the 5-stop scale; stop 0 is "nothing".
  *
- * Absolute rather than relative to the biggest number on screen: a plan that
- * gives every muscle two sets should look uniformly light, not fully trained.
- * The weekly bands follow the usual 10-20 sets per muscle per week guidance,
- * so stop 3 is the "in range" band and stop 4 is high volume.
+ * Absolute rather than relative to the biggest number on screen: a workout
+ * that gives every muscle two sets should look uniformly light, not fully
+ * trained.
+ *
+ * `SESSION_STOPS` is what the app renders against, because a workout is one
+ * session's worth of work and nothing above it knows your week. The weekly
+ * bands follow the usual 10-20 sets per muscle per week guidance and are kept
+ * for phase 4, which can band real volume across logged sessions — the only
+ * place a weekly number is honest.
  */
-export const WEEKLY_STOPS: readonly [number, number, number, number] = [1, 6, 11, 20];
-
-/** Per-session bands, for the "what this session hits" view. */
 export const SESSION_STOPS: readonly [number, number, number, number] = [1, 3, 6, 10];
+
+export const WEEKLY_STOPS: readonly [number, number, number, number] = [1, 6, 11, 20];
 
 export function heatStop(
   setEquivalents: number,

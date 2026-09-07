@@ -14,40 +14,54 @@ import {
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '@/data/hooks/useAuth';
-import { usePlans } from '@/data/hooks/usePlans';
 import { useProfile } from '@/data/hooks/useProfile';
-import { archivePlan, createPlan, deletePlan, newId } from '@/data/mutations/plans';
-import { estimatePlanSeconds, formatEstimate, orderedWorkouts, totalSets } from '@/domain/plans';
+import { useWorkouts } from '@/data/hooks/useWorkouts';
+import { archiveWorkout, createWorkout, deleteWorkout, newId } from '@/data/mutations/workouts';
+import {
+  estimateWorkoutSeconds,
+  exerciseSlots,
+  formatEstimate,
+  totalSets,
+} from '@/domain/workouts';
 
-export default function PlansScreen() {
+/**
+ * The workout library: PUSH, PULL, ABS — each a reusable list you start on
+ * whatever cadence you like.
+ *
+ * There is deliberately no plan or week above this. A workout is the unit you
+ * build, publish and perform, so pairing ABS with PUSH on Monday and with PULL
+ * on Wednesday needs nothing more than starting both — and ABS keeps one
+ * continuous history either way, because there is only one ABS.
+ */
+export default function WorkoutsScreen() {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
-  const { plans, isPending } = usePlans();
+  const { workouts, isPending } = useWorkouts();
   const { profile } = useProfile();
   const navigate = useNavigate();
 
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
 
-  const active = plans.filter((plan) => plan.archivedAt === null);
-  const archived = plans.filter((plan) => plan.archivedAt !== null);
+  const active = workouts.filter((workout) => workout.archivedAt === null);
+  const archived = workouts.filter((workout) => workout.archivedAt !== null);
 
   const create = (): void => {
     const trimmed = name.trim();
     if (uid === null || trimmed === '') return;
 
-    const planId = newId();
-    // Not awaited: the plan appears from the local cache immediately.
-    void createPlan(uid, planId, trimmed);
+    const workoutId = newId();
+    // Not awaited: the workout appears from the local cache immediately.
+    void createWorkout(uid, workoutId, trimmed);
     setCreating(false);
     setName('');
-    void navigate(`/plans/${planId}`);
+    void navigate(`/workouts/${workoutId}`);
   };
 
   return (
     <Stack>
       <Group justify="space-between" align="center">
-        <Title order={2}>Plans</Title>
+        <Title order={2}>Workouts</Title>
         <Button
           size="compact-md"
           onClick={() => {
@@ -63,10 +77,10 @@ export default function PlansScreen() {
       ) : active.length === 0 ? (
         <Card withBorder>
           <Stack gap="xs">
-            <Text fw={600}>No plans yet</Text>
+            <Text fw={600}>No workouts yet</Text>
             <Text size="sm" c="dimmed">
-              A plan holds your named workouts — PUSH, PULL, CHEST + DELTS — each with its own
-              exercises and prescriptions.
+              A workout is one named list you actually do — PUSH, ABS, CHEST + DELTS. Build them
+              separately and do them in whatever combination a day calls for.
             </Text>
             <Button
               variant="light"
@@ -74,53 +88,56 @@ export default function PlansScreen() {
                 setCreating(true);
               }}
             >
-              Create your first plan
+              Create your first workout
             </Button>
           </Stack>
         </Card>
       ) : (
-        active.map((plan) => {
-          const workouts = orderedWorkouts(plan);
-          const weeklySets = workouts.reduce((sum, workout) => sum + totalSets(workout), 0);
+        active.map((workout) => {
+          const exercises = exerciseSlots(workout.slots);
 
           return (
-            <Card key={plan.id} withBorder padding="sm">
+            <Card key={workout.id} withBorder padding="sm" data-testid="workout-card">
               <Group justify="space-between" wrap="nowrap" align="flex-start">
                 <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
                   <Text
                     component={Link}
-                    to={`/plans/${plan.id}`}
+                    to={`/workouts/${workout.id}`}
                     fw={600}
                     style={{ textDecoration: 'none', color: 'inherit' }}
                   >
-                    {plan.name}
+                    {workout.name}
                   </Text>
                   <Group gap="xs">
                     <Badge variant="light" color="gray" size="sm">
-                      {workouts.length === 1 ? '1 workout' : `${String(workouts.length)} workouts`}
+                      {exercises.length === 1
+                        ? '1 exercise'
+                        : `${String(exercises.length)} exercises`}
                     </Badge>
                     <Badge variant="light" color="gray" size="sm">
-                      {weeklySets} sets / week
+                      {totalSets(workout)} sets
                     </Badge>
-                    {workouts.length === 0 ? null : (
+                    {workout.slots.length === 0 ? null : (
                       <Badge variant="light" color="gray" size="sm">
-                        ~{formatEstimate(estimatePlanSeconds(workouts, profile.defaultRestSeconds))}{' '}
-                        / week
+                        ~
+                        {formatEstimate(
+                          estimateWorkoutSeconds(workout, profile.defaultRestSeconds),
+                        )}
                       </Badge>
                     )}
                     <Badge
                       variant="light"
-                      color={plan.currentVersion === 0 ? 'gray' : 'amber'}
+                      color={workout.currentVersion === 0 ? 'gray' : 'amber'}
                       size="sm"
                     >
-                      {plan.currentVersion === 0
+                      {workout.currentVersion === 0
                         ? 'unpublished'
-                        : `v${String(plan.currentVersion)}`}
+                        : `v${String(workout.currentVersion)}`}
                     </Badge>
                   </Group>
-                  {workouts.length > 0 ? (
+                  {exercises.length > 0 ? (
                     <Text size="xs" c="dimmed" lineClamp={1}>
-                      {workouts.map((workout) => workout.name).join(' · ')}
+                      {exercises.map((slot) => slot.exerciseName).join(' · ')}
                     </Text>
                   ) : null}
                 </Stack>
@@ -128,9 +145,9 @@ export default function PlansScreen() {
                   <ActionIcon
                     variant="subtle"
                     color="gray"
-                    aria-label={`Archive ${plan.name}`}
+                    aria-label={`Archive ${workout.name}`}
                     onClick={() => {
-                      if (uid !== null) void archivePlan(uid, plan.id, true);
+                      if (uid !== null) void archiveWorkout(uid, workout.id, true);
                     }}
                   >
                     ▽
@@ -138,9 +155,9 @@ export default function PlansScreen() {
                   <ActionIcon
                     variant="subtle"
                     color="red"
-                    aria-label={`Delete ${plan.name}`}
+                    aria-label={`Delete ${workout.name}`}
                     onClick={() => {
-                      if (uid !== null) void deletePlan(uid, plan.id);
+                      if (uid !== null) void deleteWorkout(uid, workout.id);
                     }}
                   >
                     ✕
@@ -157,17 +174,17 @@ export default function PlansScreen() {
           <Text size="sm" fw={600} c="dimmed">
             Archived
           </Text>
-          {archived.map((plan) => (
-            <Card key={plan.id} withBorder padding="xs">
+          {archived.map((workout) => (
+            <Card key={workout.id} withBorder padding="xs">
               <Group justify="space-between">
                 <Text size="sm" c="dimmed">
-                  {plan.name}
+                  {workout.name}
                 </Text>
                 <Button
                   size="compact-xs"
                   variant="subtle"
                   onClick={() => {
-                    if (uid !== null) void archivePlan(uid, plan.id, false);
+                    if (uid !== null) void archiveWorkout(uid, workout.id, false);
                   }}
                 >
                   Restore
@@ -183,12 +200,12 @@ export default function PlansScreen() {
         onClose={() => {
           setCreating(false);
         }}
-        title="New plan"
+        title="New workout"
       >
         <Stack>
           <TextInput
-            label="Plan name"
-            placeholder="PPL + Upper"
+            label="Workout name"
+            placeholder="PUSH"
             required
             data-autofocus
             value={name}

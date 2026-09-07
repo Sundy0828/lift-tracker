@@ -73,7 +73,10 @@ type SortableRowProps = {
   total: number;
   label: string;
   onMove: (from: number, to: number) => void;
-  /** Row-specific actions, rendered before the move and drag controls. */
+  /**
+   * Row-specific actions, rendered last — at the far right of the row. Delete
+   * lives here, as far from the handle as the row allows.
+   */
   extraControls?: ReactNode;
   /**
    * Wraps the row's visible surface. Used for swipe-to-delete, which has to
@@ -140,7 +143,6 @@ export function SortableRow({
       ) : null}
 
       <Group gap={2} wrap="nowrap">
-        {extraControls}
         <ActionIcon
           variant="subtle"
           color="gray"
@@ -165,6 +167,7 @@ export function SortableRow({
         >
           ↓
         </ActionIcon>
+        {extraControls}
       </Group>
     </div>
   );

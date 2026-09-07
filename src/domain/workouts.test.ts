@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Plan, PlanExerciseSlot, PlanWorkout, Prescription } from './plans';
+import type { ExerciseSlot, Prescription, WorkoutBody } from './workouts';
 import {
   DEFAULT_PRESCRIPTION,
   MAX_REPS,
@@ -20,20 +20,19 @@ import {
   nextOccurrenceIndex,
   normalizePrescription,
   occurrenceKey,
-  orderedWorkouts,
-  parsePlanWorkouts,
+  parseSlots,
+  parseWorkoutBody,
   parsePrescription,
   parseSlot,
-  parseWorkoutOrder,
   reorder,
   sliderBound,
   slotOccurrenceKey,
   supersetGroups,
   totalSets,
   workoutMuscles,
-} from './plans';
+} from './workouts';
 
-function slot(overrides: Partial<PlanExerciseSlot> = {}): PlanExerciseSlot {
+function slot(overrides: Partial<ExerciseSlot> = {}): ExerciseSlot {
   return {
     slotId: 's1',
     kind: 'exercise',
@@ -47,22 +46,8 @@ function slot(overrides: Partial<PlanExerciseSlot> = {}): PlanExerciseSlot {
   };
 }
 
-function workout(workoutId: string, slots: PlanExerciseSlot[] = []): PlanWorkout {
-  return { workoutId, name: workoutId.toUpperCase(), slots, groupRest: {} };
-}
-
-function plan(workouts: PlanWorkout[], workoutOrder: string[]): Plan {
-  return {
-    id: 'p1',
-    name: 'Plan',
-    notes: '',
-    currentVersion: 0,
-    workoutOrder,
-    workouts,
-    archivedAt: null,
-    createdAt: null,
-    updatedAt: null,
-  };
+function workout(name: string, slots: ExerciseSlot[] = []): WorkoutBody {
+  return { name, slots, groupRest: {} };
 }
 
 describe('DEFAULT_PRESCRIPTION', () => {
@@ -142,27 +127,6 @@ describe('createSlot', () => {
       prescription,
     });
     expect(created.prescription.sets).toBe(5);
-  });
-});
-
-describe('orderedWorkouts', () => {
-  it('follows workoutOrder', () => {
-    const target = plan([workout('a'), workout('b'), workout('c')], ['c', 'a', 'b']);
-    expect(orderedWorkouts(target).map((item) => item.workoutId)).toEqual(['c', 'a', 'b']);
-  });
-
-  it('appends workouts the order does not mention, so none can hide', () => {
-    const target = plan([workout('a'), workout('b')], ['b']);
-    expect(orderedWorkouts(target).map((item) => item.workoutId)).toEqual(['b', 'a']);
-  });
-
-  it('ignores ids in the order that no longer exist', () => {
-    const target = plan([workout('a')], ['gone', 'a']);
-    expect(orderedWorkouts(target).map((item) => item.workoutId)).toEqual(['a']);
-  });
-
-  it('handles an empty plan', () => {
-    expect(orderedWorkouts(plan([], []))).toEqual([]);
   });
 });
 
@@ -253,7 +217,7 @@ describe('range minimum gaps', () => {
   });
 
   it('is an editor constraint, not a data invariant', () => {
-    // An imported plan with a fixed target is stored as-is rather than
+    // An imported workout with a fixed target is stored as-is rather than
     // silently widened.
     const fixed = normalizePrescription({
       ...DEFAULT_PRESCRIPTION,
@@ -423,39 +387,37 @@ describe('parseSlot', () => {
   });
 });
 
-describe('parsePlanWorkouts', () => {
+describe('parseSlots', () => {
   it('returns empty for a non-array', () => {
     for (const value of [null, undefined, {}, 'x']) {
-      expect(parsePlanWorkouts(value)).toEqual([]);
+      expect(parseSlots(value)).toEqual([]);
     }
   });
 
-  it('drops workouts with no id and slots with no identity', () => {
-    const result = parsePlanWorkouts([
-      { name: 'no id' },
-      {
-        workoutId: 'w1',
-        name: 'PUSH',
-        slots: [{ slotId: 'a', exerciseId: 'bench' }, { junk: true }, null],
-      },
-    ]);
+  it('drops entries with no usable identity', () => {
+    const result = parseSlots([{ slotId: 'a', exerciseId: 'bench' }, { junk: true }, null]);
     expect(result).toHaveLength(1);
-    expect(result[0]?.workoutId).toBe('w1');
-    expect(result[0]?.slots).toHaveLength(1);
-  });
-
-  it('defaults a missing workout name', () => {
-    expect(parsePlanWorkouts([{ workoutId: 'w1' }])[0]?.name).toBe('Workout');
+    expect(result[0]?.slotId).toBe('a');
   });
 });
 
-describe('parseWorkoutOrder', () => {
-  it('keeps only non-empty strings', () => {
-    expect(parseWorkoutOrder(['a', '', 3, null, 'b'])).toEqual(['a', 'b']);
+describe('parseWorkoutBody', () => {
+  it('reads the name, slots and round rests', () => {
+    const body = parseWorkoutBody({
+      name: 'PUSH',
+      slots: [{ slotId: 'a', exerciseId: 'bench' }],
+      groupRest: { g1: 90 },
+    });
+    expect(body.name).toBe('PUSH');
+    expect(body.slots).toHaveLength(1);
+    expect(body.groupRest).toEqual({ g1: 90 });
   });
 
-  it('returns empty for a non-array', () => {
-    expect(parseWorkoutOrder({})).toEqual([]);
+  it('defaults a missing name and tolerates missing slots', () => {
+    const body = parseWorkoutBody({});
+    expect(body.name).toBe('Untitled workout');
+    expect(body.slots).toEqual([]);
+    expect(body.groupRest).toEqual({});
   });
 });
 
@@ -469,8 +431,7 @@ describe('duration estimates', () => {
   it('adds up sets and rest for a plain exercise', () => {
     // 3 sets of 8-12 (mid 10): 3 x (12 + 30) work, plus rest after the first
     // two sets only -- you finish on a set.
-    const workout: PlanWorkout = {
-      workoutId: 'w',
+    const workout: WorkoutBody = {
       name: 'W',
       groupRest: {},
       slots: [
@@ -484,8 +445,7 @@ describe('duration estimates', () => {
   });
 
   it('falls back to the profile rest when a slot has none', () => {
-    const workout: PlanWorkout = {
-      workoutId: 'w',
+    const workout: WorkoutBody = {
       name: 'W',
       groupRest: {},
       slots: [slot({ slotId: 'a', prescription: { ...DEFAULT_PRESCRIPTION, sets: 2 } })],
@@ -496,8 +456,7 @@ describe('duration estimates', () => {
   });
 
   it('grows with more sets', () => {
-    const build = (sets: number): PlanWorkout => ({
-      workoutId: 'w',
+    const build = (sets: number): WorkoutBody => ({
       name: 'W',
       groupRest: {},
       slots: [slot({ slotId: 'a', prescription: { ...DEFAULT_PRESCRIPTION, sets } })],
@@ -508,14 +467,11 @@ describe('duration estimates', () => {
   });
 
   it('is zero for an empty workout', () => {
-    expect(
-      estimateWorkoutSeconds({ workoutId: 'w', name: 'W', slots: [], groupRest: {} }, 120),
-    ).toBe(0);
+    expect(estimateWorkoutSeconds({ name: 'W', slots: [], groupRest: {} }, 120)).toBe(0);
   });
 
   it('never goes negative', () => {
-    const workout: PlanWorkout = {
-      workoutId: 'w',
+    const workout: WorkoutBody = {
       name: 'W',
       groupRest: {},
       slots: [

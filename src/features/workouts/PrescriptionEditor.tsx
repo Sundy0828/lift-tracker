@@ -11,7 +11,7 @@ import {
 } from '@mantine/core';
 import { useState } from 'react';
 import { useProfile } from '@/data/hooks/useProfile';
-import type { PlanExerciseSlot, Prescription, RepRange } from '@/domain/plans';
+import type { ExerciseSlot, Prescription, RepRange } from '@/domain/workouts';
 import {
   MAX_SETS,
   REPS_MIN_GAP,
@@ -22,7 +22,7 @@ import {
   formatRestSeconds,
   normalizePrescription,
   sliderBound,
-} from '@/domain/plans';
+} from '@/domain/workouts';
 import classes from './PrescriptionEditor.module.css';
 
 export type SlotEdit = {
@@ -32,7 +32,7 @@ export type SlotEdit = {
 };
 
 type Props = {
-  slot: PlanExerciseSlot | null;
+  slot: ExerciseSlot | null;
   onClose: () => void;
   onSave: (slotId: string, edit: SlotEdit) => void;
   onRemove: (slotId: string) => void;
@@ -49,7 +49,7 @@ const REST_PRESETS = [60, 90, 120, 180, 240];
  * thumb out of the way, so raising the bottom of an 8-12 rep range to 11
  * carries the top to 13 rather than waiting for a collision.
  *
- * Values are still normalised on save, because imported and shared plans
+ * Values are still normalised on save, because imported and shared workouts
  * arrive from outside this form.
  */
 export function PrescriptionEditor({ slot, onClose, onSave, onRemove }: Props) {

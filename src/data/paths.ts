@@ -18,13 +18,14 @@ export const paths = {
   user: (uid: string): DocumentReference => doc(db, 'users', uid),
   customExercises: (uid: string): CollectionReference =>
     collection(db, 'users', uid, 'customExercises'),
-  plans: (uid: string): CollectionReference => collection(db, 'users', uid, 'plans'),
-  plan: (uid: string, planId: string): DocumentReference => doc(db, 'users', uid, 'plans', planId),
-  planVersions: (uid: string, planId: string): CollectionReference =>
-    collection(db, 'users', uid, 'plans', planId, 'versions'),
+  workouts: (uid: string): CollectionReference => collection(db, 'users', uid, 'workouts'),
+  workout: (uid: string, workoutId: string): DocumentReference =>
+    doc(db, 'users', uid, 'workouts', workoutId),
+  workoutVersions: (uid: string, workoutId: string): CollectionReference =>
+    collection(db, 'users', uid, 'workouts', workoutId, 'versions'),
   sessions: (uid: string): CollectionReference => collection(db, 'users', uid, 'sessions'),
   workoutStats: (uid: string): CollectionReference => collection(db, 'users', uid, 'workoutStats'),
   exerciseStats: (uid: string): CollectionReference =>
     collection(db, 'users', uid, 'exerciseStats'),
-  sharedPlans: (): CollectionReference => collection(db, 'sharedPlans'),
+  sharedWorkouts: (): CollectionReference => collection(db, 'sharedWorkouts'),
 } as const;

@@ -9,7 +9,7 @@
  * **Extensions** are finer muscles the source vocabulary lacks, each declaring
  * a base group as its parent. They exist because the source buckets are too
  * coarse to train against: `shoulders` covers 129 exercises including every
- * rear-delt movement, so a plan tagged only with base names cannot reveal the
+ * rear-delt movement, so a workout tagged only with base names cannot reveal the
  * most common imbalance there is.
  *
  * Because every extension rolls up to a base group, adding them costs the map

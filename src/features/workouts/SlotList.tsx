@@ -1,12 +1,12 @@
 import { ActionIcon, Group, NumberInput, Text, Tooltip } from '@mantine/core';
-import type { PlanExerciseSlot, PlanWorkout } from '@/domain/plans';
+import type { ExerciseSlot, WorkoutBody } from '@/domain/workouts';
 import {
   MAX_SETS,
   formatPrescription,
   formatRestSeconds,
   groupRounds,
   restSlotSeconds,
-} from '@/domain/plans';
+} from '@/domain/workouts';
 import { SortableList, SortableRow } from './SortableList';
 import { SwipeToDelete } from './SwipeToDelete';
 import classes from './SlotList.module.css';
@@ -27,10 +27,10 @@ import classes from './SlotList.module.css';
  */
 
 type Props = {
-  workout: PlanWorkout;
+  workout: WorkoutBody;
   defaultRestSeconds: number;
   onReorder: (from: number, to: number) => void;
-  onEditSlot: (slot: PlanExerciseSlot) => void;
+  onEditSlot: (slot: ExerciseSlot) => void;
   onRemoveSlot: (slotId: string) => void;
   onGroup: (activeSlotId: string, targetSlotId: string) => void;
   /** Opens the picker to insert directly after this slot. */
@@ -44,10 +44,10 @@ type Props = {
 
 /** Consecutive runs of slots, split by superset group. */
 type Segment =
-  | { kind: 'single'; slot: PlanExerciseSlot; index: number }
-  | { kind: 'circuit'; groupId: string; members: { slot: PlanExerciseSlot; index: number }[] };
+  | { kind: 'single'; slot: ExerciseSlot; index: number }
+  | { kind: 'circuit'; groupId: string; members: { slot: ExerciseSlot; index: number }[] };
 
-function segment(slots: readonly PlanExerciseSlot[]): Segment[] {
+function segment(slots: readonly ExerciseSlot[]): Segment[] {
   const segments: Segment[] = [];
 
   slots.forEach((slot, index) => {
@@ -76,7 +76,7 @@ function segment(slots: readonly PlanExerciseSlot[]): Segment[] {
 }
 
 /** Reps only — inside a circuit the set count belongs to the block. */
-function formatReps(slot: PlanExerciseSlot): string {
+function formatReps(slot: ExerciseSlot): string {
   const { min, max } = slot.prescription.repRange;
   return min === max ? `${String(min)} reps` : `${String(min)}-${String(max)} reps`;
 }
@@ -87,9 +87,9 @@ function SlotBody({
   onEditSlot,
   onRestSeconds,
 }: {
-  slot: PlanExerciseSlot;
+  slot: ExerciseSlot;
   inCircuit: boolean;
-  onEditSlot: (slot: PlanExerciseSlot) => void;
+  onEditSlot: (slot: ExerciseSlot) => void;
   onRestSeconds: (slotId: string, seconds: number) => void;
 }) {
   if (slot.kind === 'rest') {
@@ -144,7 +144,7 @@ function RemoveButton({
   slot,
   onRemoveSlot,
 }: {
-  slot: PlanExerciseSlot;
+  slot: ExerciseSlot;
   onRemoveSlot: (slotId: string) => void;
 }) {
   const label = slot.kind === 'rest' ? 'rest' : slot.exerciseName;
@@ -177,7 +177,7 @@ function InsertRow({
   onAddRestAfter,
 }: {
   /** null for the row above the first exercise, i.e. the start. */
-  slot: PlanExerciseSlot | null;
+  slot: ExerciseSlot | null;
   onAddAfter: (slotId: string | null) => void;
   onAddRestAfter: (slotId: string | null) => void;
 }) {
@@ -236,7 +236,7 @@ export function SlotList({
   const slotIds = workout.slots.map((slot) => slot.slotId);
   const segments = segment(workout.slots);
 
-  const swipeLabel = (slot: PlanExerciseSlot): string =>
+  const swipeLabel = (slot: ExerciseSlot): string =>
     slot.kind === 'rest' ? 'Delete rest' : `Delete ${slot.exerciseName}`;
 
   const groupOf = (slotId: string): string | null =>

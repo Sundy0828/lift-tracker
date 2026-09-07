@@ -1,14 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * Phase 2 acceptance: a 4-day plan builds end to end, editing it produces a
- * new version with a readable summary while workoutIds stay stable, old
- * versions stay viewable and unchanged, and the muscle map tracks the
- * exercises as they are added.
+ * Phase 2 acceptance: a workout builds end to end, editing it produces a new
+ * version with a readable summary while its id stays stable, old versions stay
+ * viewable and unchanged, and the muscle map tracks the exercises as they are
+ * added.
+ *
+ * A workout is the whole unit — there is no plan above it — so building one is
+ * a single step: name it, then add exercises.
  */
 
 async function signIn(page: Page): Promise<void> {
-  const email = `pl-${String(Date.now())}-${String(Math.floor(Math.random() * 100000))}@example.com`;
+  const email = `wo-${String(Date.now())}-${String(Math.floor(Math.random() * 100000))}@example.com`;
   await page.goto('/sign-in');
   await page.getByRole('button', { name: 'Need an account?' }).click();
   await page.getByRole('textbox', { name: 'Email' }).fill(email);
@@ -17,23 +20,23 @@ async function signIn(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
 }
 
-async function createPlan(page: Page, name: string): Promise<void> {
-  await page.goto('/plans');
-  await expect(page.getByRole('heading', { name: 'Plans' })).toBeVisible();
+async function createWorkout(page: Page, name: string): Promise<void> {
+  await page.goto('/workouts');
+  await expect(page.getByRole('heading', { name: 'Workouts' })).toBeVisible();
   await page.getByRole('button', { name: 'New', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Plan name' }).fill(name);
+  // Scoped to the dialog: the editor's own name field shares this label.
+  await page.getByRole('dialog').getByRole('textbox', { name: 'Workout name' }).fill(name);
   await page.getByRole('button', { name: 'Create', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Plan name' })).toHaveValue(name);
+  await expect(page.getByRole('textbox', { name: 'Workout name' })).toHaveValue(name);
 }
 
 /**
- * Adds an exercise to the workout card at `cardIndex`. Tapping a result opens
- * a preview, so adding takes an explicit confirmation.
+ * Appends an exercise. Tapping a result opens a preview, so adding takes an
+ * explicit confirmation.
  */
-async function addExercise(page: Page, cardIndex: number, query: string): Promise<void> {
-  const card = page.getByTestId('workout-card').nth(cardIndex);
-  // Appends: the last insert row in the card is the one below the last exercise.
-  await card.getByTestId('insert-exercise').last().click();
+async function addExercise(page: Page, query: string): Promise<void> {
+  // With an insert row under every exercise, the last one is the end.
+  await page.getByTestId('insert-exercise').last().click();
   await page.getByRole('textbox', { name: 'Search exercises to add' }).fill(query);
   await page.getByTestId('exercise-list').getByRole('button').first().click();
   const confirm = page.getByRole('button', { name: /^Add to /u });
@@ -44,92 +47,91 @@ async function addExercise(page: Page, cardIndex: number, query: string): Promis
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
-async function renameWorkout(page: Page, index: number, name: string): Promise<void> {
-  const field = page.getByRole('textbox', { name: `Workout ${String(index + 1)} name` });
+async function rename(page: Page, name: string): Promise<void> {
+  const field = page.getByRole('textbox', { name: 'Workout name' });
   await field.fill(name);
   await field.blur();
 }
 
-test.describe('plans', () => {
-  test('a 4-day plan can be built end to end', async ({ page }) => {
+test.describe('workouts', () => {
+  test('a workout builds end to end', async ({ page }) => {
     await signIn(page);
-    await createPlan(page, 'PPL + Upper');
+    await createWorkout(page, 'PUSH');
 
-    const days = ['PUSH', 'PULL', 'CHEST + DELTS', 'ARMS + LEGS'];
-    for (const [index, day] of days.entries()) {
-      await page.getByRole('button', { name: '+ Add another day' }).click();
-      await renameWorkout(page, index, day);
-    }
+    await addExercise(page, 'barbell bench press');
+    await addExercise(page, 'barbell row');
+    await addExercise(page, 'barbell squat');
 
-    await expect(page.getByRole('textbox', { name: /Workout \d name/u })).toHaveCount(4);
-    for (const [index, day] of days.entries()) {
-      await expect(
-        page.getByRole('textbox', { name: `Workout ${String(index + 1)} name` }),
-      ).toHaveValue(day);
-    }
-
-    await addExercise(page, 0, 'barbell bench press');
-    await addExercise(page, 1, 'barbell row');
-    await addExercise(page, 3, 'barbell squat');
-
-    await expect(page.getByText('4 workouts')).toBeVisible();
+    await expect(page.getByText('3 exercises')).toBeVisible();
     // Three exercises at the default 3 sets each.
-    await expect(page.getByText('9 sets / week')).toBeVisible();
+    await expect(page.getByText('9 sets', { exact: true })).toBeVisible();
   });
 
-  test('a new plan appears in the list even though createdAt is server-set', async ({ page }) => {
-    // Guards the offline path: the write is pending, so createdAt is null
-    // locally. The list must still show the plan.
+  test('several workouts stand alongside each other, on no schedule', async ({ page }) => {
+    // The case the model exists for: PUSH and ABS are separate, reusable
+    // things, and nothing pairs them into a week.
     await signIn(page);
-    await createPlan(page, 'Cache Visible Plan');
+    await createWorkout(page, 'PUSH');
+    await addExercise(page, 'barbell bench press');
+    await createWorkout(page, 'ABS');
+    await addExercise(page, 'crunches');
 
-    await page.goto('/plans');
-    await expect(page.getByText('Cache Visible Plan')).toBeVisible();
+    await page.goto('/workouts');
+    await expect(page.getByTestId('workout-card')).toHaveCount(2);
+    await expect(page.getByText('PUSH', { exact: true })).toBeVisible();
+    await expect(page.getByText('ABS', { exact: true })).toBeVisible();
+  });
+
+  test('a new workout appears in the list even though createdAt is server-set', async ({
+    page,
+  }) => {
+    // Guards the offline path: the write is pending, so createdAt is null
+    // locally. The list must still show the workout.
+    await signIn(page);
+    await createWorkout(page, 'Cache Visible Workout');
+
+    await page.goto('/workouts');
+    await expect(page.getByText('Cache Visible Workout')).toBeVisible();
   });
 
   test('one muscle map, updating as exercises are added', async ({ page }) => {
     await signIn(page);
-    await createPlan(page, 'Map Plan');
-    await page.getByRole('button', { name: '+ Add another day' }).click();
+    await createWorkout(page, 'Map Workout');
 
     // Exactly one map, open by default, so it visibly follows the lifts.
-    await expect(page.getByTestId('plan-muscle-map')).toHaveCount(1);
+    await expect(page.getByTestId('workout-muscle-map')).toHaveCount(1);
     await expect(
-      page.getByText('No exercises yet — add one to see what across this plan hits'),
+      page.getByText('No exercises yet — add one to see what this workout hits'),
     ).toBeVisible();
 
-    await addExercise(page, 0, 'barbell bench press');
+    await addExercise(page, 'barbell bench press');
 
-    const chestRow = page.getByTestId('plan-muscle-map').locator('[data-muscle-row="chest"]');
+    const chestRow = page.getByTestId('workout-muscle-map').locator('[data-muscle-row="chest"]');
     await expect(chestRow).toBeVisible();
     await expect(chestRow).toContainText('3');
 
     // Adding a second chest exercise increases the number.
-    await addExercise(page, 0, 'cable crossover');
+    await addExercise(page, 'cable crossover');
     await expect(chestRow).toContainText('6');
   });
 
-  test('a second workout folds into the same map', async ({ page }) => {
+  test('the map covers every exercise in the workout', async ({ page }) => {
     await signIn(page);
-    await createPlan(page, 'Two Day Map Plan');
+    await createWorkout(page, 'Mixed Workout');
 
-    await page.getByRole('button', { name: '+ Add another day' }).click();
-    await addExercise(page, 0, 'barbell bench press');
-    await page.getByRole('button', { name: '+ Add another day' }).click();
-    await addExercise(page, 1, 'barbell squat');
+    await addExercise(page, 'barbell bench press');
+    await addExercise(page, 'barbell squat');
 
-    // Still one map, now covering both days.
-    await expect(page.getByTestId('plan-muscle-map')).toHaveCount(1);
-    const map = page.getByTestId('plan-muscle-map');
+    const map = page.getByTestId('workout-muscle-map');
+    await expect(map).toHaveCount(1);
     await expect(map.locator('[data-muscle-row="chest"]')).toBeVisible();
     await expect(map.locator('[data-muscle-row="quadriceps"]')).toBeVisible();
   });
 
   test('the body diagram exposes a path per muscle and is decorative', async ({ page }) => {
     await signIn(page);
-    await createPlan(page, 'SVG Plan');
-    await page.getByRole('button', { name: '+ Add another day' }).click();
-    await addExercise(page, 0, 'barbell bench press');
+    await createWorkout(page, 'SVG Workout');
+    await addExercise(page, 'barbell bench press');
 
     const chestPath = page.locator('svg [data-muscle="chest"]').first();
     await expect(chestPath).toBeAttached();
@@ -141,39 +143,36 @@ test.describe('plans', () => {
 
   test('adding the same exercise twice marks the second occurrence', async ({ page }) => {
     await signIn(page);
-    await createPlan(page, 'Duplicate Plan');
-    await page.getByRole('button', { name: '+ Add another day' }).click();
+    await createWorkout(page, 'Duplicate Workout');
 
-    await addExercise(page, 0, 'barbell bench press');
-    await addExercise(page, 0, 'barbell bench press');
+    await addExercise(page, 'barbell bench press');
+    await addExercise(page, 'barbell bench press');
 
     await expect(page.getByText('(again)')).toBeVisible();
     await expect(page.getByText('2 exercises')).toBeVisible();
   });
 
-  test('publishing snapshots the plan, and editing it later leaves that snapshot alone', async ({
+  test('publishing snapshots the workout, and editing it later leaves that snapshot alone', async ({
     page,
   }) => {
     await signIn(page);
-    await createPlan(page, 'Versioned Plan');
-    await page.getByRole('button', { name: '+ Add another day' }).click();
-    await renameWorkout(page, 0, 'CHEST');
-    await addExercise(page, 0, 'barbell bench press');
+    await createWorkout(page, 'CHEST');
+    await addExercise(page, 'barbell bench press');
 
     // --- v1
     await expect(page.getByText('Unpublished changes')).toBeVisible();
+    await expect(page.getByText(/Created CHEST with 1 exercise/u)).toBeVisible();
     await page.getByRole('button', { name: 'Publish v1' }).click();
     await expect(page.getByText('unpublished', { exact: true })).toBeHidden();
     await expect(page.getByText('v1', { exact: true }).first()).toBeVisible();
 
-    // --- edit: rename the day and add a lift
-    await renameWorkout(page, 0, 'CHEST + DELTS');
-    await addExercise(page, 0, 'dumbbell flyes');
+    // --- edit: rename it and add a lift
+    await rename(page, 'CHEST + DELTS');
+    await addExercise(page, 'dumbbell flyes');
 
-    const alert = page.getByText('Unpublished changes');
-    await expect(alert).toBeVisible();
-    // The summary reads as a rename, not a delete plus an add, because
-    // workoutId is stable across versions.
+    await expect(page.getByText('Unpublished changes')).toBeVisible();
+    // The summary reads as a rename, not a delete plus an add, because the
+    // workout's id is its document and never changes.
     await expect(page.getByText(/Renamed CHEST to CHEST \+ DELTS/u)).toBeVisible();
 
     await page.getByRole('button', { name: 'Publish v2' }).click();
@@ -185,8 +184,8 @@ test.describe('plans', () => {
     await expect(history.getByText(/^v1$/u)).toBeVisible();
     await expect(history.getByText(/Renamed CHEST to CHEST \+ DELTS/u)).toBeVisible();
 
-    // --- v1 still shows the week-1 definition
-    await history.getByText(/Added workout CHEST/u).click();
+    // --- v1 still shows the week-1 definition, under its week-1 name
+    await history.getByText(/Created CHEST with 1 exercise/u).click();
     const snapshot = page.getByRole('dialog');
     await expect(snapshot.getByText('CHEST', { exact: true })).toBeVisible();
     await expect(snapshot.getByText('Dumbbell Flyes')).toBeHidden();
@@ -197,9 +196,8 @@ test.describe('plans', () => {
 
   test('a prescription can be edited and shows in the slot summary', async ({ page }) => {
     await signIn(page);
-    await createPlan(page, 'Prescription Plan');
-    await page.getByRole('button', { name: '+ Add another day' }).click();
-    await addExercise(page, 0, 'barbell bench press');
+    await createWorkout(page, 'Prescription Workout');
+    await addExercise(page, 'barbell bench press');
 
     await expect(page.getByText('3 x 8-12 @ 1-2 RIR')).toBeVisible();
     await page.getByText('3 x 8-12 @ 1-2 RIR').click();
@@ -226,9 +224,8 @@ test.describe('plans', () => {
 
   test('raising the bottom of a range carries the top with it', async ({ page }) => {
     await signIn(page);
-    await createPlan(page, 'Range Plan');
-    await page.getByRole('button', { name: '+ Add another day' }).click();
-    await addExercise(page, 0, 'barbell bench press');
+    await createWorkout(page, 'Range Workout');
+    await addExercise(page, 'barbell bench press');
     await page.getByText('3 x 8-12 @ 1-2 RIR').click();
 
     const drawer = page.getByRole('dialog');
@@ -256,9 +253,8 @@ test.describe('plans', () => {
 
   test('lowering the top of a range pushes the bottom, keeping the gap', async ({ page }) => {
     await signIn(page);
-    await createPlan(page, 'Range Down Plan');
-    await page.getByRole('button', { name: '+ Add another day' }).click();
-    await addExercise(page, 0, 'barbell bench press');
+    await createWorkout(page, 'Range Down Workout');
+    await addExercise(page, 'barbell bench press');
     await page.getByText('3 x 8-12 @ 1-2 RIR').click();
 
     const drawer = page.getByRole('dialog');
@@ -279,9 +275,8 @@ test.describe('plans', () => {
 
   test('a per-exercise rest falls back to the profile default', async ({ page }) => {
     await signIn(page);
-    await createPlan(page, 'Rest Plan');
-    await page.getByRole('button', { name: '+ Add another day' }).click();
-    await addExercise(page, 0, 'barbell bench press');
+    await createWorkout(page, 'Rest Workout');
+    await addExercise(page, 'barbell bench press');
     await page.getByText('3 x 8-12 @ 1-2 RIR').click();
 
     const drawer = page.getByRole('dialog');
@@ -296,38 +291,21 @@ test.describe('plans', () => {
     await expect(drawer.getByText('your default, 120s')).toBeVisible();
   });
 
-  test('a workout can be reordered with the move buttons', async ({ page }) => {
+  test('exercise slots can be reordered with the move buttons', async ({ page }) => {
     await signIn(page);
-    await createPlan(page, 'Reorder Plan');
+    await createWorkout(page, 'Slot Order Workout');
 
-    await page.getByRole('button', { name: '+ Add another day' }).click();
-    await renameWorkout(page, 0, 'FIRST');
-    await page.getByRole('button', { name: '+ Add another day' }).click();
-    await renameWorkout(page, 1, 'SECOND');
-
-    await page.getByRole('button', { name: 'Move SECOND up' }).click();
-
-    await expect(page.getByRole('textbox', { name: 'Workout 1 name' })).toHaveValue('SECOND');
-    await expect(page.getByRole('textbox', { name: 'Workout 2 name' })).toHaveValue('FIRST');
-  });
-
-  test('exercise slots can be reordered within a workout', async ({ page }) => {
-    await signIn(page);
-    await createPlan(page, 'Slot Order Plan');
-    await page.getByRole('button', { name: '+ Add another day' }).click();
-
-    await addExercise(page, 0, 'barbell bench press');
-    await addExercise(page, 0, 'barbell squat');
+    await addExercise(page, 'barbell bench press');
+    await addExercise(page, 'barbell squat');
 
     await page.getByRole('button', { name: /Move Barbell Squat up/u }).click();
-    const rows = page.locator('[data-muscle-row], button').filter({ hasText: 'Barbell' });
-    await expect(rows.first()).toContainText('Barbell Squat');
+    await expect(page.getByTestId('slot-name').first()).toContainText('Barbell Squat');
   });
 
-  test('a plan can be archived and restored', async ({ page }) => {
+  test('a workout can be archived and restored', async ({ page }) => {
     await signIn(page);
-    await createPlan(page, 'Archive Me');
-    await page.goto('/plans');
+    await createWorkout(page, 'Archive Me');
+    await page.goto('/workouts');
 
     await page.getByRole('button', { name: 'Archive Archive Me' }).click();
     await expect(page.getByText('Archived')).toBeVisible();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PlanExerciseSlot, PlanWorkout } from './plans';
+import type { ExerciseSlot, WorkoutBody } from './workouts';
 import {
   DEFAULT_PRESCRIPTION,
   MAX_SETS,
@@ -12,7 +12,7 @@ import {
   groupWithSlot,
   insertSlotAfter,
   linkToPrevious,
-  parsePlanWorkouts,
+  parseWorkoutBody,
   parseGroupRest,
   pruneGroupRest,
   reconcileGroups,
@@ -23,7 +23,7 @@ import {
   totalSets,
   unlink,
   withGroupRounds,
-} from './plans';
+} from './workouts';
 import { workoutVolume, type MuscleLookup } from './volume';
 
 /**
@@ -32,7 +32,7 @@ import { workoutVolume, type MuscleLookup } from './volume';
  * three times through".
  */
 
-function slot(overrides: Partial<PlanExerciseSlot> = {}): PlanExerciseSlot {
+function slot(overrides: Partial<ExerciseSlot> = {}): ExerciseSlot {
   return {
     slotId: 's',
     kind: 'exercise',
@@ -46,12 +46,12 @@ function slot(overrides: Partial<PlanExerciseSlot> = {}): PlanExerciseSlot {
   };
 }
 
-function asWorkout(slots: PlanExerciseSlot[]): PlanWorkout {
-  return { workoutId: 'w', name: 'W', slots, groupRest: {} };
+function asWorkout(slots: ExerciseSlot[]): WorkoutBody {
+  return { name: 'W', slots, groupRest: {} };
 }
 
 /** Warm-up, then the three-exercise circuit from the brief. */
-function base(): PlanExerciseSlot[] {
+function base(): ExerciseSlot[] {
   return [
     slot({ slotId: 'warm', exerciseId: 'warmup', exerciseName: 'Warm-up' }),
     slot({ slotId: 'a', exerciseId: 'pushup', exerciseName: 'Push-ups' }),
@@ -60,7 +60,7 @@ function base(): PlanExerciseSlot[] {
   ];
 }
 
-const find = (slots: readonly PlanExerciseSlot[], slotId: string): PlanExerciseSlot | undefined =>
+const find = (slots: readonly ExerciseSlot[], slotId: string): ExerciseSlot | undefined =>
   slots.find((item) => item.slotId === slotId);
 
 describe('linkToPrevious', () => {
@@ -113,7 +113,7 @@ describe('linkToPrevious', () => {
 });
 
 describe('unlink', () => {
-  const threeMemberCircuit = (): PlanExerciseSlot[] =>
+  const threeMemberCircuit = (): ExerciseSlot[] =>
     linkToPrevious(linkToPrevious(base(), 'b', 'g1'), 'c', 'g1');
 
   it('removes one member and restores its default rest', () => {
@@ -143,7 +143,7 @@ describe('groupRounds', () => {
     expect(groupRounds(members)).toBe(DEFAULT_PRESCRIPTION.sets);
   });
 
-  it('reports null when members disagree, as an imported plan can', () => {
+  it('reports null when members disagree, as an imported workout can', () => {
     expect(
       groupRounds([
         slot({ slotId: 'a', prescription: { ...DEFAULT_PRESCRIPTION, sets: 3 } }),
@@ -354,7 +354,7 @@ describe('groupWithSlot', () => {
 });
 
 describe('reconcileGroups', () => {
-  const circuitOf = (): PlanExerciseSlot[] =>
+  const circuitOf = (): ExerciseSlot[] =>
     linkToPrevious(linkToPrevious(base(), 'b', 'g1'), 'c', 'g1');
 
   it('leaves an intact circuit alone', () => {
@@ -436,7 +436,7 @@ describe('reconcileGroups', () => {
 });
 
 describe('insertSlotAfter', () => {
-  const fresh = (): PlanExerciseSlot =>
+  const fresh = (): ExerciseSlot =>
     slot({ slotId: 'new', exerciseId: 'dip', exerciseName: 'Dips' });
 
   it('inserts at the start when no anchor is given', () => {
@@ -559,30 +559,28 @@ describe('rest rows', () => {
   });
 
   it('survives a round trip through the parser', () => {
-    const parsed = parsePlanWorkouts([
-      {
-        workoutId: 'w1',
-        name: 'W',
-        slots: [
-          {
-            slotId: 'r1',
-            kind: 'rest',
-            exerciseId: REST_SLOT_ID,
-            prescription: { restSeconds: 45 },
-          },
-        ],
-      },
-    ]);
-    const rest = parsed[0]?.slots[0];
+    const parsed = parseWorkoutBody({
+      name: 'W',
+      slots: [
+        {
+          slotId: 'r1',
+          kind: 'rest',
+          exerciseId: REST_SLOT_ID,
+          prescription: { restSeconds: 45 },
+        },
+      ],
+    });
+    const rest = parsed.slots[0];
     expect(rest?.kind).toBe('rest');
     expect(rest?.exerciseName).toBe('Rest');
     expect(restSlotSeconds(rest ?? createRestSlot('x', 0))).toBe(45);
   });
 
   it('defaults an unmarked slot to an exercise', () => {
-    const parsed = parsePlanWorkouts([
-      { workoutId: 'w1', name: 'W', slots: [{ slotId: 's1', exerciseId: 'bench' }] },
-    ]);
-    expect(parsed[0]?.slots[0]?.kind).toBe('exercise');
+    const parsed = parseWorkoutBody({
+      name: 'W',
+      slots: [{ slotId: 's1', exerciseId: 'bench' }],
+    });
+    expect(parsed.slots[0]?.kind).toBe('exercise');
   });
 });

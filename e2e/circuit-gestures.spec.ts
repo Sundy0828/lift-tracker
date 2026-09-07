@@ -36,12 +36,17 @@ async function addExercise(page: Page, query: string): Promise<void> {
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
-async function buildWorkout(page: Page, name: string): Promise<void> {
-  await page.goto('/plans');
+async function createWorkout(page: Page, name: string): Promise<void> {
+  await page.goto('/workouts');
   await page.getByRole('button', { name: 'New', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Plan name' }).fill(name);
+  // Scoped to the dialog: the editor's own name field shares this label.
+  await page.getByRole('dialog').getByRole('textbox', { name: 'Workout name' }).fill(name);
   await page.getByRole('button', { name: 'Create', exact: true }).click();
-  await page.getByRole('button', { name: '+ Add another day' }).click();
+  await expect(page.getByRole('textbox', { name: 'Workout name' })).toHaveValue(name);
+}
+
+async function buildWorkout(page: Page, name: string): Promise<void> {
+  await createWorkout(page, name);
 
   await addExercise(page, 'bench jump');
   await addExercise(page, 'pushups');
@@ -81,7 +86,7 @@ async function group(page: Page, name: string, onto: string, members: number): P
 test.describe('drag to group', () => {
   test('holding over another exercise groups them on release', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Dwell Plan');
+    await buildWorkout(page, 'Dwell Workout');
 
     await dragOnto(page, 'Crunches', 'Pushups');
     // The target says what the drop will do before you commit to it.
@@ -94,7 +99,7 @@ test.describe('drag to group', () => {
 
   test('a third exercise joins the same circuit, not a second one', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Three Plan');
+    await buildWorkout(page, 'Three Workout');
 
     await group(page, 'Crunches', 'Pushups', 2);
     await group(page, 'Pullups', 'Crunches', 3);
@@ -104,7 +109,7 @@ test.describe('drag to group', () => {
 
   test('a quick drag still reorders instead of grouping', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Quick Drag Plan');
+    await buildWorkout(page, 'Quick Drag Workout');
 
     const handle = page.getByRole('button', { name: /^Reorder or group Pullups$/u });
     const target = page.getByRole('button', { name: /^Reorder or group Crunches$/u });
@@ -125,7 +130,7 @@ test.describe('drag to group', () => {
 
   test('two members of the same circuit offer no grouping', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Same Group Plan');
+    await buildWorkout(page, 'Same Group Workout');
     await group(page, 'Crunches', 'Pushups', 2);
 
     // Already together, so however long it hovers it stays a reorder.
@@ -137,7 +142,7 @@ test.describe('drag to group', () => {
 
   test('the keyboard can group too, with g', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Keyboard Plan');
+    await buildWorkout(page, 'Keyboard Workout');
 
     // dnd-kit updates the drop target asynchronously, so the keystrokes are
     // spaced the way a person's would be.
@@ -155,7 +160,7 @@ test.describe('drag to group', () => {
 
   test('the gesture is explained where it is used', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Hint Plan');
+    await buildWorkout(page, 'Hint Workout');
     await expect(page.getByText(/hold for a moment to make them a circuit/u)).toBeVisible();
   });
 });
@@ -163,7 +168,7 @@ test.describe('drag to group', () => {
 test.describe('drag out of a circuit', () => {
   test('dragging a member clear of the block removes it', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Drag Out Plan');
+    await buildWorkout(page, 'Drag Out Workout');
     await group(page, 'Crunches', 'Pushups', 2);
     await group(page, 'Pullups', 'Crunches', 3);
 
@@ -188,7 +193,7 @@ test.describe('drag out of a circuit', () => {
 
   test('the keyboard can leave a circuit by arrowing out', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Keyboard Out Plan');
+    await buildWorkout(page, 'Keyboard Out Workout');
     await group(page, 'Crunches', 'Pushups', 2);
     await group(page, 'Pullups', 'Crunches', 3);
 
@@ -209,7 +214,7 @@ test.describe('drag out of a circuit', () => {
 test.describe('adding in place, and uneven rests', () => {
   test('the plus on a row inserts directly after it', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Insert Plan');
+    await buildWorkout(page, 'Insert Workout');
 
     await page.getByRole('button', { name: /^Add an exercise after Bench Jump$/u }).click();
     await page.getByRole('textbox', { name: 'Search exercises to add' }).fill('barbell squat');
@@ -226,7 +231,7 @@ test.describe('adding in place, and uneven rests', () => {
 
   test('the plus on a circuit member adds another member', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Insert Circuit Plan');
+    await buildWorkout(page, 'Insert Circuit Workout');
     await group(page, 'Crunches', 'Pushups', 2);
 
     await page.getByRole('button', { name: /^Add an exercise after Pushups$/u }).click();
@@ -242,7 +247,7 @@ test.describe('adding in place, and uneven rests', () => {
 
   test('a rest row can be placed between exercises, with its own length', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Rest Row Plan');
+    await buildWorkout(page, 'Rest Row Workout');
     await group(page, 'Crunches', 'Pushups', 2);
     await group(page, 'Pullups', 'Crunches', 3);
 
@@ -268,7 +273,7 @@ test.describe('adding in place, and uneven rests', () => {
 
   test('a rest row adds no sets and no volume', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Rest Volume Plan');
+    await buildWorkout(page, 'Rest Volume Workout');
     await expect(page.getByText('12 sets', { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: /^Add a rest after Pushups$/u }).click();
@@ -281,7 +286,7 @@ test.describe('adding in place, and uneven rests', () => {
 
   test('the round rest label explains itself on hover', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Round Rest Tooltip Plan');
+    await buildWorkout(page, 'Round Rest Tooltip Workout');
     await group(page, 'Crunches', 'Pushups', 2);
 
     await page.getByText('round rest').hover();
@@ -292,7 +297,7 @@ test.describe('adding in place, and uneven rests', () => {
 test.describe('deleting rows', () => {
   test('an exercise can be deleted from its row', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Delete Plan');
+    await buildWorkout(page, 'Delete Workout');
 
     await page.getByRole('button', { name: /^Delete Crunches$/u }).click();
 
@@ -302,7 +307,7 @@ test.describe('deleting rows', () => {
 
   test('a rest row can be deleted too', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Delete Rest Plan');
+    await buildWorkout(page, 'Delete Rest Workout');
 
     await page.getByRole('button', { name: /^Add a rest after Pushups$/u }).click();
     await expect(page.getByRole('textbox', { name: 'Rest length' })).toHaveCount(1);
@@ -314,7 +319,7 @@ test.describe('deleting rows', () => {
 
   test('deleting down to one member dissolves the circuit', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Delete Member Plan');
+    await buildWorkout(page, 'Delete Member Workout');
     await group(page, 'Crunches', 'Pushups', 2);
 
     // A circuit of one is just an exercise, so the block goes with it.
@@ -325,7 +330,7 @@ test.describe('deleting rows', () => {
 
   test('the round rest label is not truncated', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Label Plan');
+    await buildWorkout(page, 'Label Workout');
     await group(page, 'Crunches', 'Pushups', 2);
 
     const label = page.getByText('round rest');
@@ -357,7 +362,7 @@ async function swipeRow(page: Page, name: string, dx: number): Promise<void> {
 test.describe('swipe to delete', () => {
   test('swiping a row far enough left deletes it', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Swipe Plan');
+    await buildWorkout(page, 'Swipe Workout');
 
     await swipeRow(page, 'Crunches', -140);
     // The action is named under the row before you let go.
@@ -370,7 +375,7 @@ test.describe('swipe to delete', () => {
 
   test('a short swipe springs back and deletes nothing', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Swipe Back Plan');
+    await buildWorkout(page, 'Swipe Back Workout');
 
     await swipeRow(page, 'Crunches', -40);
     await page.mouse.up();
@@ -383,7 +388,7 @@ test.describe('swipe to delete', () => {
 
   test('a circuit member can be swiped away too', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Swipe Circuit Plan');
+    await buildWorkout(page, 'Swipe Circuit Workout');
     await group(page, 'Crunches', 'Pushups', 2);
     await group(page, 'Pullups', 'Crunches', 3);
 
@@ -397,7 +402,7 @@ test.describe('swipe to delete', () => {
 test.describe('adding at the start', () => {
   test('the insert row above the first exercise adds at the top', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Start Insert Plan');
+    await buildWorkout(page, 'Start Insert Workout');
 
     await page.getByRole('button', { name: /^Add an exercise at the start$/u }).click();
     await page.getByRole('textbox', { name: 'Search exercises to add' }).fill('barbell squat');
@@ -412,11 +417,7 @@ test.describe('adding at the start', () => {
 
   test('an empty workout is filled from its insert row alone', async ({ page }) => {
     await signIn(page);
-    await page.goto('/plans');
-    await page.getByRole('button', { name: 'New', exact: true }).click();
-    await page.getByRole('textbox', { name: 'Plan name' }).fill('Empty Insert Plan');
-    await page.getByRole('button', { name: 'Create', exact: true }).click();
-    await page.getByRole('button', { name: '+ Add another day' }).click();
+    await createWorkout(page, 'Empty Insert Workout');
 
     // No separate "Add exercise" button any more: the one insert row is it.
     await expect(page.getByText('No exercises yet.')).toBeVisible();
@@ -431,7 +432,7 @@ test.describe('adding at the start', () => {
 test.describe('row layout', () => {
   test('the drag handle sits left of the exercise name', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Handle Plan');
+    await buildWorkout(page, 'Handle Workout');
 
     const handle = page.getByRole('button', { name: /^Reorder or group Pushups$/u });
     const name = page.getByTestId('slot-name').filter({ hasText: 'Pushups' });

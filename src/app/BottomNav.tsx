@@ -3,7 +3,7 @@ import classes from './AppLayout.module.css';
 
 const ITEMS = [
   { to: '/', label: 'Today', glyph: '●' },
-  { to: '/plans', label: 'Plans', glyph: '▤' },
+  { to: '/workouts', label: 'Workouts', glyph: '▤' },
   { to: '/history', label: 'History', glyph: '◷' },
   { to: '/settings', label: 'Settings', glyph: '⚙' },
 ] as const;

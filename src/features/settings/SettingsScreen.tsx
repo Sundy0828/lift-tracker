@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '@/data/hooks/useAuth';
 import { useProfile } from '@/data/hooks/useProfile';
 import { setDefaultRestSeconds, setDisplayUnit } from '@/data/mutations/profile';
-import { formatRestSeconds } from '@/domain/plans';
+import { formatRestSeconds } from '@/domain/workouts';
 import { formatWeight, isUnit, stepFor } from '@/domain/units';
 
 // A load stored in lb, so switching the display unit visibly converts it.

@@ -1,13 +1,21 @@
 import type { MuscleGroup } from './muscles';
 
 /**
- * Plan types (§2.4) and the pure helpers that maintain their invariants.
+ * Workout types (§2.4) and the pure helpers that maintain their invariants.
+ *
+ * A **workout** is the reusable unit: PUSH, PULL, ABS. It is a top-level
+ * document with its own versions and its own history, and one training session
+ * performs exactly one of them. That is what lets ABS appear on Monday and
+ * Wednesday and still have a single continuous history — there is only one
+ * ABS. There is no plan container above it; what you do on a given day is
+ * simply which workouts you started, which lives in `sessions`.
  *
  * Two ids in here are load-bearing for history and must never be reassigned:
  *
- * - `workoutId` is stable across plan versions (§2.5). Renaming CHEST to
- *   CHEST + DELTS, reordering it, or swapping its exercises keeps the same id,
- *   which is what preserves that day's overlay history.
+ * - the workout's own document id is stable across its versions (§2.5).
+ *   Renaming CHEST to CHEST + DELTS or swapping its exercises keeps the same
+ *   id, which is what preserves its overlay history. Being the document id
+ *   makes that structural rather than a rule to remember.
  * - `occurrenceIndex` distinguishes the same exercise appearing twice in one
  *   workout. It is part of the overlay key `exerciseId#occurrenceIndex`, so it
  *   is assigned once and never renumbered.
@@ -40,12 +48,12 @@ export type SlotKind = 'exercise' | 'rest';
 /** Reserved id for rest rows. Never resolves against the exercise catalog. */
 export const REST_SLOT_ID = '__rest__';
 
-export type PlanExerciseSlot = {
-  /** Stable uuid; survives reordering, and is how planDiff matches slots. */
+export type ExerciseSlot = {
+  /** Stable uuid; survives reordering, and is how workoutDiff matches slots. */
   slotId: string;
   kind: SlotKind;
   exerciseId: string;
-  /** Denormalised so shared plans and offline sessions render without a lookup. */
+  /** Denormalised so shared and offline workouts render without a lookup. */
   exerciseName: string;
   occurrenceIndex: number;
   /**
@@ -57,17 +65,14 @@ export type PlanExerciseSlot = {
   notes: string;
 };
 
-export function isRestSlot(slot: PlanExerciseSlot): boolean {
+export function isRestSlot(slot: ExerciseSlot): boolean {
   return slot.kind === 'rest';
 }
 
 export const DEFAULT_REST_SLOT_SECONDS = 60;
 
 /** Builds a rest row of `seconds`. */
-export function createRestSlot(
-  slotId: string,
-  seconds = DEFAULT_REST_SLOT_SECONDS,
-): PlanExerciseSlot {
+export function createRestSlot(slotId: string, seconds = DEFAULT_REST_SLOT_SECONDS): ExerciseSlot {
   return {
     slotId,
     kind: 'rest',
@@ -87,20 +92,29 @@ export function createRestSlot(
 }
 
 /** Seconds a rest row pauses for. */
-export function restSlotSeconds(slot: PlanExerciseSlot): number {
+export function restSlotSeconds(slot: ExerciseSlot): number {
   return slot.prescription.restSeconds ?? 0;
 }
 
 /** Only the exercise rows — what volume, rounds and set counts care about. */
-export function exerciseSlots(slots: readonly PlanExerciseSlot[]): PlanExerciseSlot[] {
+export function exerciseSlots(slots: readonly ExerciseSlot[]): ExerciseSlot[] {
   return slots.filter((slot) => slot.kind === 'exercise');
 }
 
-export type PlanWorkout = {
-  /** Stable across plan versions — the overlay depends on this. */
-  workoutId: string;
+/**
+ * The part of a workout that is versioned: what you would perform.
+ *
+ * The name is in here deliberately. A published version has to record what the
+ * workout was *called* at the time, or an old session would render under a
+ * name that did not exist yet. Notes are not: they are a running scratchpad,
+ * not part of the prescription.
+ *
+ * Every helper below takes a body rather than the whole document, so the same
+ * code serves the live working copy and an immutable snapshot.
+ */
+export type WorkoutBody = {
   name: string;
-  slots: PlanExerciseSlot[];
+  slots: ExerciseSlot[];
   /**
    * Rest between rounds of a circuit, keyed by `supersetGroup` id.
    *
@@ -115,27 +129,28 @@ export type PlanWorkout = {
   groupRest: Record<string, number | null>;
 };
 
-/** The editable working copy at `plans/{planId}`. */
-export type Plan = {
+/** The editable working copy at `workouts/{workoutId}`. */
+export type Workout = WorkoutBody & {
+  /** Stable for the workout's whole life — the overlay depends on this. */
   id: string;
-  name: string;
   notes: string;
   currentVersion: number;
-  /** workoutIds in display order; authoritative for ordering. */
-  workoutOrder: string[];
-  workouts: PlanWorkout[];
   archivedAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };
 
-/** An immutable snapshot at `plans/{planId}/versions/{versionNumber}`. */
-export type PlanVersion = {
+/** An immutable snapshot at `workouts/{workoutId}/versions/{versionNumber}`. */
+export type WorkoutVersion = WorkoutBody & {
   versionNumber: number;
   createdAt: string | null;
   changeSummary: string;
-  workouts: PlanWorkout[];
 };
+
+/** An empty body, for a workout with nothing published yet. */
+export function emptyBody(name = ''): WorkoutBody {
+  return { name, slots: [], groupRest: {} };
+}
 
 export const DEFAULT_PRESCRIPTION: Prescription = {
   sets: 3,
@@ -146,7 +161,7 @@ export const DEFAULT_PRESCRIPTION: Prescription = {
   loadHint: null,
 };
 
-/** Hard caps. Imported and shared plans are clamped to these. */
+/** Hard caps. Imported and shared workouts are clamped to these. */
 export const MAX_SETS = 20;
 export const MAX_REPS = 100;
 export const MAX_RIR = 10;
@@ -168,7 +183,7 @@ export const RIR_SOFT_MAX = 5;
  * looks like it does. Reps get a wider floor than RIR because two reps of
  * latitude is the useful unit there, whereas RIR only spans 0-5 at all.
  *
- * These constrain the editor, not the data: an imported plan with a fixed
+ * These constrain the editor, not the data: an imported workout with a fixed
  * target is stored and shown as-is (see `normalizePrescription`, which only
  * enforces max >= min).
  */
@@ -209,10 +224,7 @@ export function formatDuration(seconds: number): string {
  * deleted slot's overlay history. Indices are therefore monotonic per exercise
  * per workout, and gaps are expected and harmless.
  */
-export function nextOccurrenceIndex(
-  slots: readonly PlanExerciseSlot[],
-  exerciseId: string,
-): number {
+export function nextOccurrenceIndex(slots: readonly ExerciseSlot[], exerciseId: string): number {
   const used = slots
     .filter((slot) => slot.exerciseId === exerciseId)
     .map((slot) => slot.occurrenceIndex);
@@ -224,7 +236,7 @@ export function occurrenceKey(exerciseId: string, occurrenceIndex: number): stri
   return `${exerciseId}#${String(occurrenceIndex)}`;
 }
 
-export function slotOccurrenceKey(slot: PlanExerciseSlot): string {
+export function slotOccurrenceKey(slot: ExerciseSlot): string {
   return occurrenceKey(slot.exerciseId, slot.occurrenceIndex);
 }
 
@@ -236,10 +248,7 @@ export type NewSlotInput = {
 };
 
 /** Builds a slot with the correct occurrence index for its workout. */
-export function createSlot(
-  slots: readonly PlanExerciseSlot[],
-  input: NewSlotInput,
-): PlanExerciseSlot {
+export function createSlot(slots: readonly ExerciseSlot[], input: NewSlotInput): ExerciseSlot {
   return {
     slotId: input.slotId,
     kind: 'exercise',
@@ -262,10 +271,10 @@ export function createSlot(
  * end, so the same call adds the first exercise.
  */
 export function insertSlotAfter(
-  slots: readonly PlanExerciseSlot[],
+  slots: readonly ExerciseSlot[],
   afterSlotId: string | null,
-  slot: PlanExerciseSlot,
-): PlanExerciseSlot[] {
+  slot: ExerciseSlot,
+): ExerciseSlot[] {
   if (afterSlotId === null) return [slot, ...slots];
 
   const position = slots.findIndex((item) => item.slotId === afterSlotId);
@@ -277,7 +286,7 @@ export function insertSlotAfter(
   // A rest row joins the group but keeps its own prescription: adopting the
   // host's round count and zeroing its rest would erase the pause it exists
   // to hold.
-  const joined: PlanExerciseSlot =
+  const joined: ExerciseSlot =
     groupId === null
       ? slot
       : slot.kind === 'rest'
@@ -295,26 +304,6 @@ export function insertSlotAfter(
   const next = [...slots];
   next.splice(position + 1, 0, joined);
   return next;
-}
-
-/**
- * Workouts in display order. Driven by `workoutOrder`, with any workout the
- * order does not mention appended, so a partially-written order never hides a
- * workout.
- */
-export function orderedWorkouts(plan: Plan): PlanWorkout[] {
-  const byId = new Map(plan.workouts.map((workout) => [workout.workoutId, workout]));
-  const ordered: PlanWorkout[] = [];
-
-  for (const workoutId of plan.workoutOrder) {
-    const workout = byId.get(workoutId);
-    if (workout !== undefined) {
-      ordered.push(workout);
-      byId.delete(workoutId);
-    }
-  }
-
-  return [...ordered, ...byId.values()];
 }
 
 /** Moves an item between positions, returning a new array. */
@@ -388,7 +377,7 @@ export function estimateSetSeconds(prescription: Prescription): number {
  * round, and the group's rest is added once per round. The very last rest of
  * the workout is dropped: you finish on a set, not on a stopwatch.
  */
-export function estimateWorkoutSeconds(workout: PlanWorkout, defaultRestSeconds: number): number {
+export function estimateWorkoutSeconds(workout: WorkoutBody, defaultRestSeconds: number): number {
   let total = 0;
   let trailingRest = 0;
 
@@ -429,17 +418,6 @@ export function estimateWorkoutSeconds(workout: PlanWorkout, defaultRestSeconds:
   return Math.max(0, Math.round(total - trailingRest));
 }
 
-/** Estimated seconds across a plan — one pass through every workout. */
-export function estimatePlanSeconds(
-  workouts: readonly PlanWorkout[],
-  defaultRestSeconds: number,
-): number {
-  return workouts.reduce(
-    (total, workout) => total + estimateWorkoutSeconds(workout, defaultRestSeconds),
-    0,
-  );
-}
-
 /** A duration as `45 min` or `1 h 20`, for an at-a-glance estimate. */
 export function formatEstimate(seconds: number): string {
   const minutes = Math.round(seconds / 60);
@@ -453,7 +431,7 @@ export function formatEstimate(seconds: number): string {
 }
 
 /** Total prescribed sets in a workout. */
-export function totalSets(workout: PlanWorkout): number {
+export function totalSets(workout: WorkoutBody): number {
   return exerciseSlots(workout.slots).reduce((sum, slot) => sum + slot.prescription.sets, 0);
 }
 
@@ -461,9 +439,9 @@ export function totalSets(workout: PlanWorkout): number {
  * Rounds a circuit runs for: every member's set count, when they agree.
  *
  * Returns null when members disagree, which only happens for an imported
- * plan — the editor writes the count to every member at once.
+ * workout — the editor writes the count to every member at once.
  */
-export function groupRounds(members: readonly PlanExerciseSlot[]): number | null {
+export function groupRounds(members: readonly ExerciseSlot[]): number | null {
   const working = exerciseSlots(members);
   const first = working[0];
   if (first === undefined) return null;
@@ -473,10 +451,10 @@ export function groupRounds(members: readonly PlanExerciseSlot[]): number | null
 
 /** Sets the round count across every member of a group. */
 export function withGroupRounds(
-  slots: readonly PlanExerciseSlot[],
+  slots: readonly ExerciseSlot[],
   groupId: string,
   rounds: number,
-): PlanExerciseSlot[] {
+): ExerciseSlot[] {
   const sets = clamp(Math.round(rounds), 1, MAX_SETS);
   return slots.map((slot) =>
     // A rest row has no sets to set; only the exercises take the round count.
@@ -495,10 +473,10 @@ export function withGroupRounds(
  * the next exercise, and the pause belongs to `groupRest` instead.
  */
 export function linkToPrevious(
-  slots: readonly PlanExerciseSlot[],
+  slots: readonly ExerciseSlot[],
   slotId: string,
   newGroupId: string,
-): PlanExerciseSlot[] {
+): ExerciseSlot[] {
   const position = slots.findIndex((slot) => slot.slotId === slotId);
   const previous = position > 0 ? slots[position - 1] : undefined;
   if (previous === undefined) return [...slots];
@@ -522,7 +500,7 @@ export function linkToPrevious(
 }
 
 /** Detaches a slot from any group, restoring its own rest. */
-function detach(slot: PlanExerciseSlot): PlanExerciseSlot {
+function detach(slot: ExerciseSlot): ExerciseSlot {
   // A rest row's restSeconds *is* its length, so leaving a circuit must not
   // clear it the way it clears an exercise's between-sets rest.
   if (slot.kind === 'rest') return { ...slot, supersetGroup: null };
@@ -538,7 +516,7 @@ function detach(slot: PlanExerciseSlot): PlanExerciseSlot {
  * Dissolves any group down to a single member, since a circuit of one is just
  * an exercise. Run after every grouping change.
  */
-function dissolveSingletons(slots: readonly PlanExerciseSlot[]): PlanExerciseSlot[] {
+function dissolveSingletons(slots: readonly ExerciseSlot[]): ExerciseSlot[] {
   const counts = new Map<string, number>();
   for (const slot of slots) {
     if (slot.supersetGroup !== null) {
@@ -563,11 +541,11 @@ function dissolveSingletons(slots: readonly PlanExerciseSlot[]): PlanExerciseSlo
  * hierarchy. Any group left with one member dissolves.
  */
 export function groupWithSlot(
-  slots: readonly PlanExerciseSlot[],
+  slots: readonly ExerciseSlot[],
   activeSlotId: string,
   targetSlotId: string,
   newGroupId: string,
-): PlanExerciseSlot[] {
+): ExerciseSlot[] {
   if (activeSlotId === targetSlotId) return [...slots];
 
   const active = slots.find((slot) => slot.slotId === activeSlotId);
@@ -594,7 +572,7 @@ export function groupWithSlot(
     if (inTargetGroup) insertAt = index + 1;
   }
 
-  const joined: PlanExerciseSlot =
+  const joined: ExerciseSlot =
     active.kind === 'rest'
       ? { ...active, supersetGroup: groupId }
       : {
@@ -621,7 +599,7 @@ export function groupWithSlot(
  * middle splits the smaller half out rather than leaving one group in two
  * places. Groups down to one member dissolve.
  */
-export function reconcileGroups(slots: readonly PlanExerciseSlot[]): PlanExerciseSlot[] {
+export function reconcileGroups(slots: readonly ExerciseSlot[]): ExerciseSlot[] {
   // Longest contiguous run per group, earliest run winning a tie.
   const best = new Map<string, { start: number; length: number }>();
 
@@ -659,7 +637,7 @@ export function reconcileGroups(slots: readonly PlanExerciseSlot[]): PlanExercis
  * Removes a slot from its group. A group left with one member is dissolved,
  * since a circuit of one is just an exercise.
  */
-export function unlink(slots: readonly PlanExerciseSlot[], slotId: string): PlanExerciseSlot[] {
+export function unlink(slots: readonly ExerciseSlot[], slotId: string): ExerciseSlot[] {
   const target = slots.find((slot) => slot.slotId === slotId);
   if (target?.supersetGroup === undefined || target.supersetGroup === null) return [...slots];
 
@@ -667,7 +645,7 @@ export function unlink(slots: readonly PlanExerciseSlot[], slotId: string): Plan
 }
 
 /** Group ids still in use by at least two slots. */
-export function activeGroupIds(slots: readonly PlanExerciseSlot[]): string[] {
+export function activeGroupIds(slots: readonly ExerciseSlot[]): string[] {
   const counts = new Map<string, number>();
   for (const slot of slots) {
     if (slot.supersetGroup !== null) {
@@ -677,8 +655,13 @@ export function activeGroupIds(slots: readonly PlanExerciseSlot[]): string[] {
   return [...counts.entries()].filter(([, count]) => count > 1).map(([id]) => id);
 }
 
-/** Drops round-rest entries for groups that no longer exist. */
-export function pruneGroupRest(workout: PlanWorkout): PlanWorkout {
+/**
+ * Drops round-rest entries for groups that no longer exist.
+ *
+ * Generic over the body so it can be applied to a whole `Workout` document
+ * without stripping its other fields.
+ */
+export function pruneGroupRest<T extends WorkoutBody>(workout: T): T {
   const live = new Set(activeGroupIds(workout.slots));
   const groupRest: Record<string, number | null> = {};
   for (const [groupId, rest] of Object.entries(workout.groupRest)) {
@@ -688,9 +671,9 @@ export function pruneGroupRest(workout: PlanWorkout): PlanWorkout {
 }
 
 /** Slots grouped into supersets, preserving order; ungrouped slots stand alone. */
-export function supersetGroups(workout: PlanWorkout): PlanExerciseSlot[][] {
-  const groups: PlanExerciseSlot[][] = [];
-  const byGroup = new Map<string, PlanExerciseSlot[]>();
+export function supersetGroups(workout: WorkoutBody): ExerciseSlot[][] {
+  const groups: ExerciseSlot[][] = [];
+  const byGroup = new Map<string, ExerciseSlot[]>();
 
   for (const slot of workout.slots) {
     if (slot.supersetGroup === null) {
@@ -712,7 +695,7 @@ export function supersetGroups(workout: PlanWorkout): PlanExerciseSlot[][] {
 
 /** Muscles a workout touches, for a quick label without full volume math. */
 export function workoutMuscles(
-  workout: PlanWorkout,
+  workout: WorkoutBody,
   primaryMusclesOf: (exerciseId: string) => readonly MuscleGroup[],
 ): MuscleGroup[] {
   const seen = new Set<MuscleGroup>();
@@ -722,7 +705,7 @@ export function workoutMuscles(
   return [...seen];
 }
 
-// --- Parsing untrusted plan documents ------------------------------------
+// --- Parsing untrusted workout documents ---------------------------------
 // Kept in the domain so it is testable without Firestore. The data layer only
 // converts Timestamps to ISO strings before handing values over.
 
@@ -759,7 +742,7 @@ export function parsePrescription(value: unknown): Prescription {
 }
 
 /** Returns null for a slot with no usable identity, so it is dropped. */
-export function parseSlot(value: unknown): PlanExerciseSlot | null {
+export function parseSlot(value: unknown): ExerciseSlot | null {
   if (typeof value !== 'object' || value === null) return null;
   const record = value as Record<string, unknown>;
 
@@ -783,33 +766,25 @@ export function parseSlot(value: unknown): PlanExerciseSlot | null {
   };
 }
 
-export function parsePlanWorkouts(value: unknown): PlanWorkout[] {
+/** Slots from a stored array, dropping any entry with no usable identity. */
+export function parseSlots(value: unknown): ExerciseSlot[] {
   if (!Array.isArray(value)) return [];
 
-  const workouts: PlanWorkout[] = [];
+  const slots: ExerciseSlot[] = [];
   for (const raw of value as readonly unknown[]) {
-    if (typeof raw !== 'object' || raw === null) continue;
-    const record = raw as Record<string, unknown>;
-    const workoutId = asString(record['workoutId']);
-    if (workoutId === '') continue;
-
-    const slots: PlanExerciseSlot[] = [];
-    if (Array.isArray(record['slots'])) {
-      for (const rawSlot of record['slots'] as readonly unknown[]) {
-        const slot = parseSlot(rawSlot);
-        if (slot !== null) slots.push(slot);
-      }
-    }
-
-    workouts.push({
-      workoutId,
-      name: asString(record['name'], 'Workout'),
-      slots,
-      groupRest: parseGroupRest(record['groupRest']),
-    });
+    const slot = parseSlot(raw);
+    if (slot !== null) slots.push(slot);
   }
+  return slots;
+}
 
-  return workouts;
+/** The versioned part of a workout document, or of one of its snapshots. */
+export function parseWorkoutBody(record: Record<string, unknown>): WorkoutBody {
+  return {
+    name: asString(record['name'], 'Untitled workout'),
+    slots: parseSlots(record['slots']),
+    groupRest: parseGroupRest(record['groupRest']),
+  };
 }
 
 /** Narrows the round-rest map, dropping anything that is not a group id. */
@@ -825,11 +800,4 @@ export function parseGroupRest(value: unknown): Record<string, number | null> {
     }
   }
   return parsed;
-}
-
-export function parseWorkoutOrder(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return (value as readonly unknown[]).filter(
-    (item): item is string => typeof item === 'string' && item !== '',
-  );
 }
