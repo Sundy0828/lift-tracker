@@ -10,7 +10,7 @@ declare const self: ServiceWorkerGlobalScope;
 
 /**
  * Custom service worker (injectManifest). The app shell and the exercise
- * catalog are precached; the rest-timer notifications (phase 3) hook in here.
+ * catalog are precached, and the rest timer's notification is fired from here.
  */
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
@@ -46,9 +46,116 @@ registerRoute(
   new CacheFirst({ cacheName: 'exercise-images-v1', plugins: imagePlugins }),
 );
 
-self.addEventListener('message', (event: ExtendableMessageEvent) => {
-  const data: unknown = event.data;
-  if (typeof data === 'object' && data !== null && 'type' in data && data.type === 'SKIP_WAITING') {
-    void self.skipWaiting();
+/**
+ * The rest timer's notification.
+ *
+ * It is fired from the worker rather than the page because the page is exactly
+ * what is not running: the phone is in a pocket with the screen off, which
+ * freezes the page's timers. The worker outlives the page, so a timeout set
+ * here still resolves — and a notification is the only thing that can reach
+ * you through a dark screen.
+ *
+ * This is a timeout, not a scheduled trigger. `showTrigger` would survive the
+ * worker being evicted, but it is unshipped everywhere, so the honest
+ * behaviour is: the notification is best-effort, the on-screen countdown is
+ * exact, and neither is required to finish a set.
+ */
+const REST_TAG = 'rest-timer';
+
+let restTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function cancelRest(): void {
+  if (restTimeout !== null) clearTimeout(restTimeout);
+  restTimeout = null;
+}
+
+async function fireRestNotification(body: string): Promise<void> {
+  restTimeout = null;
+
+  // Any previous rest notification is dismissed first. Re-using the tag alone
+  // would replace it *silently*, and a rest timer that ends without a buzz has
+  // failed at its only job.
+  for (const stale of await self.registration.getNotifications({ tag: REST_TAG })) {
+    stale.close();
   }
+
+  // A pocket buzz with nothing to look at is worse than nothing, so the
+  // notification names what is next.
+  await self.registration.showNotification('Rest is over', {
+    body,
+    tag: REST_TAG,
+    requireInteraction: false,
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: { url: '/' },
+  });
+}
+
+function scheduleRest(endsAt: number, body: string): void {
+  cancelRest();
+  const delay = endsAt - Date.now();
+  if (delay <= 0) {
+    void fireRestNotification(body);
+    return;
+  }
+  restTimeout = setTimeout(() => {
+    void fireRestNotification(body);
+  }, delay);
+}
+
+type RestMessage =
+  | { type: 'REST_TIMER_START'; endsAt: number; body: string }
+  | { type: 'REST_TIMER_CANCEL' }
+  | { type: 'SKIP_WAITING' };
+
+function asMessage(data: unknown): RestMessage | null {
+  if (typeof data !== 'object' || data === null || !('type' in data)) return null;
+  const record = data as Record<string, unknown>;
+
+  if (record['type'] === 'SKIP_WAITING') return { type: 'SKIP_WAITING' };
+  if (record['type'] === 'REST_TIMER_CANCEL') return { type: 'REST_TIMER_CANCEL' };
+  if (record['type'] === 'REST_TIMER_START') {
+    const endsAt: unknown = record['endsAt'];
+    if (typeof endsAt !== 'number' || !Number.isFinite(endsAt)) return null;
+    return {
+      type: 'REST_TIMER_START',
+      endsAt,
+      body: typeof record['body'] === 'string' ? record['body'] : 'Next set',
+    };
+  }
+  return null;
+}
+
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+  const message = asMessage(event.data);
+  if (message === null) return;
+
+  switch (message.type) {
+    case 'SKIP_WAITING':
+      void self.skipWaiting();
+      return;
+    case 'REST_TIMER_START':
+      scheduleRest(message.endsAt, message.body);
+      return;
+    case 'REST_TIMER_CANCEL':
+      cancelRest();
+      return;
+  }
+});
+
+/** Tapping the notification comes back to the session, not to a new tab. */
+self.addEventListener('notificationclick', (event: NotificationEvent) => {
+  event.notification.close();
+
+  event.waitUntil(
+    (async () => {
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const existing = clients[0];
+      if (existing !== undefined) {
+        await existing.focus();
+        return;
+      }
+      await self.clients.openWindow('/');
+    })(),
+  );
 });

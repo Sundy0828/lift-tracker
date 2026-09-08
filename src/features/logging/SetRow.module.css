@@ -1,0 +1,162 @@
+/* Delta colours as tokens, so the chip, the PR badge and the trend line all
+   agree. Green/red on their own fail for the ~8% of men with a red-green
+   deficiency, which is why the chip always carries a sign as well. */
+.row {
+  --delta-up: light-dark(var(--mantine-color-teal-8), var(--mantine-color-teal-4));
+  --delta-down: light-dark(var(--mantine-color-red-8), var(--mantine-color-red-4));
+  --delta-same: var(--mantine-color-dimmed);
+
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    'ordinal inputs done'
+    'meta meta meta';
+  align-items: center;
+  gap: 4px 8px;
+  padding: 4px 0;
+}
+
+.row + .row {
+  border-top: 1px solid light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+}
+
+.skipped {
+  opacity: 0.5;
+}
+
+/* The set number doubles as the warmup toggle: a warmup is a property of the
+   set, and the number is the only thing on the row that is about the set
+   itself rather than about what was lifted. */
+.ordinal {
+  all: unset;
+  grid-area: ordinal;
+  box-sizing: border-box;
+  min-width: 32px;
+  min-height: 32px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border-radius: var(--mantine-radius-sm);
+  font-size: var(--mantine-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--mantine-color-dimmed);
+}
+
+.ordinal:hover,
+.ordinal:focus-visible {
+  background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+}
+
+.ordinal[aria-pressed='true'] {
+  color: light-dark(var(--mantine-color-amber-8), var(--mantine-color-amber-4));
+  font-weight: 600;
+}
+
+.inputs {
+  grid-area: inputs;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+/* Stepper, input, stepper. The steppers are what make this usable with one
+   sweaty thumb; the keypad is the fallback, not the primary path. */
+.field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: stretch;
+  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-radius: var(--mantine-radius-sm);
+  overflow: hidden;
+  background: light-dark(var(--mantine-color-white), var(--mantine-color-dark-6));
+}
+
+.field:focus-within {
+  border-color: var(--mantine-primary-color-filled);
+}
+
+.step {
+  all: unset;
+  /* 40px: the smallest target that is reliably hittable mid-set. */
+  min-width: 34px;
+  min-height: 40px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--mantine-color-dimmed);
+  user-select: none;
+  -webkit-user-select: none;
+  /* Stops a double-tap on + zooming the page. */
+  touch-action: manipulation;
+}
+
+.step:hover,
+.step:focus-visible {
+  background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+  color: var(--mantine-color-text);
+}
+
+.step:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.input {
+  all: unset;
+  min-width: 0;
+  padding: 8px 0;
+  text-align: center;
+  font-size: 16px; /* Anything smaller makes iOS zoom on focus. */
+  font-variant-numeric: tabular-nums;
+  color: var(--mantine-color-text);
+}
+
+.input::placeholder {
+  color: var(--mantine-color-placeholder);
+  font-size: var(--mantine-font-size-xs);
+}
+
+.meta {
+  grid-area: meta;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding-left: 40px;
+  min-height: 18px;
+}
+
+.previous {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The sign carries the meaning; the colour only reinforces it. */
+.delta {
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.rowActions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.linkButton {
+  all: unset;
+  cursor: pointer;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  padding: 2px;
+}
+
+.linkButton:hover,
+.linkButton:focus-visible {
+  color: var(--mantine-color-text);
+  text-decoration-color: currentColor;
+}

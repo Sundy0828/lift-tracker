@@ -1,0 +1,11 @@
+/* Tier 1 is the number you are trying to beat, so it is stated in the accent
+   colour rather than as another line of grey. */
+.primary {
+  color: light-dark(var(--mantine-color-amber-8), var(--mantine-color-amber-4));
+}
+
+/* Tier 2 is a reference, not a target. Italic as well as dimmed, so the
+   difference survives being glanced at between sets. */
+.secondary {
+  font-style: italic;
+}

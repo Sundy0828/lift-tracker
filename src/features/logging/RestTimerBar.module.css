@@ -1,0 +1,17 @@
+/* Sits directly on top of the fixed bottom navigation (60px plus the safe-area
+   inset, matching AppLayout), so both stay reachable and neither covers the
+   other. */
+.bar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: calc(60px + env(safe-area-inset-bottom));
+  z-index: 210;
+  background: var(--mantine-color-body);
+  border-top: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  box-shadow: 0 -4px 16px light-dark(rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.4));
+}
+
+.clock {
+  /* Tabular figures so the countdown does not shift the row every second. */
+  font-variant-numeric: tabular-nums;
+}

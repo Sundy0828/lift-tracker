@@ -24,8 +24,16 @@ export const paths = {
   workoutVersions: (uid: string, workoutId: string): CollectionReference =>
     collection(db, 'users', uid, 'workouts', workoutId, 'versions'),
   sessions: (uid: string): CollectionReference => collection(db, 'users', uid, 'sessions'),
+  session: (uid: string, sessionId: string): DocumentReference =>
+    doc(db, 'users', uid, 'sessions', sessionId),
   workoutStats: (uid: string): CollectionReference => collection(db, 'users', uid, 'workoutStats'),
+  /** Tier 1 of the overlay: one document per workout, id-for-id (§2.6). */
+  workoutStat: (uid: string, workoutId: string): DocumentReference =>
+    doc(db, 'users', uid, 'workoutStats', workoutId),
   exerciseStats: (uid: string): CollectionReference =>
     collection(db, 'users', uid, 'exerciseStats'),
+  /** Tier 2 plus the PR record: one document per exercise. */
+  exerciseStat: (uid: string, exerciseId: string): DocumentReference =>
+    doc(db, 'users', uid, 'exerciseStats', exerciseId),
   sharedWorkouts: (): CollectionReference => collection(db, 'sharedWorkouts'),
 } as const;

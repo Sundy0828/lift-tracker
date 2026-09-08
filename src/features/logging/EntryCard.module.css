@@ -1,0 +1,6 @@
+/* A rest row is a pause, not work, so it reads as a divider rather than as
+   another exercise card competing for attention. */
+.restCard {
+  border-style: dashed;
+  background: transparent;
+}

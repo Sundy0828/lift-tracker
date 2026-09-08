@@ -55,6 +55,22 @@ const routes: RouteObject[] = [
         },
       },
       {
+        // Starts a session and redirects; its own route because it has to load
+        // the workout's version history first (see StartSessionScreen).
+        path: 'session/start/:workoutId',
+        lazy: async () => {
+          const { default: Component } = await import('@/features/logging/StartSessionScreen');
+          return { Component };
+        },
+      },
+      {
+        path: 'session/:sessionId',
+        lazy: async () => {
+          const { default: Component } = await import('@/features/logging/ActiveSessionScreen');
+          return { Component };
+        },
+      },
+      {
         path: 'history',
         lazy: async () => {
           const { default: Component } = await import('@/features/history/HistoryScreen');
