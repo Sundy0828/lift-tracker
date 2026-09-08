@@ -21,7 +21,7 @@ import {
   isRestSlot,
   restSlotSeconds,
   totalSets,
-  unlink,
+  leaveGroup,
   withGroupRounds,
 } from './workouts';
 import { workoutVolume, type MuscleLookup } from './volume';
@@ -112,45 +112,97 @@ describe('linkToPrevious', () => {
   });
 });
 
-describe('unlink', () => {
+describe('leaveGroup', () => {
   const threeMemberCircuit = (): ExerciseSlot[] =>
     linkToPrevious(linkToPrevious(base(), 'b', 'g1'), 'c', 'g1');
 
-  it('removes one member and restores its default rest', () => {
-    const slots = unlink(threeMemberCircuit(), 'c');
+  const ids = (slots: readonly ExerciseSlot[]): string[] => slots.map((item) => item.slotId);
+
+  it('places the row above the block, and restores its own rest', () => {
+    const slots = leaveGroup(threeMemberCircuit(), 'c', true);
+
+    // warm, a, b, c -> the circuit is a+b+c, so c lands ahead of a.
+    expect(ids(slots)).toEqual(['warm', 'c', 'a', 'b']);
     expect(find(slots, 'c')?.supersetGroup).toBeNull();
     expect(find(slots, 'c')?.prescription.restSeconds).toBeNull();
     expect(find(slots, 'a')?.supersetGroup).toBe('g1');
     expect(find(slots, 'b')?.supersetGroup).toBe('g1');
   });
 
+  it('places the row below the block when dropped on that side', () => {
+    const slots = leaveGroup(threeMemberCircuit(), 'a', false);
+
+    expect(ids(slots)).toEqual(['warm', 'b', 'c', 'a']);
+    expect(find(slots, 'a')?.supersetGroup).toBeNull();
+  });
+
+  it('lands where it was dropped rather than staying put', () => {
+    // The whole point: dragging a row out and having it sit where it started
+    // reads as the gesture not having worked.
+    const before = threeMemberCircuit();
+    expect(ids(before).indexOf('c')).toBe(3);
+    expect(ids(leaveGroup(before, 'c', true)).indexOf('c')).toBe(1);
+  });
+
+  it('closes the remaining members up, keeping the run contiguous', () => {
+    // Taking the middle one out must not leave the group either side of an
+    // ungrouped row: that breaks the invariant the logger walks a round with.
+    const slots = leaveGroup(threeMemberCircuit(), 'b', true);
+
+    expect(ids(slots)).toEqual(['warm', 'b', 'a', 'c']);
+    const grouped = slots
+      .map((item, index) => ({ index, group: item.supersetGroup }))
+      .filter((item) => item.group === 'g1')
+      .map((item) => item.index);
+    expect(grouped).toEqual([2, 3]);
+    // Already contiguous, so reconciling is a no-op.
+    expect(reconcileGroups(slots)).toEqual(slots);
+  });
+
   it('dissolves a group left with one member, since a circuit of one is an exercise', () => {
-    const slots = unlink(linkToPrevious(base(), 'b', 'g1'), 'b');
+    const slots = leaveGroup(linkToPrevious(base(), 'b', 'g1'), 'b', true);
+
     expect(slots.every((item) => item.supersetGroup === null)).toBe(true);
     expect(find(slots, 'a')?.prescription.restSeconds).toBeNull();
   });
 
-  it('does nothing for a slot that is not grouped', () => {
-    const slots = base();
-    expect(unlink(slots, 'warm')).toEqual(slots);
+  it('is the way out of a workout that is entirely one circuit', () => {
+    // Two exercises, both members. There is no position outside the run, so
+    // the row lands beside the block and the block dissolves with it.
+    const pair = [slot({ slotId: 'a' }), slot({ slotId: 'b', exerciseId: 'row' })];
+    const slots = leaveGroup(linkToPrevious(pair, 'b', 'g1'), 'b', true);
+
+    expect(ids(slots)).toEqual(['b', 'a']);
+    expect(slots.every((item) => item.supersetGroup === null)).toBe(true);
   });
 
-  it('is the only way out when the whole workout is one circuit', () => {
-    // Two exercises, both in the circuit: there is no position outside the
-    // block to drag to, so reordering can never leave it. This is why the
-    // swipe-right gesture exists.
-    const pair = [slot({ slotId: 'a' }), slot({ slotId: 'b', exerciseId: 'row' })];
-    const circuit = linkToPrevious(pair, 'b', 'g1');
-    expect(circuit.every((item) => item.supersetGroup === 'g1')).toBe(true);
-
-    // Any reorder keeps them adjacent, so the group survives reconciliation.
-    expect(reconcileGroups(reorder(circuit, 1, 0)).every((i) => i.supersetGroup === 'g1')).toBe(
-      true,
+  it('keeps a rest row a rest row, with its length', () => {
+    const withRest = insertSlotAfter(
+      linkToPrevious(base(), 'b', 'g1'),
+      'a',
+      createRestSlot('r1', 30),
     );
+    const slots = leaveGroup(withRest, 'r1', false);
+    const rest = find(slots, 'r1');
 
-    // unlink dissolves it, because a circuit of one is just an exercise.
-    const out = unlink(circuit, 'b');
-    expect(out.every((item) => item.supersetGroup === null)).toBe(true);
+    expect(rest?.supersetGroup).toBeNull();
+    expect(restSlotSeconds(rest ?? createRestSlot('x', 0))).toBe(30);
+  });
+
+  it('does nothing for a slot that is not grouped', () => {
+    const slots = base();
+    expect(leaveGroup(slots, 'warm', true)).toEqual(slots);
+  });
+
+  it('does nothing for an unknown slot', () => {
+    const slots = threeMemberCircuit();
+    expect(leaveGroup(slots, 'nope', true)).toEqual(slots);
+  });
+
+  it('leaves the input array alone', () => {
+    const slots = threeMemberCircuit();
+    leaveGroup(slots, 'c', true);
+    expect(ids(slots)).toEqual(['warm', 'a', 'b', 'c']);
   });
 });
 

@@ -202,9 +202,12 @@ the moment you arrive and firms up to "release to group" once armed, so the
 wait is never silent; `g` mid-drag skips it.
 
 Leaving is the same gesture outwards: **drag a member out of the block**, in
-whatever direction has room. Cross an edge by more than
-`ESCAPE_MARGIN_PX` and the row says "release to leave"; dropping it calls
-`unlink`.
+whatever direction has room. Cross an edge by more than `ESCAPE_MARGIN_PX` and
+the row says "release to leave"; dropping it calls `leaveGroup`, which puts it
+just outside the block on the side it was dropped — a row that stayed where it
+started would read as the gesture not having worked. Clear of the run rather
+than at an arbitrary index, so taking the middle member out of three closes the
+other two up instead of splitting the group either side of an ungrouped row.
 
 "Out" is measured against **the block's box on screen**, not against the
 circuit's run in the list, and that distinction is the whole trick. Judged by
@@ -231,6 +234,15 @@ exercise.
 
 `escape.ts` holds the geometry on its own, with tests: four edge comparisons
 with a margin are exactly the sort of thing that ships with a sign flipped.
+
+One subtlety in the join, worth knowing before touching `handleDragOver`: it
+returns early when the target has not changed. During a sortable drag the other
+rows shift to make room, so `over` flips between the target and the dragged
+row's own place while the pointer sits perfectly still — and restarting the
+dwell on each flip meant the timer effectively never completed. Joining then
+only worked with the pointer slightly off the target's edge, where the flipping
+stopped, rather than squarely on it. The dragged row is also filtered out of
+`pointerWithin`'s hits, since its own place is not something to drop onto.
 
 There is no button for either direction. Without a pointer both are reachable:
 pick a row up with Space, then `g` joins whatever is under it and `u` leaves

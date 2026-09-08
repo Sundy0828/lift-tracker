@@ -236,7 +236,12 @@ type SortableListProps = {
   /** Rejects pairs that cannot be grouped, so no intent is offered. */
   canGroup?: (activeId: string, targetId: string) => boolean;
   /** Called when a row is dragged out of its circuit. */
-  onLeave?: (activeId: string) => void;
+  /**
+   * Called when a row is dragged out of its circuit. `placeBefore` says which
+   * side of the block it was dropped on, so it can land there rather than
+   * staying where it started.
+   */
+  onLeave?: (activeId: string, placeBefore: boolean) => void;
   /**
    * The box a row must be dragged out of to leave its group, or null when it
    * has no group. Measured once per drag, since it cannot move while one is in
@@ -275,6 +280,8 @@ export function SortableList({
   const [intent, setIntent] = useState<GroupIntent>(null);
   const [pending, setPending] = useState<GroupIntent>(null);
   const [pullOut, setPullOut] = useState<string | null>(null);
+  /** Which side of the block the row was last seen on, for where it lands. */
+  const placeBefore = useRef(false);
   /** The row being dragged, and whether it has a circuit to leave. */
   const [leavable, setLeavable] = useState<string | null>(null);
   /**
@@ -372,16 +379,35 @@ export function SortableList({
     const row = dragged.rect.current.translated;
     if (row == null) return;
 
+    // Above the block's middle means it lands above the block. For a purely
+    // sideways pull that resolves the same way the row reads: the top member
+    // goes out above, a lower one below.
+    placeBefore.current = (row.top + row.bottom) / 2 < (bounds.top + bounds.bottom) / 2;
     setPullOut(hasEscaped(row, bounds) ? activeId : null);
   };
 
   const handleDragOver = ({ active: dragged, over }: DragOverEvent): void => {
-    // The target changed, so any pending or settled intent is stale.
-    stopDwell();
-    setIntent(null);
-
     const activeId = String(dragged.id);
     const targetId = over === null ? null : String(over.id);
+
+    /**
+     * Nothing to do when the target has not actually changed — and this
+     * matters more than it looks.
+     *
+     * During a sortable drag the other rows shift to make room, so `over` can
+     * flip between the target and the dragged row's own place several times
+     * while the pointer sits still. Restarting the dwell on every one of those
+     * meant the timer effectively never completed: holding a row over another
+     * did nothing until you found an offset where the flipping stopped, which
+     * is why joining used to need the pointer slightly off the target's edge
+     * rather than squarely on it.
+     */
+    const settled = hover.current;
+    if (settled?.activeId === activeId && settled.targetId === targetId) return;
+
+    // A genuinely new target, so any pending or armed intent is stale.
+    stopDwell();
+    setIntent(null);
 
     if (targetId === null || !groupable(activeId, targetId)) {
       hover.current = null;
@@ -412,13 +438,15 @@ export function SortableList({
     const { active: dragged, over } = event;
     const settled = intent;
     const leaving = pullOut;
+    const side = placeBefore.current;
     const activeId = String(dragged.id);
     finish();
 
-    // Leaving wins over both: the row was pulled clear of the block, so where
-    // it happens to hover is not what the gesture meant.
+    // Leaving wins over both: the row was pulled clear of the block, so
+    // whichever row it happens to hover is not what the gesture meant. Where
+    // it was dropped still is, which is what `placeBefore` carries.
     if (leaving === activeId) {
-      onLeave?.(activeId);
+      onLeave?.(activeId, side);
       return;
     }
 
@@ -444,7 +472,9 @@ export function SortableList({
       // whatever is literally under the finger. closestCenter is the fallback
       // for keyboard drags and for gaps between rows, where nothing is.
       collisionDetection={(args) => {
-        const within = pointerWithin(args);
+        // The dragged row's own place is not something to drop onto, and
+        // counting it made `over` flip back and forth as the list shifted.
+        const within = pointerWithin(args).filter((hit) => hit.id !== args.active.id);
         return within.length > 0 ? within : closestCenter(args);
       }}
       // Vertical only for a plain reorder, which keeps it precise. A row that

@@ -640,14 +640,49 @@ export function reconcileGroups(slots: readonly ExerciseSlot[]): ExerciseSlot[] 
 }
 
 /**
- * Removes a slot from its group. A group left with one member is dissolved,
- * since a circuit of one is just an exercise.
+ * Takes a slot out of its circuit and places it just outside the block.
+ *
+ * Detaching in place would not be enough, for two reasons.
+ *
+ * It **moves** the slot, because dragging a row out of a block and having it
+ * stay where it was reads as the gesture not having worked. `placeBefore` says
+ * which side of the block it lands on — above it or below it — which the
+ * caller takes from where the drop happened.
+ *
+ * And it moves it *clear of the run* rather than to an arbitrary index, which
+ * is what keeps circuits contiguous. Detaching the middle member of three in
+ * place would leave the group either side of an ungrouped row, breaking the
+ * one-contiguous-run invariant that lets the logger walk a round in order; the
+ * remaining two close up instead and stay a circuit.
  */
-export function unlink(slots: readonly ExerciseSlot[], slotId: string): ExerciseSlot[] {
+export function leaveGroup(
+  slots: readonly ExerciseSlot[],
+  slotId: string,
+  placeBefore: boolean,
+): ExerciseSlot[] {
   const target = slots.find((slot) => slot.slotId === slotId);
-  if (target?.supersetGroup === undefined || target.supersetGroup === null) return [...slots];
+  const groupId = target?.supersetGroup ?? null;
+  if (target === undefined || groupId === null) return [...slots];
 
-  return dissolveSingletons(slots.map((slot) => (slot.slotId === slotId ? detach(slot) : slot)));
+  const without = slots.filter((slot) => slot.slotId !== slotId);
+  const members = without
+    .map((slot, index) => ({ slot, index }))
+    .filter(({ slot }) => slot.supersetGroup === groupId)
+    .map(({ index }) => index);
+
+  const first = members[0];
+  const last = members.at(-1);
+  // No members left means the group went with it; the slot simply stays put.
+  const at =
+    first === undefined || last === undefined
+      ? slots.indexOf(target)
+      : placeBefore
+        ? first
+        : last + 1;
+
+  const next = [...without];
+  next.splice(at, 0, detach(target));
+  return dissolveSingletons(next);
 }
 
 /** Group ids still in use by at least two slots. */

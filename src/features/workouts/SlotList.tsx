@@ -38,8 +38,11 @@ type Props = {
   onEditSlot: (slot: ExerciseSlot) => void;
   onRemoveSlot: (slotId: string) => void;
   onGroup: (activeSlotId: string, targetSlotId: string) => void;
-  /** Takes one slot out of its circuit, dissolving a group left with one. */
-  onLeaveCircuit: (slotId: string) => void;
+  /**
+   * Takes one slot out of its circuit and places it just outside the block;
+   * `placeBefore` picks the side. A group left with one member dissolves.
+   */
+  onLeaveCircuit: (slotId: string, placeBefore: boolean) => void;
   /**
    * Opens the picker to insert after this slot; null for the start.
    *
@@ -258,8 +261,13 @@ export function SlotList({
   const nameOf = (slot: ExerciseSlot): string =>
     slot.kind === 'rest' ? 'rest' : slot.exerciseName;
 
-  /** Swipe left deletes; swipe right leaves the circuit, when in one. */
-  const swipeActions = (slot: ExerciseSlot, inCircuit: boolean) => {
+  /**
+   * Swipe left deletes; swipe right leaves the circuit, when in one.
+   *
+   * A swipe carries no vertical hint, so the row leaves on the side it already
+   * reads as: the first member goes out above the block, any other below.
+   */
+  const swipeActions = (slot: ExerciseSlot, leavesBefore: boolean | null) => {
     const left: SwipeAction = {
       label: `Delete ${nameOf(slot)}`,
       tone: 'danger',
@@ -267,14 +275,14 @@ export function SlotList({
         onRemoveSlot(slot.slotId);
       },
     };
-    if (!inCircuit) return { left };
+    if (leavesBefore === null) return { left };
     return {
       left,
       right: {
         label: 'Leave circuit',
         tone: 'neutral',
         onCommit: () => {
-          onLeaveCircuit(slot.slotId);
+          onLeaveCircuit(slot.slotId, leavesBefore);
         },
       } satisfies SwipeAction,
     };
@@ -325,7 +333,7 @@ export function SlotList({
                 onMove={onReorder}
                 extraControls={<RemoveButton slot={slot} onRemoveSlot={onRemoveSlot} />}
                 surface={(rowContent) => (
-                  <SwipeRow {...swipeActions(slot, false)}>{rowContent}</SwipeRow>
+                  <SwipeRow {...swipeActions(slot, null)}>{rowContent}</SwipeRow>
                 )}
               >
                 <SlotBody
@@ -405,7 +413,7 @@ export function SlotList({
                 </Group>
               </Group>
 
-              {item.members.map(({ slot, index }) => (
+              {item.members.map(({ slot, index }, memberIndex) => (
                 <div key={slot.slotId}>
                   <SortableRow
                     id={slot.slotId}
@@ -416,7 +424,7 @@ export function SlotList({
                     inGroup
                     extraControls={<RemoveButton slot={slot} onRemoveSlot={onRemoveSlot} />}
                     surface={(rowContent) => (
-                      <SwipeRow {...swipeActions(slot, true)}>{rowContent}</SwipeRow>
+                      <SwipeRow {...swipeActions(slot, memberIndex === 0)}>{rowContent}</SwipeRow>
                     )}
                   >
                     <SlotBody

@@ -97,6 +97,31 @@ test.describe('drag to group', () => {
     await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
   });
 
+  test('holding squarely on the target is enough, with no extra movement', async ({ page }) => {
+    // Regression: the dwell timer used to restart every time `over` changed,
+    // and it flips back and forth as the list shifts to make room. Holding a
+    // row dead centre on another therefore never armed, and joining needed
+    // the pointer nudged slightly off the target's edge instead.
+    await signIn(page);
+    await buildWorkout(page, 'Square Hold Workout');
+
+    const handle = page.getByRole('button', { name: /^Reorder or group Crunches$/u });
+    const target = page.getByRole('button', { name: /^Reorder or group Pushups$/u });
+    const from = await handle.boundingBox();
+    const to = await target.boundingBox();
+    if (from === null || to === null) return;
+
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(DRAG_HOLD_MS);
+    // Straight there, then completely still.
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+
+    await expect(page.getByText('release to group')).toBeVisible();
+    await page.mouse.up();
+    await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
+  });
+
   test('a third exercise joins the same circuit, not a second one', async ({ page }) => {
     await signIn(page);
     await buildWorkout(page, 'Three Workout');
@@ -556,6 +581,39 @@ test.describe('dragging out of a circuit', () => {
     await expect(page.getByTestId('circuit-block')).toHaveCount(0);
     await expect(page.getByText('2 exercises')).toBeVisible();
     await expect(page.getByTestId('slot-name').filter({ hasText: 'Crunches' })).toHaveCount(1);
+  });
+
+  test('the row lands on the side it was dropped, not back where it started', async ({ page }) => {
+    // Dragging a row out and having it sit where it was reads as the gesture
+    // not having worked.
+    await signIn(page);
+    await buildWorkout(page, 'Landing Workout');
+    await group(page, 'Crunches', 'Pushups', 2);
+
+    // Pushups, Crunches is the circuit; pull Crunches out upwards.
+    await dragBy(page, 'Crunches', 0, -110);
+    await page.mouse.up();
+
+    const names = await page.getByTestId('slot-name').allTextContents();
+    const crunches = names.findIndex((name) => name.includes('Crunches'));
+    const pushups = names.findIndex((name) => name.includes('Pushups'));
+    expect(crunches).toBeLessThan(pushups);
+  });
+
+  test('pulling a member down puts it below the block', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Landing Down Workout');
+    await group(page, 'Crunches', 'Pushups', 2);
+    await group(page, 'Pullups', 'Crunches', 3);
+
+    // The first member, dragged downwards, ends up after the whole block.
+    await dragBy(page, 'Pushups', 0, 200);
+    await page.mouse.up();
+
+    const names = await page.getByTestId('slot-name').allTextContents();
+    expect(names.at(-1)).toContain('Pushups');
+    // The remaining two closed up and are still a circuit.
+    await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
   });
 
   test('pulling one member out leaves the rest of the circuit intact', async ({ page }) => {

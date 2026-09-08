@@ -77,15 +77,21 @@ function swipe(surface: Element, dx: number): void {
 
 describe('leaving a circuit by swiping right', () => {
   it('is wired up for a workout that is entirely one circuit', () => {
-    // No position outside the block exists here, so drag cannot do it and
-    // this gesture is the only route.
     const props = setup(allCircuit());
     expect(screen.getByTestId('circuit-block')).toBeInTheDocument();
 
     swipe(surfaceOf('Crunches'), 140);
 
-    expect(props.onLeaveCircuit).toHaveBeenCalledWith('b');
+    // A swipe has no vertical hint, so a member that is not the first leaves
+    // on the side it already reads as: below the block.
+    expect(props.onLeaveCircuit).toHaveBeenCalledWith('b', false);
     expect(props.onRemoveSlot).not.toHaveBeenCalled();
+  });
+
+  it('sends the first member out above the block instead', () => {
+    const props = setup(allCircuit());
+    swipe(surfaceOf('Pushups'), 140);
+    expect(props.onLeaveCircuit).toHaveBeenCalledWith('a', true);
   });
 
   it('still deletes when swiped the other way', () => {

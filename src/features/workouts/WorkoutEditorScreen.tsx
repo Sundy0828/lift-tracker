@@ -39,11 +39,11 @@ import {
   formatEstimate,
   groupWithSlot,
   insertSlotAfter,
+  leaveGroup,
   pruneGroupRest,
   reconcileGroups,
   reorder,
   totalSets,
-  unlink,
   withGroupRounds,
 } from '@/domain/workouts';
 import { SESSION_STOPS, workoutVolume } from '@/domain/volume';
@@ -262,8 +262,8 @@ export default function WorkoutEditorScreen() {
         onGroup={(activeSlotId, targetSlotId) => {
           mapSlots((slots) => groupWithSlot(slots, activeSlotId, targetSlotId, newId()));
         }}
-        onLeaveCircuit={(slotId) => {
-          mapSlots((slots) => unlink(slots, slotId));
+        onLeaveCircuit={(slotId, placeBefore) => {
+          mapSlots((slots) => leaveGroup(slots, slotId, placeBefore));
         }}
         onAddAfter={(slotId, join) => {
           setPicking({ afterSlotId: slotId, join });
