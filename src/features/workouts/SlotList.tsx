@@ -22,12 +22,13 @@ import classes from './SlotList.module.css';
  * The block's own rest is the pause after a whole round.
  *
  * Joining and leaving are both the drag gesture, so there is no button for
- * either: hold a row over another to join, and pull a member sideways out of
- * the block to leave. Sideways rather than clear of the block because a
- * two-exercise workout that is entirely one circuit has no outside — every
- * reorder leaves the two adjacent and still grouped — so the axis that always
- * has room is the one across it. Swiping a row right does the same thing
- * without picking it up.
+ * either: hold a row over another to join, and drag a member out of the block
+ * to leave. "Out" is measured against the block's box on screen rather than
+ * against the circuit's run in the list, which is what makes it possible at
+ * all when the whole workout is one circuit — the run has no outside, but the
+ * box has edges, and its header, footer and padding mean up and down have room
+ * even on a narrow phone. Swiping a row right does the same thing without
+ * picking it up.
  */
 
 type Props = {
@@ -294,7 +295,15 @@ export function SlotList({
         return active === null || active !== groupOf(targetId);
       }}
       onLeave={onLeaveCircuit}
-      canLeave={(activeId) => groupOf(activeId) !== null}
+      // The block on screen, not the run in the array: a workout that is
+      // entirely one circuit has no position outside the run, but the block is
+      // still a box with edges to cross.
+      leaveBoundsOf={(activeId) => {
+        const groupId = groupOf(activeId);
+        if (groupId === null) return null;
+        const block = document.querySelector(`[data-group-id="${CSS.escape(groupId)}"]`);
+        return block?.getBoundingClientRect() ?? null;
+      }}
     >
       <InsertRow
         slotId={null}
@@ -345,7 +354,12 @@ export function SlotList({
 
         return (
           <div key={item.groupId}>
-            <div className={classes.circuit} data-testid="circuit-block">
+            <div
+              className={classes.circuit}
+              data-testid="circuit-block"
+              // Read back to measure the box a member must be dragged out of.
+              data-group-id={item.groupId}
+            >
               <Group justify="space-between" align="center" wrap="nowrap" gap="xs">
                 <Group gap={6} wrap="nowrap">
                   <Text size="xs" fw={700} className={classes.circuitLabel}>

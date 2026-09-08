@@ -21,6 +21,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { ActionIcon, Group } from '@mantine/core';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { hasEscaped, type Bounds } from './escape';
 import classes from './SortableList.module.css';
 
 /**
@@ -37,12 +38,22 @@ import classes from './SortableList.module.css';
  * here" — the folder-drop pattern, so a normal reorder is unaffected. The
  * target says so before you release, and `g` mid-drag skips the wait.
  *
- * **Leaving** is a sideways drag, and has to be. Dragging vertically clear of
- * the block only works when a position outside it exists: a two-exercise
- * workout that is entirely one circuit has no outside, and every reorder
- * leaves the two members adjacent and still grouped. So a row already in a
- * circuit is freed from the vertical axis and pulling it out of the block
- * sideways means what it looks like. `u` is the keyboard equivalent.
+ * **Leaving** is dragging the row out of the block, in whatever direction has
+ * room — which is judged against the block's own bounds on screen rather than
+ * against the list order.
+ *
+ * That distinction is the whole trick. Judged by list order, a member can only
+ * escape by landing somewhere outside the circuit's run, and a two-exercise
+ * workout that is entirely one circuit has no such position: every reorder
+ * leaves the two adjacent and still grouped. Judged geometrically, the block
+ * is a box on screen that is taller and wider than its rows — the header, the
+ * footer and the padding are all inside it — so there is always an edge to
+ * cross. Upwards and downwards work through that chrome, and sideways works
+ * where the screen is wide enough, which on a phone it often is not.
+ *
+ * A row in a circuit is therefore freed from the vertical-axis lock for the
+ * duration of its drag, and only then. `u` is the keyboard equivalent, which
+ * needs no room at all.
  */
 
 /**
@@ -53,14 +64,6 @@ import classes from './SortableList.module.css';
  * group" state immediately, so the wait is never silent.
  */
 const GROUP_DWELL_MS = 420;
-
-/**
- * How far sideways a circuit member travels before the drop means "leave".
- *
- * Comfortably past any wobble in a drag that meant to reorder, and roughly a
- * thumb's width so it reads as a deliberate pull rather than a slip.
- */
-const PULL_OUT_PX = 56;
 
 type GroupIntent = { activeId: string; targetId: string } | null;
 
@@ -234,8 +237,12 @@ type SortableListProps = {
   canGroup?: (activeId: string, targetId: string) => boolean;
   /** Called when a row is dragged out of its circuit. */
   onLeave?: (activeId: string) => void;
-  /** True for a row that is in a circuit, and so has something to leave. */
-  canLeave?: (activeId: string) => boolean;
+  /**
+   * The box a row must be dragged out of to leave its group, or null when it
+   * has no group. Measured once per drag, since it cannot move while one is in
+   * progress: the block is not the element being transformed.
+   */
+  leaveBoundsOf?: (activeId: string) => Bounds | null;
   children: ReactNode;
 };
 
@@ -245,7 +252,7 @@ export function SortableList({
   onGroup,
   canGroup,
   onLeave,
-  canLeave,
+  leaveBoundsOf,
   children,
 }: SortableListProps) {
   const sensors = useSensors(
@@ -302,18 +309,15 @@ export function SortableList({
     onGroup !== undefined && activeId !== targetId && (canGroup?.(activeId, targetId) ?? true);
 
   /**
-   * `canLeave` behind a ref so the key listener below can depend on nothing.
+   * The dragged row's group box, captured at drag start.
    *
-   * Callers pass an inline arrow, so the prop is a new function on every
-   * render. Depending on it directly would re-run that effect every render —
-   * and its cleanup stops the dwell timer, so the hold-to-group timer would be
-   * cancelled by the very re-render that starts it, and joining could never
-   * arm at all.
+   * A ref rather than state because every pointer move reads it and nothing
+   * renders from it, and because the key listener below must depend on
+   * nothing: its cleanup stops the dwell timer, so an effect that re-ran on
+   * every render would cancel the hold-to-group timer with the very re-render
+   * that starts it, and joining could never arm at all.
    */
-  const canLeaveRef = useRef(canLeave);
-  useEffect(() => {
-    canLeaveRef.current = canLeave;
-  }, [canLeave]);
+  const leaveBounds = useRef<Bounds | null>(null);
 
   // `g` commits a join straight away and `u` leaves a circuit, which are the
   // only routes open to the keyboard sensor — there is no hovering without a
@@ -331,7 +335,7 @@ export function SortableList({
       }
       if (event.key === 'u' || event.key === 'U') {
         const activeId = active.current;
-        if (activeId === null || !(canLeaveRef.current?.(activeId) ?? false)) return;
+        if (activeId === null || leaveBounds.current === null) return;
         event.preventDefault();
         setPullOut(activeId);
       }
@@ -353,21 +357,22 @@ export function SortableList({
     setPullOut(null);
     hover.current = null;
     active.current = activeId;
-    // Frees this drag from the vertical axis when there is a circuit to pull
+    leaveBounds.current = leaveBoundsOf?.(activeId) ?? null;
+    // Frees this drag from the vertical axis when there is a circuit to get
     // out of, and only then, so a plain reorder stays crisp.
-    setLeavable((canLeave?.(activeId) ?? false) ? activeId : null);
+    setLeavable(leaveBounds.current === null ? null : activeId);
   };
 
-  const handleDragMove = ({ delta }: DragMoveEvent): void => {
+  const handleDragMove = ({ active: dragged }: DragMoveEvent): void => {
     const activeId = active.current;
-    if (activeId === null || leavable !== activeId) return;
+    const bounds = leaveBounds.current;
+    if (activeId === null || bounds === null) return;
 
-    const pulled = Math.abs(delta.x) >= PULL_OUT_PX;
-    setPullOut((current) => {
-      if (pulled) return activeId;
-      // A `u` press stands until the row is dragged back inside the block.
-      return current === activeId && Math.abs(delta.x) < PULL_OUT_PX / 2 ? null : current;
-    });
+    // The row where it currently sits, transform included.
+    const row = dragged.rect.current.translated;
+    if (row == null) return;
+
+    setPullOut(hasEscaped(row, bounds) ? activeId : null);
   };
 
   const handleDragOver = ({ active: dragged, over }: DragOverEvent): void => {

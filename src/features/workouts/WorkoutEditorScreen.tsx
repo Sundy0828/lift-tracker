@@ -294,7 +294,7 @@ export default function WorkoutEditorScreen() {
             </>
           ) : null}
           {hasCircuit
-            ? ' To leave a circuit, pull a member sideways out of the block — or swipe the row right.'
+            ? ' To leave a circuit, drag a member out of the block in any direction — or swipe the row right.'
             : null}
         </Text>
       )}

@@ -201,28 +201,40 @@ pattern, so a plain reorder is unaffected. The target dims to "hold to group"
 the moment you arrive and firms up to "release to group" once armed, so the
 wait is never silent; `g` mid-drag skips it.
 
-Leaving is the same gesture, on the other axis: **pull a member sideways out
-of the block**. Past ~56 px the row says "release to leave" and dropping it
-calls `unlink`.
+Leaving is the same gesture outwards: **drag a member out of the block**, in
+whatever direction has room. Cross an edge by more than
+`ESCAPE_MARGIN_PX` and the row says "release to leave"; dropping it calls
+`unlink`.
 
-Sideways, rather than dragging clear of the block, because clear-of-the-block
-only works when a position outside it exists. A two-exercise workout that is
-entirely one circuit has **no outside** — every reorder leaves the two members
-adjacent, so `reconcileGroups` correctly keeps them grouped and there is
-nowhere to drop that means "out". The axis that always has room is the one
-across the list, so a row that is in a circuit is released from
-`restrictToVerticalAxis` for the duration of its drag, and only then: a plain
+"Out" is measured against **the block's box on screen**, not against the
+circuit's run in the list, and that distinction is the whole trick. Judged by
+list order, a member can only escape by landing outside the run — and a
+two-exercise workout that is entirely one circuit has no such position: every
+reorder leaves the two adjacent, so `reconcileGroups` correctly keeps them
+grouped and there is nowhere to drop that means "out". Judged geometrically,
+the block is a box strictly bigger than its rows, because its header, footer
+and padding are all inside it. So there is always an edge to cross.
+
+That also fixes the direction problem. A circuit spans nearly the full width of
+a phone, so a sideways threshold measured as _travel_ can need more room than
+the screen has. Measured from the edge, up and down go out through the block's
+own header and footer and always have room; sideways works where the screen is
+wide enough. A row that is in a circuit is released from
+`restrictToVerticalAxis` for the duration of its drag, and only then — a plain
 reorder stays locked to the vertical, which keeps it precise.
 
-Dragging vertically clear of the block still works where there is room —
-`reconcileGroups` re-establishes the one-contiguous-run invariant after any
-reorder, so the longest run wins and a stranded member is detached. Swiping a
-row right does the same thing without picking it up. A circuit left with one
-member dissolves either way, since a circuit of one is just an exercise.
+`reconcileGroups` still re-establishes the one-contiguous-run invariant after
+any reorder, so a member stranded away from its run is detached regardless.
+Swiping a row right does the same thing without picking it up. A circuit left
+with one member dissolves either way, since a circuit of one is just an
+exercise.
+
+`escape.ts` holds the geometry on its own, with tests: four edge comparisons
+with a margin are exactly the sort of thing that ships with a sign flipped.
 
 There is no button for either direction. Without a pointer both are reachable:
 pick a row up with Space, then `g` joins whatever is under it and `u` leaves
-the circuit — `u` because the keyboard has no sideways room either.
+the circuit — `u` because the keyboard has no room in any direction.
 
 ## Why the drag handle waits, and why `tolerance` is enormous
 

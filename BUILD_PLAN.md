@@ -542,10 +542,11 @@ Gestures, because this is a phone-first editor: a `+` insert row in every gap (i
 the first exercise, and below a circuit block where it deliberately does *not* join) so an
 addition never needs a follow-up drag; drag on a left-hand handle, armed on a short hold; hold
 one row over another to make them a **circuit** (a contiguous `supersetGroup` run whose set count
-is its round count); swipe a row left to delete. Leaving a circuit is the same gesture on the
-other axis — pull a member sideways out of the block — because dragging *clear* of it only works
-when a position outside exists, and a workout that is entirely one circuit has none. `u` is the
-keyboard equivalent, for the same reason. A **rest row** is a slot kind you
+is its round count); swipe a row left to delete. Leaving a circuit is dragging a member out of
+the block in any direction, judged against the block's **box on screen** rather than its run in
+the list — the run has no outside when the whole workout is one circuit, but the box always has
+an edge, and its header and footer give up and down room even on a narrow phone. `u` is the
+keyboard equivalent. A **rest row** is a slot kind you
 place between exercises, so a circuit's pauses can be uneven; it contributes no volume, no sets
 and no PRs.
 

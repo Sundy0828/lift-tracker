@@ -515,12 +515,15 @@ test.describe('leaving a circuit', () => {
 });
 
 /**
- * Picks `name` up by its handle and pulls it `dx` sideways, without releasing.
+ * Picks `name` up by its handle and drags it by (`dx`, `dy`), without
+ * releasing.
  *
- * The gesture for leaving a circuit. Sideways rather than clear of the block
- * because a workout that is entirely one circuit has no outside to reach.
+ * The gesture for leaving a circuit is dragging clear of the block's box in
+ * any direction, so both axes matter: sideways needs a wide enough screen,
+ * while up and down go out through the block's header and footer and so work
+ * on a narrow phone.
  */
-async function dragSideways(page: Page, name: string, dx: number): Promise<void> {
+async function dragBy(page: Page, name: string, dx: number, dy: number): Promise<void> {
   const handle = page.getByRole('button', { name: new RegExp(`^Reorder or group ${name}$`, 'u') });
   const from = await handle.boundingBox();
   expect(from, `no box for ${name}`).not.toBeNull();
@@ -531,7 +534,7 @@ async function dragSideways(page: Page, name: string, dx: number): Promise<void>
   await page.mouse.move(x, y);
   await page.mouse.down();
   await page.waitForTimeout(DRAG_HOLD_MS);
-  await page.mouse.move(x + dx, y, { steps: 10 });
+  await page.mouse.move(x + dx, y + dy, { steps: 10 });
 }
 
 test.describe('dragging out of a circuit', () => {
@@ -544,7 +547,7 @@ test.describe('dragging out of a circuit', () => {
     await addExercise(page, 'crunches');
     await group(page, 'Crunches', 'Pushups', 2);
 
-    await dragSideways(page, 'Crunches', 120);
+    await dragBy(page, 'Crunches', 120, 0);
     // The row says what releasing will do.
     await expect(page.getByText('release to leave')).toBeVisible();
     await page.mouse.up();
@@ -561,7 +564,7 @@ test.describe('dragging out of a circuit', () => {
     await group(page, 'Crunches', 'Pushups', 2);
     await group(page, 'Pullups', 'Crunches', 3);
 
-    await dragSideways(page, 'Pullups', 120);
+    await dragBy(page, 'Pullups', 120, 0);
     await page.mouse.up();
 
     await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
@@ -570,16 +573,48 @@ test.describe('dragging out of a circuit', () => {
     await expect(page.getByText('4 exercises')).toBeVisible();
   });
 
-  test('a small sideways wobble still reorders rather than leaving', async ({ page }) => {
+  test('dragging up out of the block works too, which is the phone case', async ({ page }) => {
+    // A circuit spans nearly the full width of a phone, so sideways can run
+    // out of screen before it clears the edge. Up goes out through the
+    // block's header instead, and there is always room for that.
+    await signIn(page);
+    await buildWorkout(page, 'Pull Up Workout');
+    await group(page, 'Crunches', 'Pushups', 2);
+
+    await dragBy(page, 'Pushups', 0, -110);
+    await expect(page.getByText('release to leave')).toBeVisible();
+    await page.mouse.up();
+
+    await expect(page.getByTestId('circuit-block')).toHaveCount(0);
+    await expect(page.getByText('4 exercises')).toBeVisible();
+  });
+
+  test('a small wobble still reorders rather than leaving', async ({ page }) => {
     await signIn(page);
     await buildWorkout(page, 'Wobble Workout');
     await group(page, 'Crunches', 'Pushups', 2);
 
-    await dragSideways(page, 'Crunches', 20);
+    // Inside the block's padding plus the margin, so it has cleared nothing.
+    await dragBy(page, 'Crunches', 20, 0);
     await expect(page.getByText('release to leave')).toHaveCount(0);
     await page.mouse.up();
 
     await expect(page.getByTestId('circuit-block')).toHaveCount(1);
+  });
+
+  test('reordering inside the block does not leave it', async ({ page }) => {
+    // Swapping two members is a drag the length of a row, which stays well
+    // inside a block that is taller than its rows.
+    await signIn(page);
+    await buildWorkout(page, 'Inner Reorder Workout');
+    await group(page, 'Crunches', 'Pushups', 2);
+    await group(page, 'Pullups', 'Crunches', 3);
+
+    await dragBy(page, 'Pullups', 0, -40);
+    await expect(page.getByText('release to leave')).toHaveCount(0);
+    await page.mouse.up();
+
+    await expect(page.getByText(/3 rounds of these 3, in order/u)).toBeVisible();
   });
 
   test('a row outside a circuit is not freed sideways', async ({ page }) => {
@@ -588,7 +623,7 @@ test.describe('dragging out of a circuit', () => {
     await signIn(page);
     await buildWorkout(page, 'No Pull Workout');
 
-    await dragSideways(page, 'Pushups', 120);
+    await dragBy(page, 'Pushups', 120, 0);
     await expect(page.getByText('release to leave')).toHaveCount(0);
     await page.mouse.up();
 
