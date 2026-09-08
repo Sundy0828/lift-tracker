@@ -1,4 +1,16 @@
-import { Badge, Button, Card, Group, Progress, Skeleton, Stack, Text, Title } from '@mantine/core';
+import {
+  Badge,
+  Button,
+  Card,
+  Group,
+  List,
+  Modal,
+  Progress,
+  Skeleton,
+  Stack,
+  Text,
+  Title,
+} from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -15,31 +27,34 @@ import {
 } from '@/data/mutations/sessions';
 import type { Exercise } from '@/domain/exercises';
 import type { PersonalRecord } from '@/domain/overlay';
-import type { SessionEntry } from '@/domain/sessions';
+import type { Session, SessionEntry } from '@/domain/sessions';
 import {
   addAdHocEntry,
-  addSet,
   entryFor,
   entryKey as keyOf,
   exerciseEntries,
   isLastOfRound,
   isSessionFinished,
   nextUnfinishedSet,
+  outstandingSets,
   removeEntry,
-  removeSet,
   restAfter,
   sessionProgress,
+  sessionSeconds,
   setEntryNotes,
+  skipOutstandingSets,
   toggleSetComplete,
   toggleSetSkipped,
   totalPerformedSets,
   updateSet,
 } from '@/domain/sessions';
 import { formatE1rm, formatSet } from '@/domain/strength';
+import { formatEstimate } from '@/domain/workouts';
 import type { Unit } from '@/domain/types';
 import { ExercisePicker } from '@/features/workouts/ExercisePicker';
 import { EntryCard } from './EntryCard';
 import { RestTimerBar } from './RestTimerBar';
+import { SessionClock } from './SessionClock';
 import { SessionMeta } from './SessionMeta';
 import { useRestTimer } from './useRestTimer';
 import { useSessionDraft } from './useSessionDraft';
@@ -76,6 +91,8 @@ export default function ActiveSessionScreen() {
    * place is both harder to hit by accident and quicker to dismiss.
    */
   const [armedToDiscard, setArmedToDiscard] = useState(false);
+  /** Set when Finish is pressed with sets still outstanding. */
+  const [confirmingEarly, setConfirmingEarly] = useState(false);
 
   const { stats: workoutStats } = useWorkoutStats(session?.workoutId ?? null);
 
@@ -151,20 +168,6 @@ export default function ActiveSessionScreen() {
   const onToggleSkipped = useCallback(
     (key: string, setIndex: number) => {
       apply((entries) => toggleSetSkipped(entries, key, setIndex));
-    },
-    [apply],
-  );
-
-  const onRemove = useCallback(
-    (key: string, setIndex: number) => {
-      apply((entries) => removeSet(entries, key, setIndex));
-    },
-    [apply],
-  );
-
-  const onAddSet = useCallback(
-    (key: string) => {
-      apply((entries) => addSet(entries, key));
     },
     [apply],
   );
@@ -253,6 +256,7 @@ export default function ActiveSessionScreen() {
   // Every set dealt with. It does not gate finishing — you are allowed to cut a
   // session short — it only stops the primary button shouting before its time.
   const allSetsDone = isSessionFinished(entries);
+  const outstanding = outstandingSets(entries);
 
   const announcePrs = (prs: readonly PersonalRecord[]): void => {
     for (const pr of prs) {
@@ -268,26 +272,59 @@ export default function ActiveSessionScreen() {
     }
   };
 
-  const finish = (): void => {
+  /**
+   * Writes the session and leaves.
+   *
+   * `finalEntries` is passed in rather than read, because finishing early
+   * marks the outstanding sets skipped and the batch has to carry that — not
+   * the state as it was a render ago.
+   */
+  const complete = (finalEntries: readonly SessionEntry[]): void => {
     if (uid === null || isDone) return;
     setFinishing(true);
 
-    // Flushed first so the batch carries the sets exactly as they are on
-    // screen, including one entered a moment ago that is still debounced.
+    // Flushed first so the local cache agrees with the batch, including a set
+    // entered a moment ago that is still inside the debounce window.
     draft.flush();
 
-    const { promise, result } = completeSession(uid, { ...session, entries: [...entries] }, lookup);
+    const finished: Session = { ...session, entries: [...finalEntries] };
+    const { promise, result } = completeSession(uid, finished, lookup);
     void promise;
 
     announcePrs(result.prs);
+    const elapsed = sessionSeconds({ ...finished, completedAt: result.completedAt });
     notifications.show({
-      message: `${session.workoutName} logged — ${String(totalPerformedSets(entries))} sets`,
+      message: `${session.workoutName} logged — ${String(
+        totalPerformedSets(finalEntries),
+      )} sets${elapsed === null ? '' : ` in ${formatEstimate(elapsed)}`}`,
       color: 'teal',
     });
     stopRest();
     // Back to Today rather than to the timeline: the record is written, and
     // Today is where the next thing starts.
     void navigate('/');
+  };
+
+  /**
+   * Finishing is allowed at any point — cutting a session short is a normal
+   * thing to do — but not silently. With sets outstanding it asks first, and
+   * names them, because the alternative is discovering next week that three
+   * sets went unrecorded and the overlay moved on without them.
+   */
+  const finish = (): void => {
+    if (uid === null || isDone) return;
+    if (outstanding.length > 0) {
+      setConfirmingEarly(true);
+      return;
+    }
+    complete(entries);
+  };
+
+  const finishEarly = (): void => {
+    const skipped = skipOutstandingSets(entries);
+    apply(() => skipped);
+    setConfirmingEarly(false);
+    complete(skipped);
   };
 
   const abandon = (): void => {
@@ -322,10 +359,16 @@ export default function ActiveSessionScreen() {
             </Group>
           </Group>
           <Progress value={percent} size="sm" color="sky" />
-          <Text size="xs" c="dimmed">
-            {progress.completed} of {progress.total} sets · {totalPerformedSets(entries)} logged
-            {draft.isDirty ? ' · saving' : ''}
-          </Text>
+          <Group gap={6}>
+            <Text size="xs" c="dimmed">
+              {progress.completed} of {progress.total} sets · {totalPerformedSets(entries)} logged
+              {draft.isDirty ? ' · saving' : ''}
+            </Text>
+            <Text size="xs" c="dimmed">
+              ·
+            </Text>
+            <SessionClock session={session} />
+          </Group>
         </Stack>
 
         <SessionMeta
@@ -358,7 +401,6 @@ export default function ActiveSessionScreen() {
               workoutStats={workoutStats}
               exerciseStats={byExercise.get(entry.exerciseId) ?? null}
               workoutName={session.workoutName}
-              onAddSet={onAddSet}
               onNotes={onNotes}
               // A prescribed row belongs to the workout, so it is skipped
               // rather than deleted; only an ad-hoc addition can be taken back.
@@ -369,19 +411,27 @@ export default function ActiveSessionScreen() {
               onToggleComplete={onToggleComplete}
               onToggleSkipped={onToggleSkipped}
               onToggleWarmup={onToggleWarmup}
-              onRemove={onRemove}
             />
           );
         })}
 
-        <Button
-          variant="light"
-          onClick={() => {
-            setPicking(true);
-          }}
-        >
-          + Add exercise
-        </Button>
+        {/*
+          Only for an ad-hoc session, which starts with no slots at all — there
+          it is the only way to log anything. A workout-backed session has a
+          prescription, and bolting an exercise onto it mid-set is a change to
+          the plan made at the worst moment; the workout editor is where that
+          belongs, and next time it will be there from the start.
+        */}
+        {session.workoutId === null ? (
+          <Button
+            variant="light"
+            onClick={() => {
+              setPicking(true);
+            }}
+          >
+            + Add exercise
+          </Button>
+        ) : null}
 
         <Card withBorder padding="sm">
           <Stack gap="xs">
@@ -423,6 +473,40 @@ export default function ActiveSessionScreen() {
       </Stack>
 
       <RestTimerBar rest={rest} onAdjust={adjustRest} onStop={stopRest} />
+
+      <Modal
+        opened={confirmingEarly}
+        onClose={() => {
+          setConfirmingEarly(false);
+        }}
+        title="Finish with sets left?"
+        centered
+      >
+        <Stack gap="sm">
+          <Text size="sm">
+            These are not done yet. Finishing marks them skipped, so the session records what you
+            actually did and next time compares against your last real set.
+          </Text>
+          <List size="sm" spacing={2}>
+            {outstanding.map((item) => (
+              <List.Item key={item.exerciseName}>
+                {item.exerciseName} — {item.sets} {item.sets === 1 ? 'set' : 'sets'}
+              </List.Item>
+            ))}
+          </List>
+          <Group justify="flex-end" gap="xs">
+            <Button
+              variant="default"
+              onClick={() => {
+                setConfirmingEarly(false);
+              }}
+            >
+              Keep logging
+            </Button>
+            <Button onClick={finishEarly}>Skip them and finish</Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <ExercisePicker
         opened={picking}

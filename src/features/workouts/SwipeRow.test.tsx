@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+// Drives real pointer events. The suite defaults to node; see vite.config.ts.
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SwipeRow, type SwipeAction } from './SwipeRow';

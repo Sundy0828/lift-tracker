@@ -11,7 +11,7 @@ import {
 } from './overlay';
 import type { LoggedSet, Session, SessionEntry } from './sessions';
 import { emptySet, newSession } from './sessions';
-import { adjustedE1rm, compareSets, describeDelta } from './strength';
+import { adjustedE1rm, describeComparison } from './strength';
 import type { Unit } from './types';
 import type { ExerciseSlot, WorkoutBody } from './workouts';
 import { DEFAULT_PRESCRIPTION, occurrenceKey } from './workouts';
@@ -470,21 +470,11 @@ describe('a workout changed between weeks', () => {
 
     const previous = previousSetAt(overlay.data, 0);
     expect(previous).not.toBeNull();
-    const comparison = compareSets(set(0, 190, 8, 2), previous ?? set(0, null, null, null));
-    expect(comparison).not.toBeNull();
-    expect(comparison?.direction).toBe('up');
-    expect(
-      describeDelta(
-        comparison ?? {
-          direction: 'same',
-          e1rmDeltaKg: 0,
-          weightDeltaKg: 0,
-          repsDelta: 0,
-          rirDelta: 0,
-        },
-        'lb',
-      ),
-    ).toBe('+5 lb');
+    if (previous === null) return;
+
+    const chip = describeComparison(set(0, 190, 8, 2), previous, 'lb');
+    expect(chip?.direction).toBe('up');
+    expect(chip?.label).toBe('+5 lb');
   });
 
   it('leaves the dropped exercise history reachable through tier 2', () => {

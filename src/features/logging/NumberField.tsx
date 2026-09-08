@@ -14,6 +14,13 @@ import classes from './SetRow.module.css';
  * a session has upwards of fifty of these, and the component's controlled
  * value, formatter and wrapper elements are all cost on the one screen that
  * cannot afford it. Touch sizing lives in the CSS module instead.
+ *
+ * `type="number"` for what it gives back: arrow keys step the value, and
+ * assistive technology announces a spinbutton with its range rather than a
+ * text box. Its two liabilities are dealt with rather than tolerated — the
+ * native spinners are removed in CSS because the row already has bigger ones,
+ * and a scroll wheel over a focused field blurs it instead of silently
+ * changing a logged weight.
  */
 
 type Props = {
@@ -103,10 +110,13 @@ export function NumberField({
       <input
         ref={input}
         className={classes.input}
-        // A numeric keypad without the spinner arrows or the scroll-wheel
-        // hazard of type="number".
-        type="text"
+        type="number"
+        // Still declared: it picks the decimal keypad on phones whose
+        // number-input keyboard omits the separator.
         inputMode="decimal"
+        step={step}
+        min={min}
+        max={max}
         enterKeyHint="next"
         autoComplete="off"
         aria-label={label}
@@ -118,6 +128,13 @@ export function NumberField({
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') event.currentTarget.blur();
+        }}
+        onWheel={(event) => {
+          // Scrolling the page with the cursor over a focused number input
+          // otherwise changes the value, which on this screen means silently
+          // rewriting a set you already logged. Blurring commits what is there
+          // and takes the field out of the wheel's reach.
+          if (document.activeElement === event.currentTarget) event.currentTarget.blur();
         }}
       />
       <button

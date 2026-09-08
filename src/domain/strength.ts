@@ -111,31 +111,68 @@ function signed(value: number, unit: string): string {
   return `${sign}${formatNumber(Math.abs(value))}${unit === '' ? '' : ` ${unit}`}`;
 }
 
+export type DeltaChip = {
+  /** The short label on the chip itself. */
+  label: string;
+  direction: Direction;
+  /** The whole comparison in words, for a tooltip. */
+  detail: string;
+};
+
 /**
- * The delta chip's text: the *one* thing that changed.
+ * What changed since last time, as a chip plus an explanation.
  *
- * Mid-set, on a phone, one figure reads and three do not — and the interesting
- * figure is almost always the one you deliberately changed. So it reports the
- * load if the load moved, else the reps, else the effort, and `=` when the set
- * was repeated exactly.
+ * **Every axis that moved is named.** An earlier version reported only the
+ * most significant one, which produced the genuinely misleading case of
+ * 45 × 15 becoming 50 × 12 and reading as a red "+5 lb" — the label said the
+ * load went up, the colour said the set was worse, and the reps that explained
+ * the contradiction were nowhere. So when more than one of load, reps and
+ * effort moved, the chip says so: `+5 lb · −3 reps`. The colour still comes
+ * from the estimated 1RM, which is the only thing that can adjudicate a
+ * trade-off between load and reps, and the tooltip states the verdict outright.
  *
- * The load difference is rendered in the display unit, converted from kg, so a
+ * Load differences are rendered in the display unit, converted from kg, so a
  * set logged in kg last time reads as a sane pound figure now.
  */
-export function describeDelta(comparison: SetComparison, displayUnit: Unit): string {
-  const { weightDeltaKg, repsDelta, rirDelta } = comparison;
+export function describeComparison(
+  current: SetLoad,
+  previous: SetLoad,
+  displayUnit: Unit,
+): DeltaChip | null {
+  const comparison = compareSets(current, previous);
+  if (comparison === null) return null;
 
+  const { direction, e1rmDeltaKg, weightDeltaKg, repsDelta, rirDelta } = comparison;
+
+  const parts: string[] = [];
   if (weightDeltaKg !== null && Math.abs(weightDeltaKg) > EPSILON) {
-    return signed(fromKg(weightDeltaKg, displayUnit), displayUnit);
+    parts.push(signed(fromKg(weightDeltaKg, displayUnit), displayUnit));
   }
   if (repsDelta !== null && repsDelta !== 0) {
-    return signed(repsDelta, Math.abs(repsDelta) === 1 ? 'rep' : 'reps');
+    parts.push(signed(repsDelta, Math.abs(repsDelta) === 1 ? 'rep' : 'reps'));
   }
-  // Reported literally, like the other two. It happens to agree with the
+  // Reported literally, like the other two, and it happens to agree with the
   // direction: fewer reps in reserve at the same load is more effort for the
-  // same result, so RIR falling and performance falling are the same sign.
-  if (rirDelta !== null && rirDelta !== 0) return signed(rirDelta, 'RIR');
-  return '=';
+  // same result, so RIR falling and capacity falling share a sign.
+  if (rirDelta !== null && rirDelta !== 0) parts.push(signed(rirDelta, 'RIR'));
+
+  const verdict =
+    direction === 'same'
+      ? 'estimated 1RM unchanged'
+      : `estimated 1RM ${direction === 'up' ? 'up' : 'down'} ${formatNumber(
+          Math.abs(fromKg(e1rmDeltaKg, displayUnit)),
+        )} ${displayUnit}`;
+
+  const detail = `${formatSet(current, displayUnit)} vs ${formatSet(
+    previous,
+    displayUnit,
+  )} — ${verdict}`;
+
+  if (parts.length === 0) return { label: '=', direction, detail };
+
+  // Two is the most a chip can carry on a phone without wrapping. A third
+  // moved axis is rare and the tooltip has it.
+  return { label: parts.slice(0, 2).join(' · '), direction, detail };
 }
 
 // --- Personal records -----------------------------------------------------

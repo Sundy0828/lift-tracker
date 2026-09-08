@@ -90,7 +90,14 @@ export default defineConfig(({ mode }) => ({
   },
   server: { port: 5173 },
   test: {
-    environment: 'jsdom',
+    /**
+     * Node by default. Only three test files touch a DOM; the rest are pure
+     * domain logic, and standing up a jsdom for each of those cost more than
+     * every assertion in the suite put together — enough to starve the
+     * wall-clock budget in `search.test.ts` as the suite grew. The three that
+     * need one opt in with a `@vitest-environment jsdom` docblock.
+     */
+    environment: 'node',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],

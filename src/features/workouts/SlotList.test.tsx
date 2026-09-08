@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+// Renders and drives real rows. The suite defaults to node; see vite.config.ts.
 import { MantineProvider } from '@mantine/core';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';

@@ -1,12 +1,13 @@
 import { Badge, Button, Card, Group, Stack, Text, Textarea } from '@mantine/core';
 import { useState } from 'react';
 import type { ExerciseStats, Overlay, WorkoutStats } from '@/domain/overlay';
+import type { DeltaChip } from '@/domain/strength';
 import { isComparable, previousSetAt, resolveOverlay, workedPosition } from '@/domain/overlay';
 import type { LoggedSet, SessionEntry } from '@/domain/sessions';
-import { entryKey as keyOf, isRestEntry } from '@/domain/sessions';
-import { compareSets, describeDelta, formatSet } from '@/domain/strength';
+import { assessSet, entryKey as keyOf, isRestEntry } from '@/domain/sessions';
+import { describeComparison, formatSet } from '@/domain/strength';
 import type { Unit } from '@/domain/types';
-import { formatPrescription, formatRestSeconds } from '@/domain/workouts';
+import { formatPrescription, formatRange, formatRestSeconds } from '@/domain/workouts';
 import { OverlayLine } from './OverlayLine';
 import { SetRow } from './SetRow';
 import classes from './EntryCard.module.css';
@@ -26,7 +27,6 @@ export type SetHandlers = {
   onToggleComplete: (entryKey: string, setIndex: number) => void;
   onToggleSkipped: (entryKey: string, setIndex: number) => void;
   onToggleWarmup: (entryKey: string, setIndex: number) => void;
-  onRemove: (entryKey: string, setIndex: number) => void;
 };
 
 type Props = SetHandlers & {
@@ -36,7 +36,6 @@ type Props = SetHandlers & {
   exerciseStats: ExerciseStats | null;
   /** The workout being performed, so tier 1 can be labelled with its name. */
   workoutName: string;
-  onAddSet: (entryKey: string) => void;
   onNotes: (entryKey: string, notes: string) => void;
   /** Only offered for ad-hoc rows: a prescribed row belongs to the workout. */
   onRemoveEntry: ((entryKey: string) => void) | null;
@@ -53,8 +52,17 @@ function ordinalFor(sets: readonly LoggedSet[], set: LoggedSet): string {
   return String(sets.filter((other) => !other.isWarmup).indexOf(set) + 1);
 }
 
+type RowOverlay = {
+  /** Last time's numbers for this set position. */
+  previousLabel: string | null;
+  /** The chip, present only for a tier-1 comparison against a filled row. */
+  delta: DeltaChip | null;
+};
+
+const NOTHING: RowOverlay = { previousLabel: null, delta: null };
+
 /**
- * The per-row overlay text.
+ * The per-row overlay: last time's numbers, and the comparison if there is one.
  *
  * Only tier 1 produces a delta. Tier 2 still shows last time's numbers — it is
  * a useful hint at what to load — but comparing across day types would produce
@@ -65,36 +73,19 @@ function rowOverlay(
   entry: SessionEntry,
   set: LoggedSet,
   displayUnit: Unit,
-): { previousLabel: string | null; deltaLabel: string | null } {
-  if (overlay.kind === 'new' || set.isWarmup) return { previousLabel: null, deltaLabel: null };
+): RowOverlay {
+  if (overlay.kind === 'new' || set.isWarmup) return NOTHING;
 
   const position = workedPosition(entry, set.setIndex);
-  if (position === null) return { previousLabel: null, deltaLabel: null };
+  if (position === null) return NOTHING;
 
   const previous = previousSetAt(overlay.data, position);
-  if (previous === null) return { previousLabel: null, deltaLabel: null };
+  if (previous === null) return NOTHING;
 
   const previousLabel = formatSet(previous, displayUnit);
-  if (!isComparable(overlay)) return { previousLabel, deltaLabel: null };
+  if (!isComparable(overlay)) return { previousLabel, delta: null };
 
-  const comparison = compareSets(set, previous);
-  return {
-    previousLabel,
-    deltaLabel: comparison === null ? null : describeDelta(comparison, displayUnit),
-  };
-}
-
-function directionOf(
-  overlay: Overlay,
-  entry: SessionEntry,
-  set: LoggedSet,
-): 'up' | 'down' | 'same' | null {
-  if (!isComparable(overlay) || set.isWarmup) return null;
-  const position = workedPosition(entry, set.setIndex);
-  if (position === null) return null;
-  const previous = previousSetAt(overlay.data, position);
-  if (previous === null) return null;
-  return compareSets(set, previous)?.direction ?? null;
+  return { previousLabel, delta: describeComparison(set, previous, displayUnit) };
 }
 
 export function EntryCard({
@@ -103,7 +94,6 @@ export function EntryCard({
   workoutStats,
   exerciseStats,
   workoutName,
-  onAddSet,
   onNotes,
   onRemoveEntry,
   ...handlers
@@ -111,6 +101,9 @@ export function EntryCard({
   const key = keyOf(entry);
   const [notes, setNotes] = useState<string | null>(null);
   const overlay = resolveOverlay(entry, workoutStats, exerciseStats);
+  // Named in the off-target note, so "under 8-12" reads on its own.
+  const repRangeLabel =
+    entry.prescription === null ? null : formatRange(entry.prescription.repRange);
 
   if (isRestEntry(entry)) {
     return (
@@ -164,7 +157,7 @@ export function EntryCard({
 
         <div>
           {entry.sets.map((set) => {
-            const { previousLabel, deltaLabel } = rowOverlay(overlay, entry, set, displayUnit);
+            const { previousLabel, delta } = rowOverlay(overlay, entry, set, displayUnit);
             return (
               <SetRow
                 key={set.setIndex}
@@ -175,13 +168,17 @@ export function EntryCard({
                 weightUnit={set.weight?.unit ?? displayUnit}
                 reps={set.reps}
                 rir={set.rir}
+                rirTarget={entry.prescription?.rirRange ?? null}
                 isWarmup={set.isWarmup}
                 skipped={set.skipped}
                 isComplete={set.completedAt !== null}
                 displayUnit={displayUnit}
+                assessment={assessSet(set, entry.prescription)}
+                repRangeLabel={repRangeLabel}
                 previousLabel={previousLabel}
-                deltaLabel={deltaLabel}
-                deltaDirection={directionOf(overlay, entry, set)}
+                deltaLabel={delta?.label ?? null}
+                deltaDetail={delta?.detail ?? null}
+                deltaDirection={delta?.direction ?? null}
                 {...handlers}
               />
             );
@@ -189,15 +186,6 @@ export function EntryCard({
         </div>
 
         <Group gap="xs">
-          <Button
-            size="compact-xs"
-            variant="light"
-            onClick={() => {
-              onAddSet(key);
-            }}
-          >
-            + Set
-          </Button>
           <Button
             size="compact-xs"
             variant="subtle"

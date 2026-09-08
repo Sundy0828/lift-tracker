@@ -1,11 +1,56 @@
+/* Only the name shrinks. The date is the part that changes between sessions
+   and the part being read for, so it is never the thing that gets clipped. */
+.line {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--mantine-font-size-xs);
+  line-height: 1.4;
+}
+
+.lead {
+  flex: 0 0 auto;
+}
+
+.name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.date {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Tier 1 is the number you are trying to beat, so it is stated in the accent
    colour rather than as another line of grey. */
 .primary {
   color: light-dark(var(--mantine-color-sky-8), var(--mantine-color-sky-4));
 }
 
-/* Tier 2 is a reference, not a target. Italic as well as dimmed, so the
-   difference survives being glanced at between sets. */
+/* Tier 2 is a reference, not a target. Dimmed and italic, so the difference
+   survives being glanced at between sets. */
 .secondary {
+  color: var(--mantine-color-dimmed);
   font-style: italic;
+}
+
+/* Says "this is not a comparison" in a tag rather than a clause, which is what
+   keeps the line one line. The tooltip carries the why. */
+.tag {
+  flex: 0 0 auto;
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: var(--mantine-radius-sm);
+  background: light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+  color: var(--mantine-color-dimmed);
+  cursor: help;
 }

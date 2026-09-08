@@ -1,10 +1,14 @@
-/* Delta colours as tokens, so the chip, the PR badge and the trend line all
-   agree. Green/red on their own fail for the ~8% of men with a red-green
-   deficiency, which is why the chip always carries a sign as well. */
+/* Delta and assessment colours as tokens, so the chip, the off-target note and
+   the row's edge marker all agree. Red and green on their own fail for the
+   ~8% of men with a red-green deficiency, so every colour here is paired with
+   a sign or a word — never load-bearing on its own. */
 .row {
   --delta-up: light-dark(var(--mantine-color-teal-8), var(--mantine-color-teal-4));
   --delta-down: light-dark(var(--mantine-color-red-8), var(--mantine-color-red-4));
   --delta-same: var(--mantine-color-dimmed);
+  --under: light-dark(var(--mantine-color-red-7), var(--mantine-color-red-5));
+  --over: light-dark(var(--mantine-color-yellow-8), var(--mantine-color-yellow-5));
+  --on-target: light-dark(var(--mantine-color-teal-7), var(--mantine-color-teal-5));
 
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -13,15 +17,34 @@
     'meta meta meta';
   align-items: center;
   gap: 4px 8px;
-  padding: 4px 0;
+  padding: 4px 0 4px 6px;
+  /* Reserved even when unset, so a row does not shift sideways the moment it
+     is judged. */
+  border-left: 3px solid transparent;
 }
 
 .row + .row {
   border-top: 1px solid light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
 }
 
-.skipped {
+/* The edge marker: a quiet stripe rather than a tinted row. Reading the
+   numbers is the job, and a coloured background behind a set of figures makes
+   them harder to read for the sake of a signal the note already carries. */
+.row[data-assessment='under'] {
+  border-left-color: var(--under);
+}
+
+.row[data-assessment='over'] {
+  border-left-color: var(--over);
+}
+
+.row[data-assessment='on-target'] {
+  border-left-color: var(--on-target);
+}
+
+.row[data-skipped] {
   opacity: 0.5;
+  border-left-color: transparent;
 }
 
 /* The set number doubles as the warmup toggle: a warmup is a property of the
@@ -52,10 +75,11 @@
   font-weight: 600;
 }
 
+/* Two fields, not three: effort is a set of buttons on the line below. */
 .inputs {
   grid-area: inputs;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -77,7 +101,7 @@
 
 .step {
   all: unset;
-  /* 40px: the smallest target that is reliably hittable mid-set. */
+  /* The smallest target that is reliably hittable mid-set. */
   min-width: 34px;
   min-height: 40px;
   display: grid;
@@ -111,6 +135,17 @@
   font-size: 16px; /* Anything smaller makes iOS zoom on focus. */
   font-variant-numeric: tabular-nums;
   color: var(--mantine-color-text);
+  /* The row's own steppers are bigger and sit either side, so the native
+     spinners would be a second, worse pair of the same control. */
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.input::-webkit-outer-spin-button,
+.input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
 }
 
 .input::placeholder {
@@ -121,11 +156,68 @@
 .meta {
   grid-area: meta;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   gap: 4px 8px;
-  padding-left: 40px;
+  padding-left: 38px;
   min-height: 18px;
+}
+
+/* Reps in reserve, as four buttons. Segmented, so it reads as one control with
+   one answer rather than four independent toggles. */
+.effort {
+  display: flex;
+  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-radius: var(--mantine-radius-sm);
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.effortStep {
+  all: unset;
+  box-sizing: border-box;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 6px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: var(--mantine-font-size-xs);
+  line-height: 1;
+  color: var(--mantine-color-dimmed);
+  touch-action: manipulation;
+}
+
+.effortStep + .effortStep {
+  border-left: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+}
+
+/* The prescribed range, marked before anything is chosen — so the control
+   itself says what the workout asked for. A dotted underline rather than a
+   fill, which is reserved for what you actually picked. */
+.effortStep[data-target] {
+  color: var(--mantine-color-text);
+  text-decoration: underline dotted
+    light-dark(var(--mantine-color-sky-7), var(--mantine-color-sky-4));
+  text-underline-offset: 2px;
+}
+
+.effortStep:hover:not(:disabled),
+.effortStep:focus-visible {
+  background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+  color: var(--mantine-color-text);
+}
+
+.effortStep[aria-pressed='true'] {
+  background: var(--mantine-primary-color-filled);
+  color: var(--mantine-primary-color-contrast);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.effortStep:disabled {
+  cursor: default;
+  opacity: 0.4;
 }
 
 .previous {
@@ -139,10 +231,15 @@
   font-variant-numeric: tabular-nums;
 }
 
-.rowActions {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
+/* The off-target note names the range it missed, so it reads without colour. */
+.note {
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 600;
+  color: var(--under);
+}
+
+.row[data-assessment='over'] .note {
+  color: var(--over);
 }
 
 .linkButton {
@@ -153,6 +250,7 @@
   text-decoration: underline;
   text-decoration-color: transparent;
   padding: 2px;
+  margin-left: auto;
 }
 
 .linkButton:hover,

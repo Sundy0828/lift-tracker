@@ -9,25 +9,33 @@ import { afterEach, vi } from 'vitest';
  * scheme on mount. The pointer-capture pair is used by the swipe gesture,
  * where capture is an optimisation rather than part of the behaviour — so a
  * no-op is a faithful stand-in.
+ *
+ * Guarded on a DOM being present, because this file also runs for the pure
+ * domain tests, which are in the `node` environment and have no `window` to
+ * patch (see the `test` block in vite.config.ts).
  */
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  }),
-});
+const hasDom = typeof window !== 'undefined';
 
-Element.prototype.setPointerCapture = vi.fn();
-Element.prototype.releasePointerCapture = vi.fn();
-Element.prototype.hasPointerCapture = vi.fn(() => false);
+if (hasDom) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }),
+  });
+
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+}
 
 afterEach(() => {
-  cleanup();
+  if (hasDom) cleanup();
 });

@@ -242,6 +242,13 @@ export function newSession(input: NewSessionInput): Session {
 // --- Editing entries -----------------------------------------------------
 // All pure. The screen writes the returned array straight through to the
 // session document and re-renders from Firestore's local cache.
+//
+// There is deliberately no way to add or delete a set here. The workout's
+// prescription *is* the plan, and a set count changed mid-session is a change
+// to the plan made at the worst possible moment. Skipping is the honest way to
+// record doing less, and it keeps the row — so the session still reads as what
+// was prescribed, with the gap visible. Changing the prescription itself is
+// the workout editor's job.
 
 function mapEntry(
   entries: readonly SessionEntry[],
@@ -249,11 +256,6 @@ function mapEntry(
   change: (entry: SessionEntry) => SessionEntry,
 ): SessionEntry[] {
   return entries.map((entry) => (entryKey(entry) === key ? change(entry) : entry));
-}
-
-/** Renumbers `setIndex` to match array position, which the helpers rely on. */
-function renumber(sets: readonly LoggedSet[]): LoggedSet[] {
-  return sets.map((set, index) => (set.setIndex === index ? set : { ...set, setIndex: index }));
 }
 
 export type SetPatch = {
@@ -291,37 +293,6 @@ export function updateSet(
       set.setIndex === setIndex ? normalizeSet({ ...set, ...patch }) : set,
     ),
   }));
-}
-
-/**
- * Appends a set, carrying the last worked set's load forward.
- *
- * A set added mid-workout is nearly always another set of the same thing, so
- * prefilling the load saves the taps that matter most; it is a starting point
- * and is meant to be corrected.
- */
-export function addSet(entries: readonly SessionEntry[], key: string): SessionEntry[] {
-  return mapEntry(entries, key, (entry) => {
-    if (entry.kind === 'rest') return entry;
-    const template = [...entry.sets].reverse().find((set) => !set.isWarmup && !set.skipped);
-    const next: LoggedSet = {
-      ...emptySet(entry.sets.length),
-      ...(template === undefined ? {} : { weight: template.weight, reps: template.reps }),
-    };
-    return { ...entry, sets: [...entry.sets, next] };
-  });
-}
-
-/** Drops a set. The last one stays: a row with no sets cannot be logged. */
-export function removeSet(
-  entries: readonly SessionEntry[],
-  key: string,
-  setIndex: number,
-): SessionEntry[] {
-  return mapEntry(entries, key, (entry) => {
-    if (entry.sets.length <= 1) return entry;
-    return { ...entry, sets: renumber(entry.sets.filter((set) => set.setIndex !== setIndex)) };
-  });
 }
 
 /**
@@ -440,6 +411,34 @@ export function performedSets(sets: readonly LoggedSet[]): LoggedSet[] {
   return workingSets(sets).filter(isPerformed);
 }
 
+/**
+ * How a logged set landed against what it was prescribed.
+ *
+ * Reps only, and deliberately only reps. The rep range is the part of a
+ * prescription you either hit or did not, and it is the part that tells you
+ * what to do next: under it means the load was too heavy, over it means too
+ * light. Judging the load itself would need a target load, which no
+ * prescription carries — a load is compared against *last time*, which is the
+ * delta chip's job, not this.
+ *
+ * `unassessed` covers a row with nothing entered, a warmup, a skipped set and
+ * an ad-hoc row with no prescription. None of those can be off-target, and
+ * marking an empty row as failing to hit a rep range would flag every set
+ * before it was done.
+ */
+export type SetAssessment = 'unassessed' | 'under' | 'on-target' | 'over';
+
+export function assessSet(set: LoggedSet, prescription: Prescription | null): SetAssessment {
+  if (prescription === null || set.isWarmup || set.skipped || set.reps === null) {
+    return 'unassessed';
+  }
+
+  const { min, max } = prescription.repRange;
+  if (set.reps < min) return 'under';
+  if (set.reps > max) return 'over';
+  return 'on-target';
+}
+
 export type SessionProgress = { completed: number; total: number };
 
 /**
@@ -518,6 +517,58 @@ export function nextUnfinishedSet(
 /** The row a set reference points at. */
 export function entryFor(entries: readonly SessionEntry[], key: string): SessionEntry | null {
   return entries.find((entry) => entryKey(entry) === key) ?? null;
+}
+
+/** Elapsed seconds of an in-progress or finished session. */
+export function sessionSeconds(session: Session, now: Date = new Date()): number | null {
+  if (session.startedAt === null) return null;
+  const start = Date.parse(session.startedAt);
+  if (Number.isNaN(start)) return null;
+
+  const end = session.completedAt === null ? now.getTime() : Date.parse(session.completedAt);
+  if (Number.isNaN(end)) return null;
+  return Math.max(0, Math.round((end - start) / 1000));
+}
+
+export type Outstanding = { exerciseName: string; sets: number };
+
+/**
+ * What has not been dealt with yet, per exercise.
+ *
+ * Drives the confirmation shown when a session is finished early: naming the
+ * exercises is the difference between "3 sets left" and knowing that they are
+ * all the last exercise you meant to drop anyway.
+ */
+export function outstandingSets(entries: readonly SessionEntry[]): Outstanding[] {
+  const outstanding: Outstanding[] = [];
+
+  for (const entry of exerciseEntries(entries)) {
+    const sets = entry.sets.filter((set) => set.completedAt === null && !set.skipped).length;
+    if (sets > 0) outstanding.push({ exerciseName: entry.exerciseName, sets });
+  }
+  return outstanding;
+}
+
+/**
+ * Marks everything still outstanding as skipped.
+ *
+ * Finishing early has to record *something* for the sets not done, and skipped
+ * is the truthful value: the row stays, so the session still reads as what was
+ * prescribed with the gap visible, and a skipped set feeds no stats — so next
+ * week's overlay compares against the last set actually performed rather than
+ * against a blank.
+ */
+export function skipOutstandingSets(entries: readonly SessionEntry[]): SessionEntry[] {
+  return entries.map((entry) =>
+    entry.kind === 'rest'
+      ? entry
+      : {
+          ...entry,
+          sets: entry.sets.map((set) =>
+            set.completedAt === null && !set.skipped ? { ...set, skipped: true } : set,
+          ),
+        },
+  );
 }
 
 /**

@@ -6,7 +6,7 @@ import {
   beatsRecord,
   bestSet,
   compareSets,
-  describeDelta,
+  describeComparison,
   e1rm,
   epley,
   formatE1rm,
@@ -126,44 +126,73 @@ describe('compareSets', () => {
   });
 });
 
-describe('describeDelta', () => {
-  function delta(current: LoggedSet, previous: LoggedSet, unit: Unit = 'lb'): string {
-    const comparison = compareSets(current, previous);
-    expect(comparison).not.toBeNull();
-    return describeDelta(
-      comparison ?? {
-        direction: 'same',
-        e1rmDeltaKg: 0,
-        weightDeltaKg: 0,
-        repsDelta: 0,
-        rirDelta: 0,
-      },
-      unit,
-    );
+describe('describeComparison', () => {
+  function chip(current: LoggedSet, previous: LoggedSet, unit: Unit = 'lb') {
+    const result = describeComparison(current, previous, unit);
+    expect(result).not.toBeNull();
+    return result ?? { label: '', direction: 'same' as const, detail: '' };
   }
 
-  it('reports the load when the load moved', () => {
-    expect(delta(set(190, 8, 2), set(185, 8, 2))).toBe('+5 lb');
-    expect(delta(set(180, 8, 2), set(185, 8, 2))).toBe('−5 lb');
+  it('is null when either side is incomplete', () => {
+    expect(describeComparison(set(185, null, 1), set(185, 8, 1), 'lb')).toBeNull();
   });
 
-  it('reports reps when the load held', () => {
-    expect(delta(set(185, 10, 2), set(185, 8, 2))).toBe('+2 reps');
-    expect(delta(set(185, 9, 2), set(185, 8, 2))).toBe('+1 rep');
+  it('names the load alone when only the load moved', () => {
+    expect(chip(set(190, 8, 2), set(185, 8, 2)).label).toBe('+5 lb');
+    expect(chip(set(180, 8, 2), set(185, 8, 2)).label).toBe('−5 lb');
   });
 
-  it('reports effort when load and reps both held', () => {
-    // One fewer rep in reserve: harder, so the chip reads negative.
-    expect(delta(set(185, 8, 1), set(185, 8, 2))).toBe('−1 RIR');
+  it('names the reps alone when only the reps moved', () => {
+    expect(chip(set(185, 10, 2), set(185, 8, 2)).label).toBe('+2 reps');
+    expect(chip(set(185, 9, 2), set(185, 8, 2)).label).toBe('+1 rep');
+  });
+
+  it('names the effort alone when only the effort moved', () => {
+    expect(chip(set(185, 8, 1), set(185, 8, 2)).label).toBe('−1 RIR');
   });
 
   it('reads = for a set repeated exactly', () => {
-    expect(delta(set(185, 8, 2), set(185, 8, 2))).toBe('=');
+    const result = chip(set(185, 8, 2), set(185, 8, 2));
+    expect(result.label).toBe('=');
+    expect(result.direction).toBe('same');
+  });
+
+  /**
+   * The case this function was rewritten for. Reporting only the load made
+   * this read as a red "+5 lb": the label said the weight went up, the colour
+   * said the set was worse, and the three reps that explained the
+   * contradiction were not shown at all.
+   */
+  it('names both axes when load and reps both moved', () => {
+    const result = chip(set(50, 12, null), set(45, 15, null));
+    expect(result.label).toBe('+5 lb · −3 reps');
+    expect(result.detail).toContain('50 lb × 12');
+    expect(result.detail).toContain('45 lb × 15');
+  });
+
+  it('agrees with its own colour when the trade-off is a net loss', () => {
+    // 50x10 estimates below 45x15, so the chip says both halves of the
+    // trade-off and the colour adjudicates it.
+    const result = chip(set(50, 10, null), set(45, 15, null));
+    expect(result.direction).toBe('down');
+    expect(result.label).toBe('+5 lb · −5 reps');
+    expect(result.detail).toContain('estimated 1RM down');
+  });
+
+  it('states the verdict in the detail, which is what the colour means', () => {
+    expect(chip(set(190, 8, 2), set(185, 8, 2)).detail).toContain('estimated 1RM up');
+    expect(chip(set(185, 8, 2), set(185, 8, 2)).detail).toContain('estimated 1RM unchanged');
+  });
+
+  it('shows at most two axes, leaving the third to the detail', () => {
+    const result = chip(set(190, 10, 1), set(185, 8, 2));
+    expect(result.label).toBe('+5 lb · +2 reps');
+    expect(result.detail).toContain('@ 1 RIR');
   });
 
   it('renders the load difference in the display unit', () => {
     // Last time in kg, this time in kg, shown to someone reading pounds.
-    expect(delta(set(102.5, 5, 1, { unit: 'kg' }), set(100, 5, 1, { unit: 'kg' }), 'lb')).toBe(
+    expect(chip(set(102.5, 5, 1, { unit: 'kg' }), set(100, 5, 1, { unit: 'kg' }), 'lb').label).toBe(
       '+5.5 lb',
     );
   });
