@@ -94,7 +94,7 @@ function setup(
   workoutName = 'PUSH',
 ) {
   const props = handlers();
-  render(
+  const rendered = render(
     <MantineProvider>
       <EntryCard
         entry={entry}
@@ -106,7 +106,7 @@ function setup(
       />
     </MantineProvider>,
   );
-  return props;
+  return { ...props, container: rendered.container };
 }
 
 /** Today's session: two prescribed sets, the first already filled in. */
@@ -354,6 +354,42 @@ describe('rep range', () => {
 
   it('says nothing about a set that has not been done yet', () => {
     setup(todaysEntry(null), null, null);
+    expect(screen.queryByTestId('set-note')).not.toBeInTheDocument();
+  });
+});
+
+describe('a set missing a number', () => {
+  /**
+   * The quiet failure this exists for: a half-entered set is excluded from
+   * the stats, so it looks logged and then silently never reaches history.
+   */
+  it('flags a missing load, and says it will not be saved', () => {
+    const noLoad: LoggedSet = { ...set(0, 190, 10, 2), weight: null };
+    setup(todaysEntry(noLoad), null, null);
+
+    expect(screen.getByTestId('set-note')).toHaveTextContent('no weight — will not be saved');
+  });
+
+  it('flags missing reps', () => {
+    const noReps: LoggedSet = { ...set(0, 190, 10, 2), reps: null };
+    setup(todaysEntry(noReps), null, null);
+
+    expect(screen.getByTestId('set-note')).toHaveTextContent('no reps — will not be saved');
+  });
+
+  /** Its own marker, distinct from the good/bad pair. */
+  it('marks the row incomplete rather than under or over the rep range', () => {
+    const noLoad: LoggedSet = { ...set(0, 190, 4, 2), weight: null };
+    const { container } = setup(todaysEntry(noLoad), null, null);
+
+    expect(container.querySelector('[data-assessment="incomplete"]')).not.toBeNull();
+    expect(container.querySelector('[data-assessment="under"]')).toBeNull();
+  });
+
+  it('says nothing about a half-entered warmup, which never counted anyway', () => {
+    const warmup: LoggedSet = { ...set(0, 95, 10, 6), reps: null, isWarmup: true };
+    setup(todaysEntry(warmup), null, null);
+
     expect(screen.queryByTestId('set-note')).not.toBeInTheDocument();
   });
 });

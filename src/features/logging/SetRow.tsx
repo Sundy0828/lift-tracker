@@ -47,6 +47,8 @@ type Props = {
   assessment: SetAssessment;
   /** The rep range, named in the off-target note so colour is never alone. */
   repRangeLabel: string | null;
+  /** Which number a half-entered set is missing, named in its note. */
+  missing: 'weight' | 'reps' | null;
   /** Last time's numbers for this set position, already formatted. */
   previousLabel: string | null;
   /** The delta chip, or null when there is nothing comparable to compare to. */
@@ -69,15 +71,25 @@ const DELTA_COLOR: Record<Direction, string> = {
 };
 
 /**
- * The off-target note.
+ * The note beside a row that needs attention.
  *
  * Always words as well as colour: red and green are the same colour to a
  * significant slice of people, and this screen gets read in bad gym light with
  * a phone at arm's length. An on-target set says nothing — the absence of a
  * complaint is the signal, and a green "on target" on every row would drown
  * the two that are not.
+ *
+ * `incomplete` outranks the rep range, and says which number is missing. It is
+ * the more urgent of the two: a set missing its load or its reps cannot be
+ * turned into an estimate, so it silently never reaches your history, and this
+ * is the last moment the number can still be supplied.
  */
-function assessmentNote(assessment: SetAssessment, repRangeLabel: string | null): string | null {
+function assessmentNote(
+  assessment: SetAssessment,
+  repRangeLabel: string | null,
+  missing: 'weight' | 'reps' | null,
+): string | null {
+  if (assessment === 'incomplete') return `no ${missing ?? 'entry'} — will not be saved`;
   if (repRangeLabel === null) return null;
   if (assessment === 'under') return `under ${repRangeLabel}`;
   if (assessment === 'over') return `over ${repRangeLabel}`;
@@ -99,6 +111,7 @@ function SetRowBase({
   displayUnit,
   assessment,
   repRangeLabel,
+  missing,
   previousLabel,
   deltaLabel,
   deltaDetail,
@@ -118,7 +131,7 @@ function SetRowBase({
    */
   const entryUnit = weight === null ? displayUnit : weightUnit;
   const showUnit = weight !== null && weightUnit !== displayUnit;
-  const note = assessmentNote(assessment, repRangeLabel);
+  const note = assessmentNote(assessment, repRangeLabel, missing);
 
   return (
     <div

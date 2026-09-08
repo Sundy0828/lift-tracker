@@ -18,11 +18,13 @@ import {
   parseSessionEntry,
   performedSets,
   removeEntry,
+  lastCompletedSet,
+  missingField,
   outstandingSets,
   restAfter,
   sessionProgress,
   sessionSeconds,
-  skipOutstandingSets,
+  settleOutstandingSets,
   toggleSetComplete,
   toggleSetSkipped,
   totalPerformedSets,
@@ -340,17 +342,43 @@ describe('assessSet', () => {
     expect(assessSet(logged(13), prescription)).toBe('over');
   });
 
-  /** A row that has not been done yet cannot have missed anything. */
-  it('says nothing about a set with no reps entered', () => {
-    expect(assessSet(logged(null), prescription)).toBe('unassessed');
+  /** A row that has not been touched cannot have missed anything. */
+  it('says nothing about an untouched set', () => {
+    expect(assessSet({ ...emptySet(0) }, prescription)).toBe('unassessed');
+  });
+
+  /**
+   * The quiet failure worth surfacing: a half-entered set is excluded from
+   * `performedSets`, so it never reaches the stats and next week's overlay
+   * behaves as though it never happened.
+   */
+  it('flags a set missing its reps', () => {
+    expect(assessSet(logged(null), prescription)).toBe('incomplete');
+    expect(missingField(logged(null))).toBe('reps');
+  });
+
+  it('flags a set missing its load', () => {
+    const noLoad = { ...logged(10), weight: null };
+    expect(assessSet(noLoad, prescription)).toBe('incomplete');
+    expect(missingField(noLoad)).toBe('weight');
+  });
+
+  it('flags a half-entered ad-hoc set too, which has no range but still needs both numbers', () => {
+    expect(assessSet({ ...logged(10), weight: null }, null)).toBe('incomplete');
+  });
+
+  it('names no missing field once both numbers are there', () => {
+    expect(missingField(logged(10))).toBeNull();
   });
 
   it('says nothing about a warmup or a skipped set', () => {
     expect(assessSet(logged(3, { isWarmup: true }), prescription)).toBe('unassessed');
     expect(assessSet(logged(3, { skipped: true }), prescription)).toBe('unassessed');
+    // Not even when half-entered: neither reaches history by design.
+    expect(assessSet({ ...logged(null), isWarmup: true }, prescription)).toBe('unassessed');
   });
 
-  it('says nothing about an ad-hoc row, which has no range to miss', () => {
+  it('says nothing about a fully entered ad-hoc row, which has no range to miss', () => {
     expect(assessSet(logged(3), null)).toBe('unassessed');
   });
 });
@@ -438,19 +466,29 @@ describe('sessionSeconds', () => {
 describe('finishing early', () => {
   const session = start(body([slot('a', 'bench'), createRestSlot('r1'), slot('b', 'row')]));
 
-  it('names what is outstanding, per exercise', () => {
-    let entries = toggleSetComplete(session.entries, 'a', 0, 'now');
-    entries = toggleSetComplete(entries, 'a', 1, 'now');
+  /** Reps entered means the set happened, whether or not it was ticked. */
+  function withReps(entries: readonly SessionEntry[], key: string, index: number) {
+    return updateSet(entries, key, index, { weight: { value: 185, unit: 'lb' }, reps: 8 });
+  }
+
+  it('splits what is outstanding into what was done and what was not', () => {
+    // Set 1 ticked, set 2 filled in but never ticked, set 3 untouched.
+    let entries = toggleSetComplete(withReps(session.entries, 'a', 0), 'a', 0, 'now');
+    entries = withReps(entries, 'a', 1);
 
     expect(outstandingSets(entries)).toEqual([
-      { exerciseName: 'bench', sets: 1 },
-      { exerciseName: 'row', sets: 3 },
+      { exerciseName: 'bench', toComplete: 1, toSkip: 1 },
+      { exerciseName: 'row', toComplete: 0, toSkip: 3 },
     ]);
   });
 
   it('counts a skipped set as dealt with, not outstanding', () => {
     const entries = toggleSetSkipped(session.entries, 'a', 0);
-    expect(outstandingSets(entries)[0]).toEqual({ exerciseName: 'bench', sets: 2 });
+    expect(outstandingSets(entries)[0]).toEqual({
+      exerciseName: 'bench',
+      toComplete: 0,
+      toSkip: 2,
+    });
   });
 
   it('is empty once everything is done', () => {
@@ -462,30 +500,99 @@ describe('finishing early', () => {
     expect(isSessionFinished(entries)).toBe(true);
   });
 
-  it('skips what is left without touching what was logged', () => {
-    const logged = updateSet(toggleSetComplete(session.entries, 'a', 0, 'now'), 'a', 0, {
-      weight: { value: 185, unit: 'lb' },
-      reps: 8,
+  /**
+   * The bug this replaced: blanket-skipping threw away sets that had real
+   * numbers in them, so they never reached `workoutStats` and the next
+   * session's overlay compared against the set before them instead.
+   */
+  it('ticks a set that has reps rather than skipping it', () => {
+    const entries = withReps(session.entries, 'a', 1);
+    const settled = settleOutstandingSets(entries, 'then');
+
+    expect(settled.entries[0]?.sets[1]?.completedAt).toBe('then');
+    expect(settled.entries[0]?.sets[1]?.skipped).toBe(false);
+    expect(settled.completed).toBe(1);
+  });
+
+  it('keeps a ticked set exactly as it was', () => {
+    const entries = toggleSetComplete(withReps(session.entries, 'a', 0), 'a', 0, 'earlier');
+    const settled = settleOutstandingSets(entries, 'then');
+
+    expect(settled.entries[0]?.sets[0]?.completedAt).toBe('earlier');
+    expect(settled.entries[0]?.sets[0]?.reps).toBe(8);
+  });
+
+  it('skips only the sets with nothing entered', () => {
+    const settled = settleOutstandingSets(withReps(session.entries, 'a', 0), 'then');
+
+    expect(settled.completed).toBe(1);
+    expect(settled.skipped).toBe(5);
+    expect(settled.entries[0]?.sets[1]?.skipped).toBe(true);
+  });
+
+  it('leaves a set with a load but no reps to be skipped, not counted', () => {
+    // A loaded bar is not a performed set; reps are what say it happened.
+    const entries = updateSet(session.entries, 'a', 0, { weight: { value: 185, unit: 'lb' } });
+    const settled = settleOutstandingSets(entries, 'then');
+
+    expect(settled.entries[0]?.sets[0]?.skipped).toBe(true);
+    expect(settled.completed).toBe(0);
+  });
+
+  it('settles everything, so the session reads as finished', () => {
+    const settled = settleOutstandingSets(withReps(session.entries, 'a', 0), 'then');
+    expect(outstandingSets(settled.entries)).toEqual([]);
+    expect(isSessionFinished(settled.entries)).toBe(true);
+  });
+
+  it('keeps the reps it ticked in the performed count', () => {
+    const settled = settleOutstandingSets(withReps(session.entries, 'a', 0), 'then');
+    expect(totalPerformedSets(settled.entries)).toBe(1);
+  });
+
+  it('leaves rest rows alone, which have no sets to settle', () => {
+    const settled = settleOutstandingSets(session.entries, 'then');
+    expect(settled.entries[1]?.kind).toBe('rest');
+    expect(settled.entries[1]?.sets).toEqual([]);
+  });
+});
+
+describe('lastCompletedSet', () => {
+  const session = start(body([slot('a', 'bench'), slot('b', 'row')]));
+
+  it('is null when nothing has been ticked', () => {
+    expect(lastCompletedSet(session.entries)).toBeNull();
+  });
+
+  /**
+   * Ordered by when each set was ticked, not by position: sets get filled in
+   * out of order, and the rest still owed belongs to whichever was finished
+   * most recently.
+   */
+  it('finds the most recently ticked set, wherever it sits', () => {
+    let entries = toggleSetComplete(session.entries, 'b', 2, '2025-08-24T17:20:00.000Z');
+    entries = toggleSetComplete(entries, 'a', 0, '2025-08-24T17:05:00.000Z');
+
+    expect(lastCompletedSet(entries)).toEqual({
+      entryKey: 'b',
+      setIndex: 2,
+      completedAt: '2025-08-24T17:20:00.000Z',
     });
-    const next = skipOutstandingSets(logged);
-
-    expect(next[0]?.sets[0]?.skipped).toBe(false);
-    expect(next[0]?.sets[0]?.reps).toBe(8);
-    expect(next[0]?.sets[1]?.skipped).toBe(true);
-    expect(outstandingSets(next)).toEqual([]);
-    expect(isSessionFinished(next)).toBe(true);
   });
 
-  it('leaves rest rows alone, which have no sets to skip', () => {
-    const next = skipOutstandingSets(session.entries);
-    expect(next[1]?.kind).toBe('rest');
-    expect(next[1]?.sets).toEqual([]);
+  it('ignores a set that has been un-ticked', () => {
+    let entries = toggleSetComplete(session.entries, 'a', 0, '2025-08-24T17:05:00.000Z');
+    entries = toggleSetComplete(entries, 'a', 1, '2025-08-24T17:08:00.000Z');
+    // Un-tick the later one, as a mis-tap correction would.
+    entries = toggleSetComplete(entries, 'a', 1);
+
+    expect(lastCompletedSet(entries)?.setIndex).toBe(0);
   });
 
-  /** A skipped set feeds no stats, so it cannot become last week's number. */
-  it('leaves nothing for the overlay to pick up', () => {
-    const next = skipOutstandingSets(session.entries);
-    expect(totalPerformedSets(next)).toBe(0);
+  it('ignores a skipped set', () => {
+    let entries = toggleSetComplete(session.entries, 'a', 0, '2025-08-24T17:05:00.000Z');
+    entries = toggleSetSkipped(entries, 'a', 1);
+    expect(lastCompletedSet(entries)?.setIndex).toBe(0);
   });
 });
 

@@ -412,31 +412,54 @@ export function performedSets(sets: readonly LoggedSet[]): LoggedSet[] {
 }
 
 /**
- * How a logged set landed against what it was prescribed.
+ * How a logged set landed: whether it is even usable, and if so how it did
+ * against what was prescribed.
  *
- * Reps only, and deliberately only reps. The rep range is the part of a
- * prescription you either hit or did not, and it is the part that tells you
- * what to do next: under it means the load was too heavy, over it means too
- * light. Judging the load itself would need a target load, which no
+ * `incomplete` comes first and matters most. A set with reps but no load — or
+ * a load but no reps — cannot be turned into an estimated 1RM, so it is
+ * excluded from `performedSets` and therefore never reaches `workoutStats`.
+ * That is the quiet failure worth surfacing: the set looks logged, and next
+ * week the overlay will act as though it never happened. Flagging it while the
+ * session is open is the only moment the missing number can still be supplied.
+ *
+ * The rest is reps against the prescribed range, and deliberately only reps.
+ * The rep range is the part of a prescription you either hit or did not, and it
+ * says what to do next: under it means the load was too heavy, over it means
+ * too light. Judging the load itself would need a target load, which no
  * prescription carries — a load is compared against *last time*, which is the
  * delta chip's job, not this.
  *
- * `unassessed` covers a row with nothing entered, a warmup, a skipped set and
- * an ad-hoc row with no prescription. None of those can be off-target, and
- * marking an empty row as failing to hit a rep range would flag every set
- * before it was done.
+ * `unassessed` covers a row with nothing entered at all, a warmup, a skipped
+ * set, and a fully entered ad-hoc set with no prescription to be measured
+ * against. None of those can be off-target, and marking an untouched row as
+ * missing its rep range would flag every set before it was done.
  */
-export type SetAssessment = 'unassessed' | 'under' | 'on-target' | 'over';
+export type SetAssessment = 'unassessed' | 'incomplete' | 'under' | 'on-target' | 'over';
 
 export function assessSet(set: LoggedSet, prescription: Prescription | null): SetAssessment {
-  if (prescription === null || set.isWarmup || set.skipped || set.reps === null) {
-    return 'unassessed';
-  }
+  // A warmup and a skipped set are both excluded from history by design, so
+  // neither a missing number nor a missed rep range means anything for them.
+  if (set.isWarmup || set.skipped) return 'unassessed';
+
+  // Untouched. Not a problem, just not started.
+  if (set.weight === null && set.reps === null) return 'unassessed';
+
+  // Half-entered: this set will not reach your history (see the type's note).
+  if (set.weight === null || set.reps === null) return 'incomplete';
+
+  if (prescription === null) return 'unassessed';
 
   const { min, max } = prescription.repRange;
   if (set.reps < min) return 'under';
   if (set.reps > max) return 'over';
   return 'on-target';
+}
+
+/** The number a half-entered set is missing, for the on-screen note. */
+export function missingField(set: LoggedSet): 'weight' | 'reps' | null {
+  if (set.weight === null && set.reps !== null) return 'weight';
+  if (set.reps === null && set.weight !== null) return 'reps';
+  return null;
 }
 
 export type SessionProgress = { completed: number; total: number };
@@ -530,45 +553,125 @@ export function sessionSeconds(session: Session, now: Date = new Date()): number
   return Math.max(0, Math.round((end - start) / 1000));
 }
 
-export type Outstanding = { exerciseName: string; sets: number };
+/**
+ * Enough to say the set happened.
+ *
+ * A rep count, and only a rep count. Reps are the irreducible fact of a
+ * performed set — a load without them says the bar was loaded, not that
+ * anything was lifted — so a row with reps in it was done, whatever else is
+ * missing, and a row without them was not.
+ */
+function wasPerformed(set: LoggedSet): boolean {
+  return set.reps !== null;
+}
+
+function isOutstanding(set: LoggedSet): boolean {
+  return set.completedAt === null && !set.skipped;
+}
+
+export type Outstanding = {
+  exerciseName: string;
+  /** Outstanding sets that have reps in them, so they were done. */
+  toComplete: number;
+  /** Outstanding sets with nothing entered. */
+  toSkip: number;
+};
 
 /**
- * What has not been dealt with yet, per exercise.
+ * What has not been dealt with yet, split by what should happen to it.
  *
- * Drives the confirmation shown when a session is finished early: naming the
- * exercises is the difference between "3 sets left" and knowing that they are
- * all the last exercise you meant to drop anyway.
+ * Drives the confirmation shown when a session is finished early. Naming the
+ * exercises is the difference between "3 sets left" and knowing they are all
+ * the last exercise you meant to drop anyway — and splitting them is the
+ * difference between skipping work you actually did and recording it.
  */
 export function outstandingSets(entries: readonly SessionEntry[]): Outstanding[] {
   const outstanding: Outstanding[] = [];
 
   for (const entry of exerciseEntries(entries)) {
-    const sets = entry.sets.filter((set) => set.completedAt === null && !set.skipped).length;
-    if (sets > 0) outstanding.push({ exerciseName: entry.exerciseName, sets });
+    const pending = entry.sets.filter(isOutstanding);
+    const toComplete = pending.filter(wasPerformed).length;
+    const toSkip = pending.length - toComplete;
+    if (pending.length > 0) {
+      outstanding.push({ exerciseName: entry.exerciseName, toComplete, toSkip });
+    }
   }
   return outstanding;
 }
 
+export type Settlement = {
+  entries: SessionEntry[];
+  /** How many were ticked because they had reps in them. */
+  completed: number;
+  /** How many were skipped because nothing was entered. */
+  skipped: number;
+};
+
 /**
- * Marks everything still outstanding as skipped.
+ * Settles everything still outstanding, so finishing early records the truth.
  *
- * Finishing early has to record *something* for the sets not done, and skipped
- * is the truthful value: the row stays, so the session still reads as what was
- * prescribed with the gap visible, and a skipped set feeds no stats — so next
- * week's overlay compares against the last set actually performed rather than
- * against a blank.
+ * Two different things get two different treatments, because they mean two
+ * different things:
+ *
+ * - **Reps entered but not ticked** is a forgotten tap, not a set you did not
+ *   do. Skipping it would drop real work out of `workingSets`, so it would
+ *   never reach `workoutStats`, and next week's overlay would compare against
+ *   the set before it as though this one never happened. It is marked **done**.
+ * - **Nothing entered** is work not done. It is marked **skipped**, which
+ *   keeps the row — so the session still reads as what was prescribed, with
+ *   the gap visible — and feeds no stats, so the overlay falls back to the
+ *   last set actually performed.
  */
-export function skipOutstandingSets(entries: readonly SessionEntry[]): SessionEntry[] {
-  return entries.map((entry) =>
-    entry.kind === 'rest'
-      ? entry
-      : {
-          ...entry,
-          sets: entry.sets.map((set) =>
-            set.completedAt === null && !set.skipped ? { ...set, skipped: true } : set,
-          ),
-        },
-  );
+export function settleOutstandingSets(
+  entries: readonly SessionEntry[],
+  at: string = new Date().toISOString(),
+): Settlement {
+  let completed = 0;
+  let skipped = 0;
+
+  const settled = entries.map((entry) => {
+    if (entry.kind === 'rest') return entry;
+
+    return {
+      ...entry,
+      sets: entry.sets.map((set) => {
+        if (!isOutstanding(set)) return set;
+        if (wasPerformed(set)) {
+          completed += 1;
+          return { ...set, completedAt: at };
+        }
+        skipped += 1;
+        return { ...set, skipped: true };
+      }),
+    };
+  });
+
+  return { entries: settled, completed, skipped };
+}
+
+export type CompletedSet = { entryKey: string; setIndex: number; completedAt: string };
+
+/**
+ * The set completed most recently, by the time it was ticked.
+ *
+ * This is what a rest timer falls back to when the set that started it is
+ * un-ticked: the rest that the *previous* set earned is still owed, and it
+ * started when that set was finished — not now. Ordered by `completedAt`
+ * rather than by position, because sets get filled in out of order.
+ */
+export function lastCompletedSet(entries: readonly SessionEntry[]): CompletedSet | null {
+  let latest: CompletedSet | null = null;
+
+  for (const entry of exerciseEntries(entries)) {
+    for (const set of entry.sets) {
+      const at = set.completedAt;
+      if (at === null || set.skipped) continue;
+      if (latest === null || at > latest.completedAt) {
+        latest = { entryKey: entryKey(entry), setIndex: set.setIndex, completedAt: at };
+      }
+    }
+  }
+  return latest;
 }
 
 /**

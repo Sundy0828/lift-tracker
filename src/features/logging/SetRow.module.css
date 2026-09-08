@@ -7,8 +7,14 @@
   --delta-down: light-dark(var(--mantine-color-red-8), var(--mantine-color-red-4));
   --delta-same: var(--mantine-color-dimmed);
   --under: light-dark(var(--mantine-color-red-7), var(--mantine-color-red-5));
-  --over: light-dark(var(--mantine-color-yellow-8), var(--mantine-color-yellow-5));
   --on-target: light-dark(var(--mantine-color-teal-7), var(--mantine-color-teal-5));
+  /* A set missing a number will not reach your history at all, which is worse
+     than missing a rep range — so it gets its own colour rather than sharing
+     one, and the loudest of the three that is not an outright failure. */
+  --incomplete: light-dark(var(--mantine-color-yellow-8), var(--mantine-color-yellow-4));
+  /* More reps than asked for is information, not a fault: the load was light.
+     Blue keeps it clear of both the failure red and the warning yellow. */
+  --over: light-dark(var(--mantine-color-blue-7), var(--mantine-color-blue-4));
 
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -40,6 +46,13 @@
 
 .row[data-assessment='on-target'] {
   border-left-color: var(--on-target);
+}
+
+/* Wider than the others: this is the one that means "you will lose this set
+   unless you go back", and it is the only state the user can still act on. */
+.row[data-assessment='incomplete'] {
+  border-left-color: var(--incomplete);
+  border-left-width: 4px;
 }
 
 .row[data-skipped] {
@@ -231,7 +244,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The off-target note names the range it missed, so it reads without colour. */
+/* The note names the range it missed or the number it lacks, so every one of
+   these states reads without relying on its colour at all. */
 .note {
   font-size: var(--mantine-font-size-xs);
   font-weight: 600;
@@ -240,6 +254,10 @@
 
 .row[data-assessment='over'] .note {
   color: var(--over);
+}
+
+.row[data-assessment='incomplete'] .note {
+  color: var(--incomplete);
 }
 
 .linkButton {

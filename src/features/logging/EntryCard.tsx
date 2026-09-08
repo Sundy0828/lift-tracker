@@ -4,7 +4,7 @@ import type { ExerciseStats, Overlay, WorkoutStats } from '@/domain/overlay';
 import type { DeltaChip } from '@/domain/strength';
 import { isComparable, previousSetAt, resolveOverlay, workedPosition } from '@/domain/overlay';
 import type { LoggedSet, SessionEntry } from '@/domain/sessions';
-import { assessSet, entryKey as keyOf, isRestEntry } from '@/domain/sessions';
+import { assessSet, entryKey as keyOf, isRestEntry, missingField } from '@/domain/sessions';
 import { describeComparison, formatSet } from '@/domain/strength';
 import type { Unit } from '@/domain/types';
 import { formatPrescription, formatRange, formatRestSeconds } from '@/domain/workouts';
@@ -175,6 +175,7 @@ export function EntryCard({
                 displayUnit={displayUnit}
                 assessment={assessSet(set, entry.prescription)}
                 repRangeLabel={repRangeLabel}
+                missing={missingField(set)}
                 previousLabel={previousLabel}
                 deltaLabel={delta?.label ?? null}
                 deltaDetail={delta?.detail ?? null}

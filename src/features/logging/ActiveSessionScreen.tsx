@@ -35,6 +35,7 @@ import {
   exerciseEntries,
   isLastOfRound,
   isSessionFinished,
+  lastCompletedSet,
   nextUnfinishedSet,
   outstandingSets,
   removeEntry,
@@ -42,15 +43,15 @@ import {
   sessionProgress,
   sessionSeconds,
   setEntryNotes,
-  skipOutstandingSets,
+  settleOutstandingSets,
   toggleSetComplete,
   toggleSetSkipped,
   totalPerformedSets,
   updateSet,
 } from '@/domain/sessions';
 import { formatE1rm, formatSet } from '@/domain/strength';
-import { formatEstimate } from '@/domain/workouts';
 import type { Unit } from '@/domain/types';
+import { formatEstimate } from '@/domain/workouts';
 import { ExercisePicker } from '@/features/workouts/ExercisePicker';
 import { EntryCard } from './EntryCard';
 import { RestTimerBar } from './RestTimerBar';
@@ -80,7 +81,14 @@ export default function ActiveSessionScreen() {
   const { session, isPending, notFound } = useSession(sessionId);
   const { profile } = useProfile();
   const draft = useSessionDraft(uid, session);
-  const { rest, start: startRest, adjust: adjustRest, stop: stopRest } = useRestTimer();
+  const {
+    rest,
+    start: startRest,
+    resumeFrom: resumeRest,
+    isOwnedBy: restOwnedBy,
+    adjust: adjustRest,
+    stop: stopRest,
+  } = useRestTimer();
 
   const [picking, setPicking] = useState(false);
   const [finishing, setFinishing] = useState(false);
@@ -188,11 +196,38 @@ export default function ActiveSessionScreen() {
   );
 
   /**
-   * Completing a set is also what starts the rest, which is why it is an
+   * How long to rest after a given set, and what to call the countdown.
+   *
+   * Shared by starting a rest and by handing one back to an earlier set, so a
+   * fallback rest is the one that set was actually owed rather than a default.
+   */
+  const restFor = useCallback(
+    (entries: readonly SessionEntry[], key: string): { seconds: number; label: string } | null => {
+      const { session: live, defaultRestSeconds } = latest.current;
+      const entry = entryFor(entries, key);
+      if (entry === null || live === null) return null;
+
+      const seconds = restAfter(
+        { ...live, entries: [...entries] },
+        entry,
+        defaultRestSeconds,
+        isLastOfRound(entries, key),
+      );
+      const upNext = nextUnfinishedSet(entries, key);
+      const upNextEntry = upNext === null ? null : entryFor(entries, upNext.entryKey);
+      return {
+        seconds,
+        label:
+          upNextEntry === null ? 'Last set — session done' : `Next: ${upNextEntry.exerciseName}`,
+      };
+    },
+    [],
+  );
+
+  /**
+   * Completing a set is also what starts its rest, which is why it is an
    * explicit toggle rather than something inferred from the inputs being
    * filled in — the timer must not start while you are still typing.
-   *
-   * Un-completing stops it: the rest belonged to a set that is no longer done.
    */
   const onToggleComplete = useCallback(
     (key: string, setIndex: number) => {
@@ -204,30 +239,35 @@ export default function ActiveSessionScreen() {
       const next = toggleSetComplete(before, key, setIndex);
       apply(() => next);
 
-      // Un-completing stops the rest: it belonged to a set that is no longer
-      // done.
+      /**
+       * Un-ticking only ends the rest if it was *this* set's rest. Correcting
+       * a mis-tap used to kill the countdown outright, which threw away the
+       * rest the set before it was still owed — so instead the timer falls
+       * back to whichever set most recently remains ticked, resumed from when
+       * that set actually finished. If that rest has already elapsed, or
+       * nothing is left ticked, it simply ends.
+       */
       if (wasComplete) {
-        stopRest();
+        if (!restOwnedBy({ entryKey: key, setIndex })) return;
+
+        const fallback = lastCompletedSet(next);
+        const owed = fallback === null ? null : restFor(next, fallback.entryKey);
+        if (fallback === null || owed === null) {
+          stopRest();
+          return;
+        }
+        resumeRest(fallback.completedAt, owed.seconds, owed.label, {
+          entryKey: fallback.entryKey,
+          setIndex: fallback.setIndex,
+        });
         return;
       }
 
-      const { session: live, defaultRestSeconds } = latest.current;
-      if (entry === null || live === null) return;
-
-      const seconds = restAfter(
-        { ...live, entries: next },
-        entry,
-        defaultRestSeconds,
-        isLastOfRound(next, key),
-      );
-      const upNext = nextUnfinishedSet(next, key);
-      const upNextEntry = upNext === null ? null : entryFor(next, upNext.entryKey);
-      startRest(
-        seconds,
-        upNextEntry === null ? 'Last set — session done' : `Next: ${upNextEntry.exerciseName}`,
-      );
+      const owed = restFor(next, key);
+      if (owed === null) return;
+      startRest(owed.seconds, owed.label, { entryKey: key, setIndex });
     },
-    [apply, read, startRest, stopRest],
+    [apply, read, restFor, restOwnedBy, resumeRest, startRest, stopRest],
   );
 
   const addExercise = (exercise: Exercise): void => {
@@ -257,6 +297,8 @@ export default function ActiveSessionScreen() {
   // session short — it only stops the primary button shouting before its time.
   const allSetsDone = isSessionFinished(entries);
   const outstanding = outstandingSets(entries);
+  const toComplete = outstanding.filter((item) => item.toComplete > 0);
+  const toSkip = outstanding.filter((item) => item.toSkip > 0);
 
   const announcePrs = (prs: readonly PersonalRecord[]): void => {
     for (const pr of prs) {
@@ -321,10 +363,10 @@ export default function ActiveSessionScreen() {
   };
 
   const finishEarly = (): void => {
-    const skipped = skipOutstandingSets(entries);
-    apply(() => skipped);
+    const settled = settleOutstandingSets(entries);
+    apply(() => settled.entries);
     setConfirmingEarly(false);
-    complete(skipped);
+    complete(settled.entries);
   };
 
   const abandon = (): void => {
@@ -483,17 +525,43 @@ export default function ActiveSessionScreen() {
         centered
       >
         <Stack gap="sm">
-          <Text size="sm">
-            These are not done yet. Finishing marks them skipped, so the session records what you
-            actually did and next time compares against your last real set.
-          </Text>
-          <List size="sm" spacing={2}>
-            {outstanding.map((item) => (
-              <List.Item key={item.exerciseName}>
-                {item.exerciseName} — {item.sets} {item.sets === 1 ? 'set' : 'sets'}
-              </List.Item>
-            ))}
-          </List>
+          {toComplete.length === 0 ? null : (
+            <Stack gap={4}>
+              <Text size="sm" fw={600}>
+                Counted as done
+              </Text>
+              <Text size="xs" c="dimmed">
+                Reps are entered for these but they were never ticked, so they are recorded as
+                performed rather than thrown away.
+              </Text>
+              <List size="sm" spacing={2}>
+                {toComplete.map((item) => (
+                  <List.Item key={item.exerciseName}>
+                    {item.exerciseName} — {item.toComplete} {item.toComplete === 1 ? 'set' : 'sets'}
+                  </List.Item>
+                ))}
+              </List>
+            </Stack>
+          )}
+
+          {toSkip.length === 0 ? null : (
+            <Stack gap={4}>
+              <Text size="sm" fw={600}>
+                Skipped
+              </Text>
+              <Text size="xs" c="dimmed">
+                Nothing was entered for these. They stay on the session as skipped and feed no
+                history, so next time compares against your last real set.
+              </Text>
+              <List size="sm" spacing={2}>
+                {toSkip.map((item) => (
+                  <List.Item key={item.exerciseName}>
+                    {item.exerciseName} — {item.toSkip} {item.toSkip === 1 ? 'set' : 'sets'}
+                  </List.Item>
+                ))}
+              </List>
+            </Stack>
+          )}
           <Group justify="flex-end" gap="xs">
             <Button
               variant="default"
@@ -503,7 +571,9 @@ export default function ActiveSessionScreen() {
             >
               Keep logging
             </Button>
-            <Button onClick={finishEarly}>Skip them and finish</Button>
+            <Button onClick={finishEarly}>
+              {toSkip.length === 0 ? 'Tick them and finish' : 'Settle them and finish'}
+            </Button>
           </Group>
         </Stack>
       </Modal>
