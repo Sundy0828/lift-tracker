@@ -38,7 +38,6 @@ const handlers = () => ({
   onRemoveSlot: vi.fn(),
   onGroup: vi.fn(),
   onLeaveCircuit: vi.fn(),
-  onUngroup: vi.fn(),
   onAddAfter: vi.fn(),
   onAddRestAfter: vi.fn(),
   onRounds: vi.fn(),
@@ -106,28 +105,6 @@ describe('leaving a circuit by swiping right', () => {
 
     swipe(surfaceOf('Crunches'), 140);
     expect(props.onLeaveCircuit).not.toHaveBeenCalled();
-  });
-});
-
-describe('the Ungroup button on the block', () => {
-  it('takes the whole circuit apart in one tap', () => {
-    // The visible route out, and the one that matches what someone wants
-    // after grouping two rows by accident.
-    const props = setup(allCircuit());
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Ungroup the circuit starting with Pushups' }),
-    );
-    expect(props.onUngroup).toHaveBeenCalledWith('g1');
-  });
-
-  it('is not rendered when there is no circuit', () => {
-    setup({
-      name: 'PLAIN',
-      slots: [slot('a', 'Pushups'), slot('b', 'Crunches')],
-      groupRest: {},
-    });
-    expect(screen.queryByRole('button', { name: /^Ungroup/u })).not.toBeInTheDocument();
   });
 });
 

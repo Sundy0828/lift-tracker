@@ -7,6 +7,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
@@ -23,7 +24,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import classes from './SortableList.module.css';
 
 /**
- * Vertical drag reordering that works with a thumb, plus drag-to-group.
+ * Drag reordering that works with a thumb, and the two circuit gestures.
  *
  * HTML5 drag-and-drop does not fire on touch at all, so this uses dnd-kit's
  * pointer sensor (~11 kB gzipped for core + sortable + modifiers). Its
@@ -31,12 +32,17 @@ import classes from './SortableList.module.css';
  * explicit up/down buttons give a third route on small screens where dragging
  * inside a scrolling list is fiddly.
  *
- * **Grouping** reuses the same gesture: hold a dragged row over another for a
- * moment and the drop becomes "join that one's circuit" instead of "move
+ * **Joining** reuses the reorder gesture: hold a dragged row over another for
+ * a moment and the drop becomes "join that one's circuit" instead of "move
  * here" — the folder-drop pattern, so a normal reorder is unaffected. The
- * target says so before you release, and pressing `g` mid-drag skips the wait
- * (which is also the keyboard route: focus the handle, Space, arrow to the
- * target, `g`, Space).
+ * target says so before you release, and `g` mid-drag skips the wait.
+ *
+ * **Leaving** is a sideways drag, and has to be. Dragging vertically clear of
+ * the block only works when a position outside it exists: a two-exercise
+ * workout that is entirely one circuit has no outside, and every reorder
+ * leaves the two members adjacent and still grouped. So a row already in a
+ * circuit is freed from the vertical axis and pulling it out of the block
+ * sideways means what it looks like. `u` is the keyboard equivalent.
  */
 
 /**
@@ -48,22 +54,41 @@ import classes from './SortableList.module.css';
  */
 const GROUP_DWELL_MS = 420;
 
+/**
+ * How far sideways a circuit member travels before the drop means "leave".
+ *
+ * Comfortably past any wobble in a drag that meant to reorder, and roughly a
+ * thumb's width so it reads as a deliberate pull rather than a slip.
+ */
+const PULL_OUT_PX = 56;
+
 type GroupIntent = { activeId: string; targetId: string } | null;
 
-/** `pending` is hovering-but-not-yet-armed; `intent` is armed. */
-type GroupState = { pending: GroupIntent; intent: GroupIntent };
+/**
+ * What the current drag would do.
+ *
+ * `pending` is hovering-but-not-yet-armed and `intent` is armed, both for
+ * joining. `pullOut` is the id of a row displaced far enough sideways that
+ * releasing takes it out of its circuit.
+ */
+type DragState = { pending: GroupIntent; intent: GroupIntent; pullOut: string | null };
 
-const GroupStateContext = createContext<GroupState>({ pending: null, intent: null });
+const DragStateContext = createContext<DragState>({
+  pending: null,
+  intent: null,
+  pullOut: null,
+});
 
 /**
- * What the current drag would do to a row: nothing, arming, or grouping.
+ * What the current drag would do to a row: nothing, arming, grouping, or
+ * leaving.
  *
  * Consumed by SortableRow in this same file, so splitting it out to satisfy
  * fast refresh would buy nothing.
  */
 // eslint-disable-next-line react-refresh/only-export-components
-export function useGroupState(): GroupState {
-  return useContext(GroupStateContext);
+export function useDragState(): DragState {
+  return useContext(DragStateContext);
 }
 
 type SortableRowProps = {
@@ -73,6 +98,8 @@ type SortableRowProps = {
   total: number;
   label: string;
   onMove: (from: number, to: number) => void;
+  /** True when this row is in a circuit, which is what a sideways drag acts on. */
+  inGroup?: boolean;
   /**
    * Row-specific actions, rendered last — at the far right of the row. Delete
    * lives here, as far from the handle as the row allows.
@@ -93,6 +120,7 @@ export function SortableRow({
   total,
   label,
   onMove,
+  inGroup = false,
   extraControls,
   surface,
   children,
@@ -107,9 +135,10 @@ export function SortableRow({
     isDragging,
   } = useSortable({ id });
 
-  const { pending, intent } = useGroupState();
+  const { pending, intent, pullOut } = useDragState();
   const isGroupTarget = intent?.targetId === id;
   const isArming = !isGroupTarget && pending?.targetId === id;
+  const isLeaving = pullOut === id;
 
   const row = (
     <div className={classes.rowInner}>
@@ -123,7 +152,11 @@ export function SortableRow({
         // cannot also arm the swipe gesture wrapped around the row.
         data-drag-handle="true"
         aria-label={`Reorder or group ${label}`}
-        aria-description="Hold over another exercise to group them, or press g while dragging."
+        aria-description={
+          inGroup
+            ? 'Hold over another exercise to group them, or press u while dragging to leave the circuit.'
+            : 'Hold over another exercise to group them, or press g while dragging.'
+        }
         {...attributes}
         {...listeners}
       >
@@ -132,7 +165,11 @@ export function SortableRow({
 
       <div className={classes.body}>{children}</div>
 
-      {isGroupTarget ? (
+      {isLeaving ? (
+        <span className={`${classes.groupHint} ${classes.leaveHint}`} aria-hidden="true">
+          release to leave
+        </span>
+      ) : isGroupTarget ? (
         <span className={classes.groupHint} aria-hidden="true">
           release to group
         </span>
@@ -179,6 +216,7 @@ export function SortableRow({
       data-dragging={isDragging ? 'true' : undefined}
       data-group-target={isGroupTarget ? 'true' : undefined}
       data-group-arming={isArming ? 'true' : undefined}
+      data-leaving={isLeaving ? 'true' : undefined}
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
       {surface === undefined ? row : surface(row)}
@@ -194,23 +232,44 @@ type SortableListProps = {
   onGroup?: (activeId: string, targetId: string) => void;
   /** Rejects pairs that cannot be grouped, so no intent is offered. */
   canGroup?: (activeId: string, targetId: string) => boolean;
+  /** Called when a row is dragged out of its circuit. */
+  onLeave?: (activeId: string) => void;
+  /** True for a row that is in a circuit, and so has something to leave. */
+  canLeave?: (activeId: string) => boolean;
   children: ReactNode;
 };
 
-export function SortableList({ ids, onReorder, onGroup, canGroup, children }: SortableListProps) {
+export function SortableList({
+  ids,
+  onReorder,
+  onGroup,
+  canGroup,
+  onLeave,
+  canLeave,
+  children,
+}: SortableListProps) {
   const sensors = useSensors(
     /**
-     * A short hold rather than a distance threshold. Two reasons: a drag no
-     * longer starts from a stray twitch while scrolling, and a horizontal
-     * move inside the hold cancels activation, which is what leaves the
-     * swipe-to-delete gesture free to claim it.
+     * A short hold rather than a distance threshold, so a drag does not start
+     * from a stray twitch while scrolling.
+     *
+     * `tolerance` is deliberately generous. In dnd-kit it is an **abort**
+     * budget, not a threshold: moving further than this before the delay
+     * elapses cancels activation outright, and the press has to be released
+     * and repeated. A small value therefore makes a quick, confident grab feel
+     * broken — press, flick, nothing happens, press again. Set high enough
+     * that a real gesture never trips it, the delay stays a delay and the drag
+     * simply begins wherever the pointer has got to.
      */
-    useSensor(PointerSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { delay: 120, tolerance: 400 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   const [intent, setIntent] = useState<GroupIntent>(null);
   const [pending, setPending] = useState<GroupIntent>(null);
+  const [pullOut, setPullOut] = useState<string | null>(null);
+  /** The row being dragged, and whether it has a circuit to leave. */
+  const [leavable, setLeavable] = useState<string | null>(null);
   /**
    * The current drop target, in a ref rather than state.
    *
@@ -221,6 +280,8 @@ export function SortableList({ ids, onReorder, onGroup, canGroup, children }: So
    * Nothing renders from it, so a ref is both safer and cheaper.
    */
   const hover = useRef<GroupIntent>(null);
+  /** The dragged row, for the `u` shortcut, which needs no target. */
+  const active = useRef<string | null>(null);
   const dwell = useRef<number | null>(null);
   /**
    * Only a pointer drag can "hover". During a keyboard drag the target simply
@@ -240,17 +301,40 @@ export function SortableList({ ids, onReorder, onGroup, canGroup, children }: So
   const groupable = (activeId: string, targetId: string): boolean =>
     onGroup !== undefined && activeId !== targetId && (canGroup?.(activeId, targetId) ?? true);
 
-  // `g` commits the intent straight away, which is the only route open to the
-  // keyboard sensor — there is no hovering without a pointer. Registered once
-  // for the component's life and gated on the ref, so it can never miss a
-  // target because an effect had not re-run yet.
+  /**
+   * `canLeave` behind a ref so the key listener below can depend on nothing.
+   *
+   * Callers pass an inline arrow, so the prop is a new function on every
+   * render. Depending on it directly would re-run that effect every render —
+   * and its cleanup stops the dwell timer, so the hold-to-group timer would be
+   * cancelled by the very re-render that starts it, and joining could never
+   * arm at all.
+   */
+  const canLeaveRef = useRef(canLeave);
+  useEffect(() => {
+    canLeaveRef.current = canLeave;
+  }, [canLeave]);
+
+  // `g` commits a join straight away and `u` leaves a circuit, which are the
+  // only routes open to the keyboard sensor — there is no hovering without a
+  // pointer, and no sideways drag either. Registered once for the component's
+  // life and gated on refs, so neither can miss because an effect had not
+  // re-run yet.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'g' && event.key !== 'G') return;
-      const target = hover.current;
-      if (target === null) return;
-      event.preventDefault();
-      setIntent(target);
+      if (event.key === 'g' || event.key === 'G') {
+        const target = hover.current;
+        if (target === null) return;
+        event.preventDefault();
+        setIntent(target);
+        return;
+      }
+      if (event.key === 'u' || event.key === 'U') {
+        const activeId = active.current;
+        if (activeId === null || !(canLeaveRef.current?.(activeId) ?? false)) return;
+        event.preventDefault();
+        setPullOut(activeId);
+      }
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -261,19 +345,37 @@ export function SortableList({ ids, onReorder, onGroup, canGroup, children }: So
   }, []);
 
   const handleDragStart = (event: DragStartEvent): void => {
+    const activeId = String(event.active.id);
     pointerDrag.current = !(event.activatorEvent instanceof KeyboardEvent);
     stopDwell();
     setIntent(null);
     setPending(null);
+    setPullOut(null);
     hover.current = null;
+    active.current = activeId;
+    // Frees this drag from the vertical axis when there is a circuit to pull
+    // out of, and only then, so a plain reorder stays crisp.
+    setLeavable((canLeave?.(activeId) ?? false) ? activeId : null);
   };
 
-  const handleDragOver = ({ active, over }: DragOverEvent): void => {
+  const handleDragMove = ({ delta }: DragMoveEvent): void => {
+    const activeId = active.current;
+    if (activeId === null || leavable !== activeId) return;
+
+    const pulled = Math.abs(delta.x) >= PULL_OUT_PX;
+    setPullOut((current) => {
+      if (pulled) return activeId;
+      // A `u` press stands until the row is dragged back inside the block.
+      return current === activeId && Math.abs(delta.x) < PULL_OUT_PX / 2 ? null : current;
+    });
+  };
+
+  const handleDragOver = ({ active: dragged, over }: DragOverEvent): void => {
     // The target changed, so any pending or settled intent is stale.
     stopDwell();
     setIntent(null);
 
-    const activeId = String(active.id);
+    const activeId = String(dragged.id);
     const targetId = over === null ? null : String(over.id);
 
     if (targetId === null || !groupable(activeId, targetId)) {
@@ -295,16 +397,27 @@ export function SortableList({ ids, onReorder, onGroup, canGroup, children }: So
     stopDwell();
     setIntent(null);
     setPending(null);
+    setPullOut(null);
+    setLeavable(null);
     hover.current = null;
+    active.current = null;
   };
 
   const handleDragEnd = (event: DragEndEvent): void => {
-    const { active, over } = event;
+    const { active: dragged, over } = event;
     const settled = intent;
+    const leaving = pullOut;
+    const activeId = String(dragged.id);
     finish();
 
-    if (over === null || active.id === over.id) return;
-    const activeId = String(active.id);
+    // Leaving wins over both: the row was pulled clear of the block, so where
+    // it happens to hover is not what the gesture meant.
+    if (leaving === activeId) {
+      onLeave?.(activeId);
+      return;
+    }
+
+    if (over === null || dragged.id === over.id) return;
     const targetId = String(over.id);
 
     // Grouping wins over reordering: groupWithSlot does its own positioning,
@@ -329,19 +442,22 @@ export function SortableList({ ids, onReorder, onGroup, canGroup, children }: So
         const within = pointerWithin(args);
         return within.length > 0 ? within : closestCenter(args);
       }}
-      // Vertical only, but deliberately NOT restricted to the parent element:
-      // a circuit member's parent *is* the circuit block, so clamping to it
-      // would make dragging out of a circuit impossible.
-      modifiers={[restrictToVerticalAxis]}
+      // Vertical only for a plain reorder, which keeps it precise. A row that
+      // is in a circuit moves freely, because sideways *is* the gesture for
+      // leaving one — and deliberately NOT restricted to the parent element
+      // either: a member's parent is the circuit block, so clamping to it
+      // would make leaving impossible.
+      modifiers={leavable === null ? [restrictToVerticalAxis] : []}
       onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
       onDragCancel={finish}
     >
       <SortableContext items={[...ids]} strategy={verticalListSortingStrategy}>
-        <GroupStateContext.Provider value={{ pending, intent }}>
+        <DragStateContext.Provider value={{ pending, intent, pullOut }}>
           <div className={classes.list}>{children}</div>
-        </GroupStateContext.Provider>
+        </DragStateContext.Provider>
       </SortableContext>
     </DndContext>
   );

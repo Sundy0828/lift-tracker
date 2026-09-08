@@ -201,31 +201,41 @@ pattern, so a plain reorder is unaffected. The target dims to "hold to group"
 the moment you arrive and firms up to "release to group" once armed, so the
 wait is never silent; `g` mid-drag skips it.
 
-Leaving needs **three** routes, and the reason is worth writing down.
+Leaving is the same gesture, on the other axis: **pull a member sideways out
+of the block**. Past ~56 px the row says "release to leave" and dropping it
+calls `unlink`.
 
-1. **Drag a member clear of the block.** `reconcileGroups` re-establishes the
-   one-contiguous-run invariant after any reorder, so leaving is the same
-   gesture as arriving — but only where there is somewhere clear to go.
-2. **Swipe a member right** (`unlink`). Works at any member count, including
-   the case drag cannot touch: a two-exercise workout that is entirely one
-   circuit has **no outside**, and any reorder leaves the two members adjacent
-   and still grouped.
-3. **Ungroup**, on the block (`ungroup`). Takes the whole circuit apart.
+Sideways, rather than dragging clear of the block, because clear-of-the-block
+only works when a position outside it exists. A two-exercise workout that is
+entirely one circuit has **no outside** — every reorder leaves the two members
+adjacent, so `reconcileGroups` correctly keeps them grouped and there is
+nowhere to drop that means "out". The axis that always has room is the one
+across the list, so a row that is in a circuit is released from
+`restrictToVerticalAxis` for the duration of its drag, and only then: a plain
+reorder stays locked to the vertical, which keeps it precise.
 
-Three looks like a lot for one operation. It is deliberate: the first two are
-gestures, and a gesture that does not land leaves you stuck with no visible way
-out — which is exactly what happened with only the first, and then with only
-the first two. Ungroup is a plain labelled button on the block, so there is
-always something to press. It is also the operation people actually want after
-grouping two rows by accident.
+Dragging vertically clear of the block still works where there is room —
+`reconcileGroups` re-establishes the one-contiguous-run invariant after any
+reorder, so the longest run wins and a stranded member is detached. Swiping a
+row right does the same thing without picking it up. A circuit left with one
+member dissolves either way, since a circuit of one is just an exercise.
 
-A circuit left with one member dissolves either way, since a circuit of one is
-just an exercise.
+There is no button for either direction. Without a pointer both are reachable:
+pick a row up with Space, then `g` joins whatever is under it and `u` leaves
+the circuit — `u` because the keyboard has no sideways room either.
 
-Joining has no button, because a drag onto something always has a target.
-Without a pointer, joining and the drag route out are both still reachable:
-pick a row up with Space, arrow to a target and press `g` to join, or arrow
-clear of the block and drop to leave.
+## Why the drag handle waits, and why `tolerance` is enormous
+
+The pointer sensor arms on a hold (`{ delay: 120, tolerance: 400 }`) so a drag
+cannot start from a stray twitch while scrolling.
+
+`tolerance` looks wrong and is not. In dnd-kit it is an **abort** budget, not
+an activation threshold: moving further than it before the delay elapses
+cancels activation outright, and the press has to be released and repeated. A
+small value therefore makes a quick, confident grab feel broken — press,
+flick, nothing happens, press again — which is exactly how it felt at the 8 px
+it started at. Set high enough that a real gesture never trips it, the delay
+stays a delay and the drag simply begins wherever the pointer has got to.
 
 ## Where the + rows go
 

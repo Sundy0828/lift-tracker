@@ -6,10 +6,10 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 /**
- * The pointer sensor arms on a hold, not on distance, so a drag has to wait
- * with the button down before it moves. A move inside the hold cancels
- * activation — that is what leaves the horizontal swipe gesture free — so this
- * has to sit between mouse.down() and the first move.
+ * The pointer sensor arms on a hold, so a drag has to wait with the button
+ * down before the first move counts. Comfortably longer than the sensor's
+ * delay: a move before it elapses is simply ignored, and the drag would then
+ * start from the wrong place.
  */
 const DRAG_HOLD_MS = 260;
 
@@ -514,44 +514,101 @@ test.describe('leaving a circuit', () => {
   });
 });
 
-test.describe('ungrouping a circuit', () => {
-  test('one tap takes the block apart, whatever the member count', async ({ page }) => {
-    // The visible route out, and the only one that does not depend on a
-    // gesture landing.
+/**
+ * Picks `name` up by its handle and pulls it `dx` sideways, without releasing.
+ *
+ * The gesture for leaving a circuit. Sideways rather than clear of the block
+ * because a workout that is entirely one circuit has no outside to reach.
+ */
+async function dragSideways(page: Page, name: string, dx: number): Promise<void> {
+  const handle = page.getByRole('button', { name: new RegExp(`^Reorder or group ${name}$`, 'u') });
+  const from = await handle.boundingBox();
+  expect(from, `no box for ${name}`).not.toBeNull();
+  if (from === null) return;
+
+  const x = from.x + from.width / 2;
+  const y = from.y + from.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.waitForTimeout(DRAG_HOLD_MS);
+  await page.mouse.move(x + dx, y, { steps: 10 });
+}
+
+test.describe('dragging out of a circuit', () => {
+  test('a workout that is entirely one circuit can still be broken up', async ({ page }) => {
+    // The case that has no outside: two exercises, both members, so every
+    // reorder leaves them adjacent and still grouped.
     await signIn(page);
-    await createWorkout(page, 'Ungroup Workout');
+    await createWorkout(page, 'Pull Out Workout');
     await addExercise(page, 'pushups');
     await addExercise(page, 'crunches');
     await group(page, 'Crunches', 'Pushups', 2);
 
-    await page.getByRole('button', { name: /^Ungroup the circuit starting with/u }).click();
+    await dragSideways(page, 'Crunches', 120);
+    // The row says what releasing will do.
+    await expect(page.getByText('release to leave')).toBeVisible();
+    await page.mouse.up();
 
+    // A circuit of one is just an exercise, so the block dissolves.
     await expect(page.getByTestId('circuit-block')).toHaveCount(0);
-    // Nothing deleted — the exercises are just no longer a circuit.
     await expect(page.getByText('2 exercises')).toBeVisible();
     await expect(page.getByTestId('slot-name').filter({ hasText: 'Crunches' })).toHaveCount(1);
-    await expect(page.getByTestId('slot-name').filter({ hasText: 'Pushups' })).toHaveCount(1);
   });
 
-  test('it survives a reload, so it really was saved', async ({ page }) => {
+  test('pulling one member out leaves the rest of the circuit intact', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'Ungroup Persist Workout');
+    await buildWorkout(page, 'Pull One Workout');
     await group(page, 'Crunches', 'Pushups', 2);
     await group(page, 'Pullups', 'Crunches', 3);
+
+    await dragSideways(page, 'Pullups', 120);
+    await page.mouse.up();
+
+    await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
     await expect(page.getByTestId('circuit-block')).toHaveCount(1);
-
-    await page.getByRole('button', { name: /^Ungroup the circuit starting with/u }).click();
-    await expect(page.getByTestId('circuit-block')).toHaveCount(0);
-
-    await page.reload();
+    // Nothing was deleted — it is just no longer a member.
     await expect(page.getByText('4 exercises')).toBeVisible();
-    await expect(page.getByTestId('circuit-block')).toHaveCount(0);
   });
 
-  test('there is no Ungroup button without a circuit', async ({ page }) => {
+  test('a small sideways wobble still reorders rather than leaving', async ({ page }) => {
     await signIn(page);
-    await buildWorkout(page, 'No Ungroup Workout');
-    await expect(page.getByRole('button', { name: /^Ungroup/u })).toHaveCount(0);
+    await buildWorkout(page, 'Wobble Workout');
+    await group(page, 'Crunches', 'Pushups', 2);
+
+    await dragSideways(page, 'Crunches', 20);
+    await expect(page.getByText('release to leave')).toHaveCount(0);
+    await page.mouse.up();
+
+    await expect(page.getByTestId('circuit-block')).toHaveCount(1);
+  });
+
+  test('a row outside a circuit is not freed sideways', async ({ page }) => {
+    // Nothing to leave, so the drag stays on the vertical axis and the hint
+    // never appears.
+    await signIn(page);
+    await buildWorkout(page, 'No Pull Workout');
+
+    await dragSideways(page, 'Pushups', 120);
+    await expect(page.getByText('release to leave')).toHaveCount(0);
+    await page.mouse.up();
+
+    await expect(page.getByText('4 exercises')).toBeVisible();
+  });
+
+  test('the keyboard leaves with u, which needs no sideways room', async ({ page }) => {
+    await signIn(page);
+    await buildWorkout(page, 'Keyboard Leave Workout');
+    await group(page, 'Crunches', 'Pushups', 2);
+
+    await page.getByRole('button', { name: /^Reorder or group Crunches$/u }).focus();
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(120);
+    await page.keyboard.press('u');
+    await page.waitForTimeout(120);
+    await page.keyboard.press('Space');
+
+    await expect(page.getByTestId('circuit-block')).toHaveCount(0);
+    await expect(page.getByText('4 exercises')).toBeVisible();
   });
 });
 

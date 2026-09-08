@@ -75,6 +75,18 @@
   border-style: dashed;
 }
 
+/* Pulled clear of the block: releasing takes the row out of the circuit. */
+.row[data-leaving='true'] {
+  border-color: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-2));
+  border-style: dashed;
+  box-shadow: var(--mantine-shadow-md);
+}
+
+.leaveHint {
+  background: light-dark(var(--mantine-color-dark-6), var(--mantine-color-gray-3));
+  color: light-dark(var(--mantine-color-white), var(--mantine-color-black));
+}
+
 .groupHintPending {
   background: light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
   color: var(--mantine-color-dimmed);

@@ -3,6 +3,7 @@ declare const classes: {
   readonly row: string;
   readonly rowInner: string;
   readonly groupHint: string;
+  readonly leaveHint: string;
   readonly groupHintPending: string;
   readonly body: string;
   readonly handle: string;

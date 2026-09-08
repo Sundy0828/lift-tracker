@@ -650,19 +650,6 @@ export function unlink(slots: readonly ExerciseSlot[], slotId: string): Exercise
   return dissolveSingletons(slots.map((slot) => (slot.slotId === slotId ? detach(slot) : slot)));
 }
 
-/**
- * Dissolves a whole circuit, detaching every member.
- *
- * The counterpart to building one: `unlink` takes one row out, this takes the
- * block apart. Worth its own function because "undo this circuit" is the thing
- * people actually want after grouping two rows by accident, and doing it by
- * removing members one at a time is neither obvious nor, for a two-member
- * circuit, distinguishable from removing either one.
- */
-export function ungroup(slots: readonly ExerciseSlot[], groupId: string): ExerciseSlot[] {
-  return slots.map((slot) => (slot.supersetGroup === groupId ? detach(slot) : slot));
-}
-
 /** Group ids still in use by at least two slots. */
 export function activeGroupIds(slots: readonly ExerciseSlot[]): string[] {
   const counts = new Map<string, number>();

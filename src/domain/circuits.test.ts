@@ -21,7 +21,6 @@ import {
   isRestSlot,
   restSlotSeconds,
   totalSets,
-  ungroup,
   unlink,
   withGroupRounds,
 } from './workouts';
@@ -152,45 +151,6 @@ describe('unlink', () => {
     // unlink dissolves it, because a circuit of one is just an exercise.
     const out = unlink(circuit, 'b');
     expect(out.every((item) => item.supersetGroup === null)).toBe(true);
-  });
-});
-
-describe('ungroup', () => {
-  it('takes a whole circuit apart and restores every default rest', () => {
-    const circuit = linkToPrevious(linkToPrevious(base(), 'b', 'g1'), 'c', 'g1');
-    const slots = ungroup(circuit, 'g1');
-
-    expect(slots.every((item) => item.supersetGroup === null)).toBe(true);
-    for (const id of ['a', 'b', 'c']) {
-      expect(find(slots, id)?.prescription.restSeconds).toBeNull();
-    }
-  });
-
-  it('leaves other groups and loose slots alone', () => {
-    const two = linkToPrevious(linkToPrevious(base(), 'b', 'g1'), 'c', 'g2');
-    const slots = ungroup(two, 'g1');
-
-    expect(find(slots, 'a')?.supersetGroup).toBeNull();
-    expect(find(slots, 'b')?.supersetGroup).toBeNull();
-    expect(find(slots, 'warm')?.supersetGroup).toBeNull();
-  });
-
-  it('does nothing for an unknown group', () => {
-    const circuit = linkToPrevious(base(), 'b', 'g1');
-    expect(ungroup(circuit, 'nope')).toEqual(circuit);
-  });
-
-  it('keeps a rest row inside it a rest row, with its length', () => {
-    const withRest = insertSlotAfter(
-      linkToPrevious(base(), 'b', 'g1'),
-      'a',
-      createRestSlot('r1', 30),
-    );
-    const slots = ungroup(withRest, 'g1');
-    const rest = find(slots, 'r1');
-
-    expect(rest?.supersetGroup).toBeNull();
-    expect(restSlotSeconds(rest ?? createRestSlot('x', 0))).toBe(30);
   });
 });
 
