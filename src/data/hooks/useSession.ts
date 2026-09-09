@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { Session } from '@/domain/sessions';
 import { toSession } from '../converters/session';
 import { paths } from '../paths';
+import { releaseSync, reportSync } from '../sync';
 import { useAuth } from './useAuth';
 
 export type SessionState = {
@@ -33,17 +34,36 @@ export function useSession(sessionId: string | null): SessionState {
   useEffect(() => {
     if (uid === null || sessionId === null || key === null) return;
 
-    return onSnapshot(paths.session(uid, sessionId), { includeMetadataChanges: true }, (next) => {
-      setSnapshot({
-        key,
-        session: next.exists() ? toSession(next.id, next.data()) : null,
-        isPending: false,
-        hasPendingWrites: next.metadata.hasPendingWrites,
-        // A miss from the cache alone is not a miss: a session started on
-        // another device is absent locally until the first server snapshot.
-        notFound: !next.exists() && !next.metadata.fromCache,
-      });
-    });
+    const syncKey = `session:${key}`;
+
+    const unsubscribe = onSnapshot(
+      paths.session(uid, sessionId),
+      { includeMetadataChanges: true },
+      (next) => {
+        // The session document is the whole logged workout (§2.8), so this is
+        // the reading the chip is really about: every set typed offline is a
+        // pending write on this one document.
+        reportSync(syncKey, {
+          pending: next.metadata.hasPendingWrites,
+          fromCache: next.metadata.fromCache,
+        });
+
+        setSnapshot({
+          key,
+          session: next.exists() ? toSession(next.id, next.data()) : null,
+          isPending: false,
+          hasPendingWrites: next.metadata.hasPendingWrites,
+          // A miss from the cache alone is not a miss: a session started on
+          // another device is absent locally until the first server snapshot.
+          notFound: !next.exists() && !next.metadata.fromCache,
+        });
+      },
+    );
+
+    return () => {
+      unsubscribe();
+      releaseSync(syncKey);
+    };
   }, [uid, sessionId, key]);
 
   if (key === null || snapshot?.key !== key) return PENDING;
@@ -53,9 +73,16 @@ export function useSession(sessionId: string | null): SessionState {
 export type ActiveSessionState = {
   session: Session | null;
   isPending: boolean;
+  /**
+   * Active sessions *besides* the one returned. Normally zero; above zero
+   * means an earlier one was never finished or discarded, and saying so is
+   * better than resuming the newest and letting the rest surface one at a
+   * time over the following weeks.
+   */
+  strandedCount: number;
 };
 
-const ACTIVE_PENDING: ActiveSessionState = { session: null, isPending: true };
+const ACTIVE_PENDING: ActiveSessionState = { session: null, isPending: true, strandedCount: 0 };
 
 type ActiveSnapshot = ActiveSessionState & { uid: string };
 
@@ -67,7 +94,8 @@ type ActiveSnapshot = ActiveSessionState & { uid: string };
  * composite index for a list that is almost always one document long.
  *
  * There should only ever be one, but the newest wins if a crash left two
- * behind, and phase 5 owns the resume-or-discard path.
+ * behind — and `strandedCount` reports the others so Today can offer to clear
+ * them rather than hiding them.
  */
 export function useActiveSession(): ActiveSessionState {
   const { user } = useAuth();
@@ -80,7 +108,12 @@ export function useActiveSession(): ActiveSessionState {
     return onSnapshot(query(paths.sessions(uid), where('status', '==', 'active')), (next) => {
       const sessions = next.docs.map((document) => toSession(document.id, document.data()));
       sessions.sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
-      setSnapshot({ uid, session: sessions[0] ?? null, isPending: false });
+      setSnapshot({
+        uid,
+        session: sessions[0] ?? null,
+        isPending: false,
+        strandedCount: Math.max(0, sessions.length - 1),
+      });
     });
   }, [uid]);
 

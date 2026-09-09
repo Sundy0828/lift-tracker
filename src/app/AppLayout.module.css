@@ -65,3 +65,16 @@
   font-size: 20px;
   line-height: 1;
 }
+
+/* The syncing counterpart of `.offline`: same geometry, quieter colour. A
+   queue flushing is routine, so it must not look like a problem. */
+.syncing {
+  position: sticky;
+  top: 0;
+  z-index: 190;
+  padding: 4px var(--mantine-spacing-md);
+  text-align: center;
+  color: light-dark(var(--mantine-color-sky-9), var(--mantine-color-sky-1));
+  background: light-dark(var(--mantine-color-sky-1), var(--mantine-color-sky-9));
+  border-bottom: 1px solid light-dark(var(--mantine-color-sky-3), var(--mantine-color-sky-8));
+}

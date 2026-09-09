@@ -1,0 +1,12 @@
+/* Floats just above the bottom bar rather than in the document flow: the offer
+   must never reflow a screen someone is reading, and it has to clear both the
+   nav and the home-indicator inset. */
+.sheet {
+  position: fixed;
+  z-index: 205;
+  inset-inline: var(--mantine-spacing-md);
+  bottom: calc(72px + env(safe-area-inset-bottom) + var(--mantine-spacing-xs));
+  max-width: 480px;
+  margin-inline: auto;
+  background: var(--mantine-color-body);
+}

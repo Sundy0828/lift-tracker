@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { Workout, WorkoutVersion } from '@/domain/workouts';
 import { toWorkout, toWorkoutVersion } from '../converters/workout';
 import { paths } from '../paths';
+import { releaseSync, reportSync } from '../sync';
 import { useAuth } from './useAuth';
 
 export type WorkoutState = {
@@ -46,14 +47,30 @@ export function useWorkout(workoutId: string | null): WorkoutState {
   useEffect(() => {
     if (uid === null || workoutId === null || key === null) return;
 
-    return onSnapshot(paths.workout(uid, workoutId), { includeMetadataChanges: true }, (next) => {
-      setSnapshot({
-        key,
-        workout: next.exists() ? toWorkout(next.id, next.data()) : null,
-        hasPendingWrites: next.metadata.hasPendingWrites,
-        notFound: !next.exists() && !next.metadata.fromCache,
-      });
-    });
+    const syncKey = `workout:${key}`;
+
+    const unsubscribe = onSnapshot(
+      paths.workout(uid, workoutId),
+      { includeMetadataChanges: true },
+      (next) => {
+        reportSync(syncKey, {
+          pending: next.metadata.hasPendingWrites,
+          fromCache: next.metadata.fromCache,
+        });
+
+        setSnapshot({
+          key,
+          workout: next.exists() ? toWorkout(next.id, next.data()) : null,
+          hasPendingWrites: next.metadata.hasPendingWrites,
+          notFound: !next.exists() && !next.metadata.fromCache,
+        });
+      },
+    );
+
+    return () => {
+      unsubscribe();
+      releaseSync(syncKey);
+    };
   }, [uid, workoutId, key]);
 
   useEffect(() => {

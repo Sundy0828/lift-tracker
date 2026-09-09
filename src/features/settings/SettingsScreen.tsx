@@ -32,6 +32,7 @@ import { formatWeight, isUnit, stepFor } from '@/domain/units';
 import { PasswordRequirements } from '@/features/auth/PasswordRequirements';
 import { isAcceptable, problem as passwordProblem, SUMMARY } from '@/features/auth/password';
 import { SignInMethods } from './SignInMethods';
+import { SyncCard } from './SyncCard';
 
 // A load stored in lb, so switching the display unit visibly converts it.
 const SAMPLE = { value: 185, unit: 'lb' } as const;
@@ -281,6 +282,8 @@ export default function SettingsScreen() {
           />
         </Stack>
       </Card>
+
+      <SyncCard />
 
       <SignInMethods />
 

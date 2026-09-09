@@ -59,6 +59,7 @@ import { SessionClock } from './SessionClock';
 import { SessionMeta } from './SessionMeta';
 import { useRestTimer } from './useRestTimer';
 import { useSessionDraft } from './useSessionDraft';
+import { useWakeLock } from './useWakeLock';
 
 /**
  * The active-session screen: the hot path (§3).
@@ -103,6 +104,12 @@ export default function ActiveSessionScreen() {
   const [confirmingEarly, setConfirmingEarly] = useState(false);
 
   const { stats: workoutStats } = useWorkoutStats(session?.workoutId ?? null);
+
+  // Held for the whole live session, not just while resting: the gap between
+  // sets is exactly when the phone is face-up on a bench being ignored.
+  // Derived here rather than from `isDone` below, which is computed past the
+  // early returns and so cannot feed a hook.
+  useWakeLock(session?.status === 'active');
 
   /**
    * Tier 2 is subscribed for every exercise in the session, not only the

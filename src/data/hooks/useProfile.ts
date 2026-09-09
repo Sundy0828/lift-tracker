@@ -5,6 +5,7 @@ import { DEFAULT_PROFILE } from '@/domain/types';
 import { parseProfile } from '../converters/profile';
 import { initializeProfile } from '../mutations/profile';
 import { paths } from '../paths';
+import { releaseSync, reportSync } from '../sync';
 import { useAuth } from './useAuth';
 
 export type ProfileState = {
@@ -47,8 +48,14 @@ export function useProfile(): ProfileState {
     // new account gets its `createdAt` without an extra round trip and
     // without a blind write that could clobber stored preferences.
     let seeded = false;
+    const syncKey = `profile:${uid}`;
 
-    return onSnapshot(paths.user(uid), { includeMetadataChanges: true }, (next) => {
+    const unsubscribe = onSnapshot(paths.user(uid), { includeMetadataChanges: true }, (next) => {
+      reportSync(syncKey, {
+        pending: next.metadata.hasPendingWrites,
+        fromCache: next.metadata.fromCache,
+      });
+
       setSnapshot({
         uid,
         profile: parseProfile(next.data()),
@@ -62,6 +69,11 @@ export function useProfile(): ProfileState {
         void initializeProfile(uid);
       }
     });
+
+    return () => {
+      unsubscribe();
+      releaseSync(syncKey);
+    };
   }, [uid]);
 
   if (uid === null || snapshot?.uid !== uid) return PENDING;

@@ -4,6 +4,7 @@
 declare const classes: {
   readonly shell: string;
   readonly offline: string;
+  readonly syncing: string;
   readonly main: string;
   readonly nav: string;
   readonly navItem: string;

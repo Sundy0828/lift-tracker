@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { CustomExercise } from '@/domain/exercises';
 import { toCustomExercise } from '../converters/exercise';
 import { paths } from '../paths';
+import { releaseSync, reportSync } from '../sync';
 import { useAuth } from './useAuth';
 
 export type CustomExercisesState = {
@@ -27,10 +28,17 @@ export function useCustomExercises(): CustomExercisesState {
   useEffect(() => {
     if (uid === null) return;
 
-    return onSnapshot(
+    const syncKey = `custom-exercises:${uid}`;
+
+    const unsubscribe = onSnapshot(
       query(paths.customExercises(uid)),
       { includeMetadataChanges: true },
       (next) => {
+        reportSync(syncKey, {
+          pending: next.metadata.hasPendingWrites,
+          fromCache: next.metadata.fromCache,
+        });
+
         setSnapshot({
           uid,
           exercises: next.docs.map((document) => toCustomExercise(document.id, document.data())),
@@ -39,6 +47,11 @@ export function useCustomExercises(): CustomExercisesState {
         });
       },
     );
+
+    return () => {
+      unsubscribe();
+      releaseSync(syncKey);
+    };
   }, [uid]);
 
   if (uid === null || snapshot?.uid !== uid) return PENDING;

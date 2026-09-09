@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { Workout } from '@/domain/workouts';
 import { toWorkout } from '../converters/workout';
 import { paths } from '../paths';
+import { releaseSync, reportSync } from '../sync';
 import { useAuth } from './useAuth';
 
 export type WorkoutsState = {
@@ -24,10 +25,17 @@ export function useWorkouts(): WorkoutsState {
   useEffect(() => {
     if (uid === null) return;
 
-    return onSnapshot(
+    const syncKey = `workouts:${uid}`;
+
+    const unsubscribe = onSnapshot(
       query(paths.workouts(uid), orderBy('createdAt', 'desc')),
       { includeMetadataChanges: true },
       (next) => {
+        reportSync(syncKey, {
+          pending: next.metadata.hasPendingWrites,
+          fromCache: next.metadata.fromCache,
+        });
+
         setSnapshot({
           uid,
           workouts: next.docs.map((document) => toWorkout(document.id, document.data())),
@@ -36,6 +44,11 @@ export function useWorkouts(): WorkoutsState {
         });
       },
     );
+
+    return () => {
+      unsubscribe();
+      releaseSync(syncKey);
+    };
   }, [uid]);
 
   if (uid === null || snapshot?.uid !== uid) return PENDING;

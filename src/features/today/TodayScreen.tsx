@@ -1,11 +1,13 @@
 import { Alert, Badge, Button, Card, Group, Skeleton, Stack, Text, Title } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Link } from 'react-router';
 import { useAuth } from '@/data/hooks/useAuth';
 import { useProfile } from '@/data/hooks/useProfile';
 import { useActiveSession } from '@/data/hooks/useSession';
 import { useWorkouts } from '@/data/hooks/useWorkouts';
-import { newSessionId, startSession } from '@/data/mutations/sessions';
+import { abandonSession, newSessionId, startSession } from '@/data/mutations/sessions';
 import { localDateKey, sessionProgress } from '@/domain/sessions';
 import {
   estimateWorkoutSeconds,
@@ -27,8 +29,24 @@ export default function TodayScreen() {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const { workouts, isPending } = useWorkouts();
-  const { session: active, isPending: activePending } = useActiveSession();
+  const { session: active, isPending: activePending, strandedCount } = useActiveSession();
   const { profile } = useProfile();
+
+  const [armedToDiscard, setArmedToDiscard] = useState(false);
+
+  /**
+   * Clearing a session that was never finished.
+   *
+   * Not awaited, like every other write (§2.8): `abandonSession` marks the
+   * document abandoned in the local cache, the active-session listener drops
+   * it on the next snapshot, and this alert disappears — offline included.
+   */
+  const discard = (): void => {
+    if (uid === null || active === null) return;
+    setArmedToDiscard(false);
+    void abandonSession(uid, active.id);
+    notifications.show({ message: 'Session discarded', color: 'gray' });
+  };
 
   const startAdHoc = (): void => {
     if (uid === null) return;
@@ -61,9 +79,58 @@ export default function TodayScreen() {
               {sessionProgress(active.entries).total} sets
               {active.performedOn === localDateKey() ? '' : ` · ${active.performedOn}`}
             </Text>
-            <Button component={Link} to={`/session/${active.id}`} size="compact-sm">
-              Resume
-            </Button>
+            {/*
+              A session from a day that is not today is almost always a crash or
+              a closed tab rather than a workout still under way, so the reason
+              to discard is named rather than left to be worked out.
+            */}
+            {active.performedOn === localDateKey() ? null : (
+              <Text size="xs" c="dimmed">
+                Started on another day. Resume it if you are still going, or discard it — its
+                numbers are not counted in any history until it is finished.
+              </Text>
+            )}
+            {strandedCount === 0 ? null : (
+              <Text size="xs" c="dimmed">
+                {strandedCount === 1
+                  ? 'One older session was also never finished. Clearing this one will offer it next.'
+                  : `${String(strandedCount)} older sessions were also never finished. Clearing this one will offer them next.`}
+              </Text>
+            )}
+            <Group gap="xs">
+              <Button component={Link} to={`/session/${active.id}`} size="compact-sm">
+                Resume
+              </Button>
+              {/* Two taps, like the one on the session screen: this throws
+                  away logged sets and there is no undo. */}
+              {armedToDiscard ? (
+                <>
+                  <Button size="compact-sm" color="red" onClick={discard}>
+                    Discard for good
+                  </Button>
+                  <Button
+                    size="compact-sm"
+                    variant="subtle"
+                    onClick={() => {
+                      setArmedToDiscard(false);
+                    }}
+                  >
+                    Keep it
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="compact-sm"
+                  variant="subtle"
+                  color="red"
+                  onClick={() => {
+                    setArmedToDiscard(true);
+                  }}
+                >
+                  Discard
+                </Button>
+              )}
+            </Group>
           </Stack>
         </Alert>
       )}
