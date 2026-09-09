@@ -1,0 +1,36 @@
+name: Deploy to Firebase Hosting on PR
+
+on: pull_request
+
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  build_and_preview:
+    # Skip PRs from forks: they can't see repo secrets, so the deploy step would fail.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Set preview channel id from branch name
+        id: channel
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          slug=$(echo "$HEAD_REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' | cut -c1-63)
+          echo "id=$slug" >> "$GITHUB_OUTPUT"
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_LIFT_TRACKER_E4A9C }}'
+          projectId: lift-tracker-e4a9c
+          channelId: '${{ steps.channel.outputs.id }}'
+          expires: 30d
