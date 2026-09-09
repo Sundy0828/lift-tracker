@@ -14,6 +14,8 @@ import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@/data/hooks/useAuth';
 import { useEmulators } from '@/data/firebase';
+import { PasswordRequirements } from './PasswordRequirements';
+import { isAcceptable, problem as passwordProblem, SUMMARY } from './password';
 
 type Mode = 'sign-in' | 'register' | 'reset';
 
@@ -38,7 +40,7 @@ function messageFor(error: unknown): string {
       return 'That address already signs in with a password. Sign in that way, then link Google from Settings.';
     }
     if (code === 'too-many-requests') return 'Too many attempts. Wait a minute and try again.';
-    if (code === 'weak-password') return 'Use at least 6 characters.';
+    if (code === 'weak-password') return `That password was refused. ${SUMMARY}`;
     if (code === 'popup-closed-by-user') return 'Sign-in window closed.';
     if (code === 'network-request-failed') {
       return 'No connection. Signing in needs network the first time.';
@@ -117,6 +119,12 @@ export default function SignInScreen() {
               void requestReset();
               return;
             }
+            // Only on the way in does an old password get to be an old
+            // password: signing in must never re-judge one that already works.
+            if (mode === 'register' && !isAcceptable(password)) {
+              setError(passwordProblem(password));
+              return;
+            }
             void run(() =>
               mode === 'sign-in'
                 ? signInWithEmail(email, password)
@@ -145,6 +153,9 @@ export default function SignInScreen() {
             {mode === 'reset' ? null : (
               <PasswordInput
                 label="Password"
+                // Stated only where it is being chosen. On the way in it would
+                // be advice about a password that already exists.
+                description={mode === 'register' ? SUMMARY : undefined}
                 autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
                 required
                 value={password}
@@ -155,10 +166,12 @@ export default function SignInScreen() {
             )}
 
             {mode === 'register' ? (
-              <Text size="xs" c="dimmed">
-                At least 6 characters. We will email you a link to confirm the address before you
-                can start logging.
-              </Text>
+              <>
+                <PasswordRequirements password={password} />
+                <Text size="xs" c="dimmed">
+                  We will email you a link to confirm the address before you can start logging.
+                </Text>
+              </>
             ) : null}
 
             {resetSent ? (
@@ -174,7 +187,12 @@ export default function SignInScreen() {
               </Alert>
             )}
 
-            <Button type="submit" loading={busy} fullWidth>
+            <Button
+              type="submit"
+              loading={busy}
+              disabled={mode === 'register' && !isAcceptable(password)}
+              fullWidth
+            >
               {TITLES[mode]}
             </Button>
 
@@ -224,7 +242,8 @@ export default function SignInScreen() {
 
       {useEmulators ? (
         <Text size="xs" c="dimmed" ta="center">
-          Connected to the local Firebase emulators. Any email and a 6-character password work.
+          Connected to the local Firebase emulators. Any email works; the password policy is the
+          same as in production.
         </Text>
       ) : null}
     </Stack>

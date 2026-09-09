@@ -29,6 +29,8 @@ import {
 import { setDefaultRestSeconds, setDisplayUnit } from '@/data/mutations/profile';
 import { formatRestSeconds } from '@/domain/workouts';
 import { formatWeight, isUnit, stepFor } from '@/domain/units';
+import { PasswordRequirements } from '@/features/auth/PasswordRequirements';
+import { isAcceptable, problem as passwordProblem, SUMMARY } from '@/features/auth/password';
 import { SignInMethods } from './SignInMethods';
 
 // A load stored in lb, so switching the display unit visibly converts it.
@@ -132,6 +134,11 @@ export default function SettingsScreen() {
     if (user === null) return;
     if (nextPassword !== confirmPassword) {
       setPasswordError('The two new passwords do not match.');
+      return;
+    }
+    const rejected = passwordProblem(nextPassword);
+    if (rejected !== null) {
+      setPasswordError(rejected);
       return;
     }
 
@@ -397,7 +404,7 @@ export default function SettingsScreen() {
           />
           <PasswordInput
             label="New password"
-            description="At least 6 characters."
+            description={SUMMARY}
             autoComplete="new-password"
             value={nextPassword}
             disabled={passwordBusy}
@@ -405,6 +412,7 @@ export default function SettingsScreen() {
               setNextPassword(event.currentTarget.value);
             }}
           />
+          <PasswordRequirements password={nextPassword} />
           <PasswordInput
             label="New password again"
             autoComplete="new-password"
@@ -434,7 +442,7 @@ export default function SettingsScreen() {
               loading={passwordBusy}
               disabled={
                 currentPassword === '' ||
-                nextPassword.length < 6 ||
+                !isAcceptable(nextPassword) ||
                 nextPassword !== confirmPassword
               }
               onClick={() => {
@@ -532,7 +540,7 @@ function describePasswordError(cause: unknown): string {
   if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
     return 'That current password was not right.';
   }
-  if (code === 'auth/weak-password') return 'The new password needs at least 6 characters.';
+  if (code === 'auth/weak-password') return `That new password was refused. ${SUMMARY}`;
   if (code === 'auth/too-many-requests') return 'Too many attempts. Wait a minute and try again.';
   if (code === 'auth/network-request-failed') {
     return 'No connection, so nothing changed. Try again once you are back online.';

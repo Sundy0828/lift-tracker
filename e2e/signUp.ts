@@ -17,7 +17,9 @@ import { expect, type Page } from '@playwright/test';
 
 const AUTH_EMULATOR = 'http://127.0.0.1:9099';
 const PROJECT_ID = 'demo-lift-tracker';
-const PASSWORD = 'lifttracker';
+// Meets the account password policy (see `features/auth/password`): the
+// register form gates its own submit button, so a weak one would not sign up.
+const PASSWORD = 'Lift$Tracker1';
 
 type OobCode = {
   email: string;

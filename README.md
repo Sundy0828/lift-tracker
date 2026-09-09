@@ -42,8 +42,11 @@ npm run emulators   # terminal 1 — needs Java, see below
 npm run dev         # terminal 2 — http://localhost:5173
 ```
 
-Sign in with any email and a 6-character password; the Auth emulator accepts
-anything.
+Sign in with any email — the Auth emulator accepts anything. Passwords are the
+app's own rule, not the emulator's: 8–4096 characters with an uppercase letter,
+a lowercase letter, a number, and one special character from
+``^ $ * . [ ] { } ( ) ? " ! @ # % & / \ , > < ' : ; | _ ~ ` ``. Nothing else is
+allowed — see [`src/features/auth/password.ts`](src/features/auth/password.ts).
 
 ## Gates
 

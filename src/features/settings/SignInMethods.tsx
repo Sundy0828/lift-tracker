@@ -18,6 +18,8 @@ import {
   linkPassword,
   unlinkProvider,
 } from '@/data/mutations/account';
+import { PasswordRequirements } from '@/features/auth/PasswordRequirements';
+import { isAcceptable, SUMMARY } from '@/features/auth/password';
 
 /**
  * The ways into this account, and adding more of them.
@@ -47,7 +49,7 @@ function describe(cause: unknown): string {
   if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
     return 'The Google window closed before it finished. Nothing changed.';
   }
-  if (code === 'auth/weak-password') return 'The password needs at least 6 characters.';
+  if (code === 'auth/weak-password') return `That password was refused. ${SUMMARY}`;
   if (code === 'auth/requires-recent-login') {
     return 'For safety this needs a fresh sign-in. Sign out, sign back in, and try again.';
   }
@@ -252,7 +254,7 @@ export function SignInMethods() {
           </Text>
           <PasswordInput
             label="New password"
-            description="At least 6 characters."
+            description={SUMMARY}
             data-autofocus
             autoComplete="new-password"
             value={password}
@@ -261,6 +263,7 @@ export function SignInMethods() {
               setPassword(event.currentTarget.value);
             }}
           />
+          <PasswordRequirements password={password} />
           <PasswordInput
             label="New password again"
             autoComplete="new-password"
@@ -282,7 +285,7 @@ export function SignInMethods() {
             </Button>
             <Button
               loading={busy}
-              disabled={password.length < 6 || password !== confirm}
+              disabled={!isAcceptable(password) || password !== confirm}
               onClick={() => {
                 void submitPassword();
               }}

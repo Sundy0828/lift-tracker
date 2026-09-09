@@ -7,7 +7,7 @@
  * this script can write it, the app could have. No service-account key is
  * needed and none is stored.
  *
- *   npm run seed -- --email demo@example.com --password 'hunter2hunter2'
+ *   npm run seed -- --email demo@example.com --password 'Hunter2$Hunter2'
  *
  * Flags:
  *   --email / --password   the account to seed. Created if it does not exist.
