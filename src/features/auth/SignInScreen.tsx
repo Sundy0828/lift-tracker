@@ -15,7 +15,13 @@ import { Navigate, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@/data/hooks/useAuth';
 import { useEmulators } from '@/data/firebase';
 
-type Mode = 'sign-in' | 'register';
+type Mode = 'sign-in' | 'register' | 'reset';
+
+const TITLES: Record<Mode, string> = {
+  'sign-in': 'Sign in',
+  register: 'Create account',
+  reset: 'Send reset link',
+};
 
 function messageFor(error: unknown): string {
   if (error instanceof Error) {
@@ -26,6 +32,12 @@ function messageFor(error: unknown): string {
       return 'That email and password do not match.';
     }
     if (code === 'email-already-in-use') return 'That email already has an account.';
+    if (code === 'account-exists-with-different-credential') {
+      // Firebase keeps one account per address, so this is not a clash of two
+      // accounts — it is one account being reached by the wrong door.
+      return 'That address already signs in with a password. Sign in that way, then link Google from Settings.';
+    }
+    if (code === 'too-many-requests') return 'Too many attempts. Wait a minute and try again.';
     if (code === 'weak-password') return 'Use at least 6 characters.';
     if (code === 'popup-closed-by-user') return 'Sign-in window closed.';
     if (code === 'network-request-failed') {
@@ -37,7 +49,8 @@ function messageFor(error: unknown): string {
 }
 
 export default function SignInScreen() {
-  const { status, signInWithGoogle, signInWithEmail, registerWithEmail } = useAuth();
+  const { status, signInWithGoogle, signInWithEmail, registerWithEmail, sendPasswordReset } =
+    useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -46,11 +59,18 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetSent, setResetSent] = useState(false);
 
   if (status === 'signed-in') {
     const from = readFrom(location.state);
     return <Navigate to={from} replace />;
   }
+
+  const switchTo = (next: Mode): void => {
+    setMode(next);
+    setError(null);
+    setResetSent(false);
+  };
 
   const run = async (action: () => Promise<void>): Promise<void> => {
     setBusy(true);
@@ -58,6 +78,19 @@ export default function SignInScreen() {
     try {
       await action();
       await navigate(readFrom(location.state), { replace: true });
+    } catch (cause: unknown) {
+      setError(messageFor(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const requestReset = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      await sendPasswordReset(email);
+      setResetSent(true);
     } catch (cause: unknown) {
       setError(messageFor(cause));
     } finally {
@@ -80,6 +113,10 @@ export default function SignInScreen() {
         <form
           onSubmit={(event) => {
             event.preventDefault();
+            if (mode === 'reset') {
+              void requestReset();
+              return;
+            }
             void run(() =>
               mode === 'sign-in'
                 ? signInWithEmail(email, password)
@@ -88,6 +125,12 @@ export default function SignInScreen() {
           }}
         >
           <Stack>
+            {mode === 'reset' ? (
+              <Text size="sm" c="dimmed">
+                Enter the address you signed up with and we will send a link to set a new password.
+              </Text>
+            ) : null}
+
             <TextInput
               label="Email"
               type="email"
@@ -98,49 +141,83 @@ export default function SignInScreen() {
                 setEmail(event.currentTarget.value);
               }}
             />
-            <PasswordInput
-              label="Password"
-              autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
-              required
-              value={password}
-              onChange={(event) => {
-                setPassword(event.currentTarget.value);
-              }}
-            />
+
+            {mode === 'reset' ? null : (
+              <PasswordInput
+                label="Password"
+                autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
+                required
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.currentTarget.value);
+                }}
+              />
+            )}
+
+            {mode === 'register' ? (
+              <Text size="xs" c="dimmed">
+                At least 6 characters. We will email you a link to confirm the address before you
+                can start logging.
+              </Text>
+            ) : null}
+
+            {resetSent ? (
+              <Alert color="green" variant="light" role="status">
+                If that address has an account, a reset link is on its way. Check the spam folder if
+                it has not arrived in a minute.
+              </Alert>
+            ) : null}
+
             {error === null ? null : (
               <Alert color="red" variant="light" role="alert">
                 {error}
               </Alert>
             )}
+
             <Button type="submit" loading={busy} fullWidth>
-              {mode === 'sign-in' ? 'Sign in' : 'Create account'}
+              {TITLES[mode]}
             </Button>
+
+            {mode === 'sign-in' ? (
+              <Button
+                variant="subtle"
+                size="compact-sm"
+                type="button"
+                onClick={() => {
+                  switchTo('reset');
+                }}
+              >
+                Forgot your password?
+              </Button>
+            ) : null}
           </Stack>
         </form>
 
-        <Divider my="md" label="or" labelPosition="center" />
-
-        <Button
-          variant="default"
-          fullWidth
-          disabled={busy}
-          onClick={() => {
-            void run(signInWithGoogle);
-          }}
-        >
-          Continue with Google
-        </Button>
+        {mode === 'reset' ? null : (
+          <>
+            <Divider my="md" label="or" labelPosition="center" />
+            <Button
+              variant="default"
+              fullWidth
+              disabled={busy}
+              onClick={() => {
+                void run(signInWithGoogle);
+              }}
+            >
+              Continue with Google
+            </Button>
+          </>
+        )}
 
         <Group justify="center" mt="md">
           <Button
             variant="subtle"
             size="compact-sm"
             onClick={() => {
-              setMode(mode === 'sign-in' ? 'register' : 'sign-in');
-              setError(null);
+              switchTo(mode === 'sign-in' ? 'register' : 'sign-in');
             }}
           >
-            {mode === 'sign-in' ? 'Need an account?' : 'Already have an account?'}
+            {mode === 'sign-in' ? 'Need an account?' : 'Back to sign in'}
           </Button>
         </Group>
       </Card>

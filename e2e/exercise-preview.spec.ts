@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { signUp } from './signUp';
 
 /**
  * Picking an exercise for a workout previews the movement first: the catalog has
@@ -7,13 +8,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 async function signIn(page: Page): Promise<void> {
-  const email = `pv-${String(Date.now())}-${String(Math.floor(Math.random() * 100000))}@example.com`;
-  await page.goto('/sign-in');
-  await page.getByRole('button', { name: 'Need an account?' }).click();
-  await page.getByRole('textbox', { name: 'Email' }).fill(email);
-  await page.getByRole('textbox', { name: 'Password' }).fill('lifttracker');
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  await signUp(page, 'pv');
 }
 
 async function openPicker(page: Page): Promise<void> {

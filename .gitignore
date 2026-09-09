@@ -8,6 +8,9 @@ test-results
 .env*.local
 !.env
 .firebase
+# Admin SDK keys: unscoped, permanent access to the whole project.
+service-account*.json
+*-firebase-adminsdk-*.json
 firebase-debug.log
 firestore-debug.log
 ui-debug.log

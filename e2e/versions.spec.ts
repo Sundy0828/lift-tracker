@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { signUp } from './signUp';
 
 /**
  * Circuits, and discarding unpublished workout edits.
@@ -13,13 +14,7 @@ import { expect, test, type Page } from '@playwright/test';
 const DRAG_HOLD_MS = 260;
 
 async function signIn(page: Page): Promise<void> {
-  const email = `ci-${String(Date.now())}-${String(Math.floor(Math.random() * 100000))}@example.com`;
-  await page.goto('/sign-in');
-  await page.getByRole('button', { name: 'Need an account?' }).click();
-  await page.getByRole('textbox', { name: 'Email' }).fill(email);
-  await page.getByRole('textbox', { name: 'Password' }).fill('lifttracker');
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  await signUp(page, 'ci');
 }
 
 async function createWorkout(page: Page, name: string): Promise<void> {

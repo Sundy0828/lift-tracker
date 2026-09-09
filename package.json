@@ -17,7 +17,9 @@
     "deploy": "npm run build && firebase deploy --only hosting",
     "icons": "node scripts/generate-icons.ts",
     "catalog:update": "node --import ./scripts/ts-resolve.mjs scripts/build-catalog.ts",
-    "seed": "node --import ./scripts/ts-resolve.mjs scripts/seed-history.ts"
+    "seed": "node --import ./scripts/ts-resolve.mjs scripts/seed-history.ts",
+    "prune-users": "node --import ./scripts/ts-resolve.mjs scripts/prune-users.ts",
+    "verify-user": "node --import ./scripts/ts-resolve.mjs scripts/verify-user.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -50,6 +52,7 @@
     "eslint": "^10.9.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.6",
+    "firebase-admin": "^14.3.0",
     "firebase-tools": "^15.29.0",
     "globals": "^17.12.0",
     "jsdom": "^29.1.1",

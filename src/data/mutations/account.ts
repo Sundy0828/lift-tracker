@@ -1,8 +1,12 @@
 import {
   EmailAuthProvider,
   deleteUser,
+  linkWithCredential,
+  linkWithPopup,
   reauthenticateWithCredential,
   reauthenticateWithPopup,
+  unlink,
+  updatePassword,
   type User,
 } from 'firebase/auth';
 import {
@@ -75,6 +79,121 @@ export async function reauthenticate(user: User, password: string): Promise<void
   }
 
   throw new Error('This sign-in method cannot be re-verified in the app. Sign in again first.');
+}
+
+/**
+ * Changes the password, proving the old one first.
+ *
+ * Firebase would accept the change on a recent-enough sign-in without ever
+ * seeing the current password, which is how a borrowed unlocked phone becomes
+ * a stolen account. Requiring it is a deliberate extra step, and it doubles as
+ * the recency proof Firebase wants anyway.
+ *
+ * Google accounts have no password to change; the caller hides this entirely
+ * for them rather than failing here.
+ */
+export async function changePassword(
+  user: User,
+  currentPassword: string,
+  nextPassword: string,
+): Promise<void> {
+  if (reauthMethod(user) !== 'password') {
+    throw new Error('This account signs in with Google, so it has no password to change.');
+  }
+  await reauthenticate(user, currentPassword);
+  await updatePassword(user, nextPassword);
+}
+
+// --- Linking sign-in methods ---------------------------------------------
+
+export const GOOGLE_PROVIDER = 'google.com';
+export const PASSWORD_PROVIDER = 'password';
+
+export type SignInMethods = {
+  google: boolean;
+  password: boolean;
+  /** Every provider on the account, including any this app does not offer. */
+  all: string[];
+};
+
+/**
+ * Which ways this account can sign in.
+ *
+ * One account, several doors. Firebase keys an account on its email, so
+ * linking Google to a password account does not merge two accounts — it adds a
+ * second way into the one that already holds all the training data. That is
+ * exactly what makes it safe to offer.
+ */
+export function signInMethodsOf(user: User): SignInMethods {
+  const all = user.providerData.map((entry) => entry.providerId);
+  return {
+    google: all.includes(GOOGLE_PROVIDER),
+    password: all.includes(PASSWORD_PROVIDER),
+    all,
+  };
+}
+
+/**
+ * Retries an operation once, after re-proving the sign-in.
+ *
+ * Firebase guards account-shape changes on a recent sign-in, and "recent" runs
+ * out on its own after a while — so the first attempt failing that way is
+ * routine, not an error worth showing anyone. `password` is only consulted for
+ * a password account; a Google one re-proves through a popup.
+ */
+async function withFreshLogin<T>(
+  user: User,
+  password: string,
+  action: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await action();
+  } catch (cause) {
+    const code = typeof cause === 'object' && cause !== null && 'code' in cause ? cause.code : null;
+    if (code !== 'auth/requires-recent-login') throw cause;
+    await reauthenticate(user, password);
+    return action();
+  }
+}
+
+/** Adds Google as a way into this account. Opens Google's own popup. */
+export async function linkGoogle(user: User): Promise<void> {
+  await linkWithPopup(user, googleProvider);
+}
+
+/**
+ * Adds a password to an account that signs in with Google.
+ *
+ * The address is taken from the account rather than asked for: a second
+ * address here would be a second account, which is the opposite of linking.
+ */
+export async function linkPassword(user: User, password: string): Promise<void> {
+  if (user.email === null || user.email === '') {
+    throw new Error('This account has no email address to attach a password to.');
+  }
+  const credential = EmailAuthProvider.credential(user.email, password);
+  // The empty string is the reauth password: a Google account has none, and
+  // this path is only reachable for one.
+  await withFreshLogin(user, '', () => linkWithCredential(user, credential));
+}
+
+/**
+ * Removes a sign-in method, refusing to remove the last one.
+ *
+ * Unlinking the only provider leaves an account nobody can ever sign into
+ * again — the data intact and permanently unreachable, which is the same
+ * failure as deleting a login before its documents.
+ */
+export async function unlinkProvider(
+  user: User,
+  providerId: string,
+  password: string,
+): Promise<void> {
+  const methods = signInMethodsOf(user);
+  if (methods.all.length <= 1) {
+    throw new Error('This is the only way into the account, so it cannot be removed.');
+  }
+  await withFreshLogin(user, password, () => unlink(user, providerId));
 }
 
 async function refsIn(source: CollectionReference): Promise<DocumentReference[]> {

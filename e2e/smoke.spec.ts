@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { signUp } from './signUp';
 
 test.describe('phase 0 foundation', () => {
   test('an unauthenticated visit redirects to sign-in', async ({ page }) => {
@@ -37,16 +38,7 @@ test.describe('phase 0 foundation', () => {
   });
 
   test('sign-in, then the unit toggle persists across a reload', async ({ page }) => {
-    const email = `phase0-${String(Date.now())}@example.com`;
-
-    await page.goto('/sign-in');
-    await page.getByRole('button', { name: 'Need an account?' }).click();
-    await page.getByRole('textbox', { name: 'Email' }).fill(email);
-    // getByLabel('Password') would also match Mantine's visibility toggle.
-    await page.getByRole('textbox', { name: 'Password' }).fill('lifttracker');
-    await page.getByRole('button', { name: 'Create account' }).click();
-
-    await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+    await signUp(page, 'phase0');
 
     await page.getByRole('link', { name: 'Settings' }).click();
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
@@ -69,14 +61,8 @@ test.describe('phase 0 foundation', () => {
   test('the default rest time can be set and persists across a reload', async ({ page }) => {
     // Stored at users/{uid}.defaultRestSeconds, and the prescription editor
     // names it as the fallback for an exercise with no rest of its own.
-    const email = `rest-${String(Date.now())}@example.com`;
 
-    await page.goto('/sign-in');
-    await page.getByRole('button', { name: 'Need an account?' }).click();
-    await page.getByRole('textbox', { name: 'Email' }).fill(email);
-    await page.getByRole('textbox', { name: 'Password' }).fill('lifttracker');
-    await page.getByRole('button', { name: 'Create account' }).click();
-    await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+    await signUp(page, 'rest');
 
     await page.goto('/settings');
     await expect(page.getByText('Default rest')).toBeVisible();

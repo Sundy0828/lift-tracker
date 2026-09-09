@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { signUp } from './signUp';
 
 /**
  * Phase 1 acceptance: searching 800+ bundled exercises is instant, and a
@@ -6,13 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 async function signIn(page: Page): Promise<void> {
-  const email = `ex-${String(Date.now())}-${String(Math.floor(Math.random() * 10000))}@example.com`;
-  await page.goto('/sign-in');
-  await page.getByRole('button', { name: 'Need an account?' }).click();
-  await page.getByRole('textbox', { name: 'Email' }).fill(email);
-  await page.getByRole('textbox', { name: 'Password' }).fill('lifttracker');
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  await signUp(page, 'ex');
 }
 
 async function openExercises(page: Page): Promise<void> {

@@ -20,10 +20,16 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '@/data/hooks/useAuth';
 import { useProfile } from '@/data/hooks/useProfile';
-import { deleteAccount, deleteAllData, reauthMethod } from '@/data/mutations/account';
+import {
+  changePassword,
+  deleteAccount,
+  deleteAllData,
+  reauthMethod,
+} from '@/data/mutations/account';
 import { setDefaultRestSeconds, setDisplayUnit } from '@/data/mutations/profile';
 import { formatRestSeconds } from '@/domain/workouts';
 import { formatWeight, isUnit, stepFor } from '@/domain/units';
+import { SignInMethods } from './SignInMethods';
 
 // A load stored in lb, so switching the display unit visibly converts it.
 const SAMPLE = { value: 185, unit: 'lb' } as const;
@@ -65,7 +71,8 @@ export default function SettingsScreen() {
   // sign-in. Wiping data needs no reauthentication — Firestore has no recency
   // rule, and pretending otherwise would just train people to retype a
   // password for something that never needed one.
-  const method = user === null || pending !== 'account' ? 'unsupported' : reauthMethod(user);
+  const signInMethod = user === null ? 'unsupported' : reauthMethod(user);
+  const method = pending === 'account' ? signInMethod : 'unsupported';
   const needsPassword = method === 'password';
 
   const closePending = (): void => {
@@ -103,6 +110,50 @@ export default function SettingsScreen() {
       setBusy(false);
       setError(describeDeleteError(cause));
     }
+  };
+
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [nextPassword, setNextPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  const closePasswordChange = (): void => {
+    if (passwordBusy) return;
+    setChangingPassword(false);
+    setCurrentPassword('');
+    setNextPassword('');
+    setConfirmPassword('');
+    setPasswordError(null);
+  };
+
+  const runPasswordChange = async (): Promise<void> => {
+    if (user === null) return;
+    if (nextPassword !== confirmPassword) {
+      setPasswordError('The two new passwords do not match.');
+      return;
+    }
+
+    setPasswordBusy(true);
+    setPasswordError(null);
+    try {
+      await changePassword(user, currentPassword, nextPassword);
+      setPasswordBusy(false);
+      closePasswordChangeAfterSuccess();
+    } catch (cause) {
+      setPasswordBusy(false);
+      setPasswordError(describePasswordError(cause));
+    }
+  };
+
+  const closePasswordChangeAfterSuccess = (): void => {
+    setChangingPassword(false);
+    setCurrentPassword('');
+    setNextPassword('');
+    setConfirmPassword('');
+    setPasswordError(null);
+    setDone('Password changed. The next sign-in will use the new one.');
   };
 
   const changeUnit = (value: string): void => {
@@ -224,12 +275,29 @@ export default function SettingsScreen() {
         </Stack>
       </Card>
 
+      <SignInMethods />
+
       <Card withBorder>
         <Stack gap="sm">
           <Text fw={600}>Account</Text>
           <Text size="sm" c="dimmed">
             {user?.email ?? user?.displayName ?? 'Signed in'}
           </Text>
+          {signInMethod === 'password' ? (
+            <Button
+              variant="default"
+              onClick={() => {
+                setDone(null);
+                setChangingPassword(true);
+              }}
+            >
+              Change password
+            </Button>
+          ) : (
+            <Text size="xs" c="dimmed">
+              Signed in with Google, so there is no password here to change — Google holds it.
+            </Text>
+          )}
           <Button
             variant="light"
             onClick={() => {
@@ -309,6 +377,77 @@ export default function SettingsScreen() {
       </Card>
 
       <Modal
+        opened={changingPassword}
+        onClose={closePasswordChange}
+        title="Change password"
+        closeOnClickOutside={!passwordBusy}
+        closeOnEscape={!passwordBusy}
+        withCloseButton={!passwordBusy}
+      >
+        <Stack>
+          <PasswordInput
+            label="Current password"
+            data-autofocus
+            autoComplete="current-password"
+            value={currentPassword}
+            disabled={passwordBusy}
+            onChange={(event) => {
+              setCurrentPassword(event.currentTarget.value);
+            }}
+          />
+          <PasswordInput
+            label="New password"
+            description="At least 6 characters."
+            autoComplete="new-password"
+            value={nextPassword}
+            disabled={passwordBusy}
+            onChange={(event) => {
+              setNextPassword(event.currentTarget.value);
+            }}
+          />
+          <PasswordInput
+            label="New password again"
+            autoComplete="new-password"
+            value={confirmPassword}
+            disabled={passwordBusy}
+            error={
+              confirmPassword !== '' && confirmPassword !== nextPassword
+                ? 'These do not match.'
+                : null
+            }
+            onChange={(event) => {
+              setConfirmPassword(event.currentTarget.value);
+            }}
+          />
+
+          {passwordError === null ? null : (
+            <Alert variant="light" color="red" title="Password not changed">
+              <Text size="sm">{passwordError}</Text>
+            </Alert>
+          )}
+
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closePasswordChange} disabled={passwordBusy}>
+              Cancel
+            </Button>
+            <Button
+              loading={passwordBusy}
+              disabled={
+                currentPassword === '' ||
+                nextPassword.length < 6 ||
+                nextPassword !== confirmPassword
+              }
+              onClick={() => {
+                void runPasswordChange();
+              }}
+            >
+              Change password
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
         opened={pending !== null}
         onClose={closePending}
         title={pending === 'account' ? 'Delete account' : 'Delete all data'}
@@ -384,6 +523,21 @@ export default function SettingsScreen() {
 
 function asColorScheme(value: string): 'auto' | 'light' | 'dark' {
   return value === 'light' || value === 'dark' ? value : 'auto';
+}
+
+/** Why a password change failed, in terms of what to do about it. */
+function describePasswordError(cause: unknown): string {
+  const code = typeof cause === 'object' && cause !== null && 'code' in cause ? cause.code : null;
+
+  if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+    return 'That current password was not right.';
+  }
+  if (code === 'auth/weak-password') return 'The new password needs at least 6 characters.';
+  if (code === 'auth/too-many-requests') return 'Too many attempts. Wait a minute and try again.';
+  if (code === 'auth/network-request-failed') {
+    return 'No connection, so nothing changed. Try again once you are back online.';
+  }
+  return cause instanceof Error ? cause.message : 'Something went wrong. Nothing changed.';
 }
 
 /**

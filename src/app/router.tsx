@@ -1,3 +1,4 @@
+import type { ComponentType } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router';
 import { AppLayout } from './AppLayout';
 import { RequireAuth } from './RequireAuth';
@@ -7,15 +8,28 @@ import { RouteError } from './RouteError';
  * Every feature area is a lazy route so workout editing, history, and sharing stay
  * out of the entry bundle (§3). `lazy` resolves the module on navigation and
  * the layout's <Suspense> covers the gap.
+ *
+ * Each screen carries its own `errorElement`. Without one the nearest boundary
+ * is the layout route's, so a single failed chunk would replace the whole
+ * shell — bottom navigation included — and leave no way out but the back
+ * button. Owned by the screen, the error renders inside the Outlet and the app
+ * around it keeps working.
  */
+
+type Load = () => Promise<{ default: ComponentType }>;
+
+/** A lazy screen that fails inside the shell rather than taking it down. */
+function screen(load: Load): Pick<RouteObject, 'lazy' | 'errorElement'> {
+  return {
+    lazy: async () => ({ Component: (await load()).default }),
+    errorElement: <RouteError />,
+  };
+}
+
 const routes: RouteObject[] = [
   {
     path: '/sign-in',
-    lazy: async () => {
-      const { default: Component } = await import('@/features/auth/SignInScreen');
-      return { Component };
-    },
-    errorElement: <RouteError />,
+    ...screen(() => import('@/features/auth/SignInScreen')),
   },
   {
     path: '/',
@@ -26,88 +40,42 @@ const routes: RouteObject[] = [
     ),
     errorElement: <RouteError />,
     children: [
-      {
-        index: true,
-        lazy: async () => {
-          const { default: Component } = await import('@/features/today/TodayScreen');
-          return { Component };
-        },
-      },
-      {
-        path: 'exercises',
-        lazy: async () => {
-          const { default: Component } = await import('@/features/exercises/ExercisesScreen');
-          return { Component };
-        },
-      },
-      {
-        path: 'workouts',
-        lazy: async () => {
-          const { default: Component } = await import('@/features/workouts/WorkoutsScreen');
-          return { Component };
-        },
-      },
+      { index: true, ...screen(() => import('@/features/today/TodayScreen')) },
+      { path: 'exercises', ...screen(() => import('@/features/exercises/ExercisesScreen')) },
+      { path: 'workouts', ...screen(() => import('@/features/workouts/WorkoutsScreen')) },
       {
         path: 'workouts/:workoutId',
-        lazy: async () => {
-          const { default: Component } = await import('@/features/workouts/WorkoutEditorScreen');
-          return { Component };
-        },
+        ...screen(() => import('@/features/workouts/WorkoutEditorScreen')),
       },
       {
         // Starts a session and redirects; its own route because it has to load
         // the workout's version history first (see StartSessionScreen).
         path: 'session/start/:workoutId',
-        lazy: async () => {
-          const { default: Component } = await import('@/features/logging/StartSessionScreen');
-          return { Component };
-        },
+        ...screen(() => import('@/features/logging/StartSessionScreen')),
       },
       {
         path: 'session/:sessionId',
-        lazy: async () => {
-          const { default: Component } = await import('@/features/logging/ActiveSessionScreen');
-          return { Component };
-        },
+        ...screen(() => import('@/features/logging/ActiveSessionScreen')),
       },
-      {
-        path: 'history',
-        lazy: async () => {
-          const { default: Component } = await import('@/features/history/HistoryScreen');
-          return { Component };
-        },
-      },
+      { path: 'history', ...screen(() => import('@/features/history/HistoryScreen')) },
       {
         // The archaeology view: one past session against the workout snapshot
         // it was performed against.
         path: 'history/session/:sessionId',
-        lazy: async () => {
-          const { default: Component } = await import('@/features/history/SessionDetailScreen');
-          return { Component };
-        },
+        ...screen(() => import('@/features/history/SessionDetailScreen')),
       },
       {
         // Its own route because it is the one screen that queries `sessions`
         // directly, and it must stay off the logging path (§2.6).
         path: 'history/exercise/:exerciseId',
-        lazy: async () => {
-          const { default: Component } = await import('@/features/history/ExerciseHistoryScreen');
-          return { Component };
-        },
+        ...screen(() => import('@/features/history/ExerciseHistoryScreen')),
       },
+      { path: 'settings', ...screen(() => import('@/features/settings/SettingsScreen')) },
       {
-        path: 'settings',
-        lazy: async () => {
-          const { default: Component } = await import('@/features/settings/SettingsScreen');
-          return { Component };
-        },
-      },
-      {
+        // A real 404. This used to render Today, which quietly turned a
+        // mistyped or stale link into "your session is missing".
         path: '*',
-        lazy: async () => {
-          const { default: Component } = await import('@/features/today/TodayScreen');
-          return { Component };
-        },
+        ...screen(() => import('@/features/errors/NotFoundScreen')),
       },
     ],
   },

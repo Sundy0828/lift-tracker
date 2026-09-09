@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { signUp } from './signUp';
 
 /**
  * Building a circuit by dragging, leaving one by dragging out, adding an
@@ -14,13 +15,7 @@ import { expect, test, type Page } from '@playwright/test';
 const DRAG_HOLD_MS = 260;
 
 async function signIn(page: Page): Promise<void> {
-  const email = `cg-${String(Date.now())}-${String(Math.floor(Math.random() * 100000))}@example.com`;
-  await page.goto('/sign-in');
-  await page.getByRole('button', { name: 'Need an account?' }).click();
-  await page.getByRole('textbox', { name: 'Email' }).fill(email);
-  await page.getByRole('textbox', { name: 'Password' }).fill('lifttracker');
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  await signUp(page, 'cg');
 }
 
 async function addExercise(page: Page, query: string): Promise<void> {
