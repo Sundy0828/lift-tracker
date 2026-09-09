@@ -78,6 +78,24 @@ const routes: RouteObject[] = [
         },
       },
       {
+        // The archaeology view: one past session against the workout snapshot
+        // it was performed against.
+        path: 'history/session/:sessionId',
+        lazy: async () => {
+          const { default: Component } = await import('@/features/history/SessionDetailScreen');
+          return { Component };
+        },
+      },
+      {
+        // Its own route because it is the one screen that queries `sessions`
+        // directly, and it must stay off the logging path (§2.6).
+        path: 'history/exercise/:exerciseId',
+        lazy: async () => {
+          const { default: Component } = await import('@/features/history/ExerciseHistoryScreen');
+          return { Component };
+        },
+      },
+      {
         path: 'settings',
         lazy: async () => {
           const { default: Component } = await import('@/features/settings/SettingsScreen');

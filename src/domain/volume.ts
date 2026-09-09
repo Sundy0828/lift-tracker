@@ -1,5 +1,7 @@
 import type { BaseMuscleGroup, MuscleGroup } from './muscles';
 import { baseMuscleOf } from './muscles';
+import type { Session, SessionEntry } from './sessions';
+import { exerciseEntries, workedSets } from './sessions';
 import type { WorkoutBody } from './workouts';
 
 /**
@@ -32,6 +34,20 @@ function add(into: Map<MuscleGroup, number>, muscle: MuscleGroup, amount: number
   into.set(muscle, (into.get(muscle) ?? 0) + amount);
 }
 
+/** Credits `sets` sets of one exercise to the muscles it works. */
+function credit(totals: Map<MuscleGroup, number>, exercise: ExerciseMuscles, sets: number): void {
+  if (sets <= 0) return;
+
+  for (const muscle of new Set(exercise.primaryMuscles)) {
+    add(totals, muscle, sets * PRIMARY_WEIGHT);
+  }
+  // A muscle listed as both primary and secondary counts once, as primary.
+  const primary = new Set<MuscleGroup>(exercise.primaryMuscles);
+  for (const muscle of new Set(exercise.secondaryMuscles)) {
+    if (!primary.has(muscle)) add(totals, muscle, sets * SECONDARY_WEIGHT);
+  }
+}
+
 /**
  * Volume for one workout, at the finest muscle granularity available.
  *
@@ -53,16 +69,52 @@ export function workoutVolume(workout: WorkoutBody, lookup: MuscleLookup): Volum
     const exercise = lookup(slot.exerciseId);
     if (exercise === null) continue;
 
-    const sets = slot.prescription.sets;
-    if (sets <= 0) continue;
+    credit(totals, exercise, slot.prescription.sets);
+  }
 
-    for (const muscle of new Set(exercise.primaryMuscles)) {
-      add(totals, muscle, sets * PRIMARY_WEIGHT);
-    }
-    // A muscle listed as both primary and secondary counts once, as primary.
-    const primary = new Set<MuscleGroup>(exercise.primaryMuscles);
-    for (const muscle of new Set(exercise.secondaryMuscles)) {
-      if (!primary.has(muscle)) add(totals, muscle, sets * SECONDARY_WEIGHT);
+  return totals;
+}
+
+/**
+ * Volume for one *logged* session — the same math over sets that were done
+ * rather than sets that were prescribed.
+ *
+ * This is the honest number, and the difference matters: a workout prescribing
+ * four sets of squats that you cut to two should shade the quads for two. Sets
+ * are counted by `workedSets`, so a skipped set contributes nothing, a warmup
+ * contributes nothing, and a bodyweight set with reps but no load still counts
+ * — it was work.
+ */
+export function sessionVolume(
+  entries: readonly SessionEntry[],
+  lookup: MuscleLookup,
+): VolumeByMuscle {
+  const totals = new Map<MuscleGroup, number>();
+
+  for (const entry of exerciseEntries(entries)) {
+    const exercise = lookup(entry.exerciseId);
+    if (exercise === null) continue;
+
+    credit(totals, exercise, workedSets(entry.sets).length);
+  }
+
+  return totals;
+}
+
+/**
+ * Volume across several sessions — what a weekly muscle map is banded on.
+ *
+ * Rolled up from the sessions actually logged rather than from a stored
+ * intention, because there is no plan above a workout to state an intention
+ * and, even if there were, the only weekly number that is true is the one you
+ * did. Band it with `WEEKLY_STOPS`.
+ */
+export function totalVolume(sessions: readonly Session[], lookup: MuscleLookup): VolumeByMuscle {
+  const totals = new Map<MuscleGroup, number>();
+
+  for (const session of sessions) {
+    for (const [muscle, amount] of sessionVolume(session.entries, lookup)) {
+      add(totals, muscle, amount);
     }
   }
 

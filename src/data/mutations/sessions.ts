@@ -2,7 +2,7 @@ import { Timestamp, serverTimestamp, setDoc, writeBatch } from 'firebase/firesto
 import type { ExerciseStats, PersonalRecord } from '@/domain/overlay';
 import { buildStatsUpdate } from '@/domain/overlay';
 import type { NewSessionInput, Session, SessionEntry } from '@/domain/sessions';
-import { newSession } from '@/domain/sessions';
+import { newSession, sessionExerciseIds } from '@/domain/sessions';
 import type { Weight } from '@/domain/types';
 import { db } from '../firestore';
 import { paths } from '../paths';
@@ -35,6 +35,7 @@ function toDocument(session: Session): Record<string, unknown> {
     startedAt: session.startedAt === null ? null : Timestamp.fromDate(new Date(session.startedAt)),
     completedAt: null,
     entries: session.entries,
+    exerciseIds: sessionExerciseIds(session.entries),
     groupRest: session.groupRest,
     bodyweight: session.bodyweight,
     notes: session.notes,
@@ -71,7 +72,7 @@ export function saveSessionEntries(
 ): Promise<void> {
   return setDoc(
     paths.session(uid, sessionId),
-    { entries, updatedAt: serverTimestamp() },
+    { entries, exerciseIds: sessionExerciseIds(entries), updatedAt: serverTimestamp() },
     { merge: true },
   );
 }
@@ -146,6 +147,7 @@ export function completeSession(
       status: 'completed',
       completedAt: Timestamp.fromDate(new Date(completedAt)),
       entries: session.entries,
+      exerciseIds: sessionExerciseIds(session.entries),
       performedOn: session.performedOn,
       updatedAt: serverTimestamp(),
     },

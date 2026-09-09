@@ -23,6 +23,9 @@ export const paths = {
     doc(db, 'users', uid, 'workouts', workoutId),
   workoutVersions: (uid: string, workoutId: string): CollectionReference =>
     collection(db, 'users', uid, 'workouts', workoutId, 'versions'),
+  /** The version number *is* the document id, so an old session is one read. */
+  workoutVersion: (uid: string, workoutId: string, versionNumber: number): DocumentReference =>
+    doc(db, 'users', uid, 'workouts', workoutId, 'versions', String(versionNumber)),
   sessions: (uid: string): CollectionReference => collection(db, 'users', uid, 'sessions'),
   session: (uid: string, sessionId: string): DocumentReference =>
     doc(db, 'users', uid, 'sessions', sessionId),

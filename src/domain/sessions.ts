@@ -412,6 +412,32 @@ export function performedSets(sets: readonly LoggedSet[]): LoggedSet[] {
 }
 
 /**
+ * Sets that were *done*, which is a looser bar than sets that can be scored.
+ *
+ * A set counts here once it has reps in it or was ticked complete, even with
+ * no load — a set of pull-ups is work whether or not a number was typed into
+ * the weight box. `performedSets` stays stricter because e1RM, deltas and PRs
+ * genuinely cannot be computed without a load; but counting sets, and shading
+ * a muscle for having been trained, only need to know the set happened.
+ */
+export function workedSets(sets: readonly LoggedSet[]): LoggedSet[] {
+  return workingSets(sets).filter((set) => set.reps !== null || set.completedAt !== null);
+}
+
+/**
+ * Every exercise the session touched, de-duplicated.
+ *
+ * Denormalised onto the session document so one lift's history is an
+ * `array-contains` query rather than a scan of every session ever logged
+ * (§2.6: deeper history comes from querying `sessions`, lazily). Occurrence
+ * indices are deliberately dropped — the query asks "did this session include
+ * bench", and the split into occurrences is the overlay's business.
+ */
+export function sessionExerciseIds(entries: readonly SessionEntry[]): string[] {
+  return [...new Set(exerciseEntries(entries).map((entry) => entry.exerciseId))].sort();
+}
+
+/**
  * How a logged set landed: whether it is even usable, and if so how it did
  * against what was prescribed.
  *

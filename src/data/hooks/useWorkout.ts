@@ -80,3 +80,58 @@ export function useWorkout(workoutId: string | null): WorkoutState {
     notFound: snapshot.notFound,
   };
 }
+
+export type WorkoutVersionState = {
+  version: WorkoutVersion | null;
+  isPending: boolean;
+  /** The snapshot is genuinely absent, not merely uncached. */
+  notFound: boolean;
+};
+
+const VERSION_PENDING: WorkoutVersionState = { version: null, isPending: true, notFound: false };
+const VERSION_NONE: WorkoutVersionState = { version: null, isPending: false, notFound: true };
+
+/**
+ * One immutable snapshot, by number — the archaeology view's authority.
+ *
+ * A session records which version it was performed against, and history
+ * renders it against *that*, never the live workout (§2.5). Reading the
+ * workout instead would show week 1 under week 3's exercises, which is the
+ * exact failure the versioning exists to prevent.
+ */
+export function useWorkoutVersion(
+  workoutId: string | null,
+  versionNumber: number | null,
+): WorkoutVersionState {
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+  const key =
+    uid === null || workoutId === null || versionNumber === null
+      ? null
+      : `${uid}/${workoutId}/${String(versionNumber)}`;
+
+  const [snapshot, setSnapshot] = useState<(WorkoutVersionState & { key: string }) | null>(null);
+
+  useEffect(() => {
+    if (uid === null || workoutId === null || versionNumber === null || key === null) return;
+
+    return onSnapshot(
+      paths.workoutVersion(uid, workoutId, versionNumber),
+      { includeMetadataChanges: true },
+      (next) => {
+        setSnapshot({
+          key,
+          version: next.exists() ? toWorkoutVersion(next.id, next.data()) : null,
+          isPending: false,
+          notFound: !next.exists() && !next.metadata.fromCache,
+        });
+      },
+    );
+  }, [uid, workoutId, versionNumber, key]);
+
+  // An ad-hoc session, or one logged before its workout was ever published,
+  // has no snapshot to wait for. That is a fact, not a pending read.
+  if (workoutId === null || versionNumber === null) return VERSION_NONE;
+  if (key === null || snapshot?.key !== key) return VERSION_PENDING;
+  return snapshot;
+}

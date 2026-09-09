@@ -223,7 +223,13 @@ describe('performance over the real catalog size', () => {
     const big = buildSearchIndex(many);
     const started = performance.now();
     for (let run = 0; run < 50; run += 1) search(big, 'press', { limit: 50 });
-    expect(performance.now() - started).toBeLessThan(1000);
+    // Wall clock measured while the rest of the suite runs on other workers,
+    // so the bound has to survive a loaded machine: uncontended this is tens
+    // of milliseconds, and a bound that merely fits *that* fails whenever
+    // another test file happens to be scheduled alongside it. What this
+    // guards against is an algorithmic regression — dropping the index and
+    // scanning — which costs orders of magnitude, not a factor of two.
+    expect(performance.now() - started).toBeLessThan(4000);
   });
 
   it('still returns correct results at that size', () => {

@@ -1,0 +1,53 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.area {
+  fill: light-dark(var(--mantine-color-sky-1), var(--mantine-color-sky-9));
+  opacity: 0.45;
+}
+
+.line {
+  fill: none;
+  stroke: light-dark(var(--mantine-color-sky-7), var(--mantine-color-sky-4));
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.dot {
+  fill: light-dark(var(--mantine-color-body), var(--mantine-color-body));
+  stroke: light-dark(var(--mantine-color-sky-7), var(--mantine-color-sky-4));
+  stroke-width: 1.5;
+}
+
+/* A record sits on the line as a filled marker, so the PR list below and the
+   chart above are visibly the same events. */
+.record {
+  fill: light-dark(var(--mantine-color-orange-6), var(--mantine-color-orange-4));
+  stroke: light-dark(var(--mantine-color-orange-8), var(--mantine-color-orange-3));
+  stroke-width: 1.5;
+}
+
+.baseline {
+  stroke: light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  font-variant-numeric: tabular-nums;
+}

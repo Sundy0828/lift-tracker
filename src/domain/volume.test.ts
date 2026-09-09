@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { MuscleGroup } from './muscles';
 import type { ExerciseSlot, Prescription, WorkoutBody } from './workouts';
 import { DEFAULT_PRESCRIPTION } from './workouts';
+import type { LoggedSet, Session, SessionEntry } from './sessions';
+import { emptySet } from './sessions';
 import type { ExerciseMuscles, MuscleLookup } from './volume';
 import {
   SESSION_STOPS,
@@ -10,7 +12,9 @@ import {
   heatByRegion,
   heatStop,
   rollUpToBase,
+  sessionVolume,
   totalSetEquivalents,
+  totalVolume,
   volumeRows,
   workoutVolume,
 } from './volume';
@@ -289,5 +293,111 @@ describe('heatByRegion', () => {
   it('leaves a base muscle alone', () => {
     const heat = heatByRegion(new Map<MuscleGroup, number>([['chest', 5]]), drawnWithObliques);
     expect(heat.get('chest')).toBe(5);
+  });
+});
+
+describe('sessionVolume', () => {
+  const logged = (
+    exerciseId: string,
+    sets: Partial<LoggedSet>[],
+    overrides: Partial<SessionEntry> = {},
+  ): SessionEntry => ({
+    slotId: `slot-${exerciseId}-${String(sets.length)}`,
+    kind: 'exercise',
+    exerciseId,
+    exerciseName: exerciseId,
+    occurrenceIndex: 0,
+    prescription: { ...DEFAULT_PRESCRIPTION, sets: sets.length },
+    sets: sets.map((patch, index) => ({ ...emptySet(index), ...patch })),
+    supersetGroup: null,
+    notes: '',
+    ...overrides,
+  });
+
+  it('counts sets that were done, not sets that were prescribed', () => {
+    // Prescribed four, did two.
+    const entries = [
+      logged('fly', [{ reps: 12 }, { reps: 10 }, {}, {}], {
+        prescription: { ...DEFAULT_PRESCRIPTION, sets: 4 },
+      }),
+    ];
+    expect(get(sessionVolume(entries, lookup), 'chest')).toBe(2);
+  });
+
+  it('counts a bodyweight set with reps and no load', () => {
+    const entries = [logged('fly', [{ reps: 12 }])];
+    expect(get(sessionVolume(entries, lookup), 'chest')).toBe(1);
+  });
+
+  it('ignores warmups and skipped sets', () => {
+    const entries = [
+      logged('fly', [{ reps: 12, isWarmup: true }, { reps: 12, skipped: true }, { reps: 12 }]),
+    ];
+    expect(get(sessionVolume(entries, lookup), 'chest')).toBe(1);
+  });
+
+  it('still credits a set ticked complete with nothing typed into it', () => {
+    const entries = [logged('fly', [{ completedAt: '2025-08-26T18:00:00.000Z' }])];
+    expect(get(sessionVolume(entries, lookup), 'chest')).toBe(1);
+  });
+
+  it('splits primary and secondary the same way a prescribed set does', () => {
+    const entries = [logged('bench', [{ reps: 8 }, { reps: 8 }])];
+    const volume = sessionVolume(entries, lookup);
+    expect(get(volume, 'chest')).toBe(2);
+    expect(get(volume, 'triceps')).toBe(1);
+  });
+
+  it('contributes nothing for a rest row', () => {
+    const entries = [logged('fly', [], { kind: 'rest' })];
+    expect(totalSetEquivalents(sessionVolume(entries, lookup))).toBe(0);
+  });
+});
+
+describe('totalVolume', () => {
+  const session = (id: string, entries: SessionEntry[]): Session => ({
+    id,
+    workoutId: 'push',
+    workoutVersion: 1,
+    workoutName: 'PUSH',
+    status: 'completed',
+    performedOn: '2025-08-26',
+    startedAt: null,
+    completedAt: null,
+    entries,
+    groupRest: {},
+    bodyweight: null,
+    notes: '',
+  });
+
+  const entry = (exerciseId: string, count: number): SessionEntry => ({
+    slotId: `slot-${exerciseId}`,
+    kind: 'exercise',
+    exerciseId,
+    exerciseName: exerciseId,
+    occurrenceIndex: 0,
+    prescription: { ...DEFAULT_PRESCRIPTION, sets: count },
+    sets: Array.from({ length: count }, (_unused, index) => ({ ...emptySet(index), reps: 10 })),
+    supersetGroup: null,
+    notes: '',
+  });
+
+  it('adds a week of sessions together', () => {
+    const volume = totalVolume(
+      [session('a', [entry('fly', 3)]), session('b', [entry('fly', 4)])],
+      lookup,
+    );
+    expect(get(volume, 'chest')).toBe(7);
+  });
+
+  it('bands a real week against the weekly stops rather than the session ones', () => {
+    const volume = totalVolume([session('a', [entry('fly', 12)])], lookup);
+    // Twelve sets is a heavy session but an ordinary week.
+    expect(heatStop(get(volume, 'chest'), SESSION_STOPS)).toBe(4);
+    expect(heatStop(get(volume, 'chest'), WEEKLY_STOPS)).toBe(3);
+  });
+
+  it('is empty with no sessions', () => {
+    expect(totalVolume([], lookup).size).toBe(0);
   });
 });
