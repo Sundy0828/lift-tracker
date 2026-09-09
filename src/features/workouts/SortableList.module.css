@@ -29,9 +29,9 @@
 /* The dwell has settled: releasing here groups rather than reorders, so the
    target has to look like a drop target rather than a neighbour. */
 .row[data-group-target='true'] {
-  border-color: light-dark(var(--mantine-color-amber-6), var(--mantine-color-amber-5));
-  background: light-dark(var(--mantine-color-amber-0), rgba(255, 166, 4, 0.12));
-  box-shadow: 0 0 0 2px light-dark(var(--mantine-color-amber-2), rgba(255, 166, 4, 0.25));
+  border-color: light-dark(var(--mantine-color-sky-6), var(--mantine-color-sky-5));
+  background: light-dark(var(--mantine-color-sky-0), rgba(86, 188, 237, 0.12));
+  box-shadow: 0 0 0 2px light-dark(var(--mantine-color-sky-2), rgba(86, 188, 237, 0.25));
 }
 
 .groupHint {
@@ -45,7 +45,7 @@
   pointer-events: none;
   padding: 2px 6px;
   border-radius: var(--mantine-radius-sm);
-  background: light-dark(var(--mantine-color-amber-6), var(--mantine-color-amber-5));
+  background: light-dark(var(--mantine-color-sky-6), var(--mantine-color-sky-5));
   color: light-dark(var(--mantine-color-white), var(--mantine-color-black));
   font-size: 10px;
   font-weight: 700;
@@ -71,7 +71,7 @@
 /* Arming: the dwell is running. Quieter than the armed state, so the two are
    not confused, but immediate — the wait is never silent. */
 .row[data-group-arming='true'] {
-  border-color: light-dark(var(--mantine-color-amber-4), var(--mantine-color-amber-8));
+  border-color: light-dark(var(--mantine-color-sky-4), var(--mantine-color-sky-8));
   border-style: dashed;
 }
 

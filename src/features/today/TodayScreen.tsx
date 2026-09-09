@@ -54,7 +54,7 @@ export default function TodayScreen() {
       {activePending ? (
         <Skeleton height={92} radius="md" />
       ) : active === null ? null : (
-        <Alert color="amber" variant="light" title="Session in progress">
+        <Alert color="sky" variant="light" title="Session in progress">
           <Stack gap="xs" align="flex-start">
             <Text size="sm">
               {active.workoutName} · {sessionProgress(active.entries).completed} of{' '}

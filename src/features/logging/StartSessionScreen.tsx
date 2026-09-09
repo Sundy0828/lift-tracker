@@ -56,7 +56,7 @@ export default function StartSessionScreen() {
       version = result.versionNumber;
       notifications.show({
         message: `Published v${String(result.versionNumber)} — ${result.changeSummary}`,
-        color: 'amber',
+        color: 'sky',
       });
     }
 

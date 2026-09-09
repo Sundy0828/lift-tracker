@@ -86,7 +86,7 @@ export default function ExercisesScreen() {
     setSelected(null);
     notifications.show({
       message: editing === null ? `Added ${draft.name}` : `Saved ${draft.name}`,
-      color: 'amber',
+      color: 'sky',
     });
   };
 

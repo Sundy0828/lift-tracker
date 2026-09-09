@@ -76,7 +76,7 @@ export function RestTimerBar({ rest, onAdjust, onStop }: Props) {
     <div className={classes.bar} role="timer" aria-live="off">
       <Progress
         value={isOver ? 100 : elapsed}
-        color={isOver ? 'teal' : 'amber'}
+        color={isOver ? 'teal' : 'sky'}
         size="xs"
         radius={0}
         transitionDuration={0}

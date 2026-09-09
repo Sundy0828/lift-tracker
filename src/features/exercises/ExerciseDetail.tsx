@@ -104,7 +104,7 @@ export function ExerciseDetail({ exercise }: { exercise: Exercise }) {
 
       <Group gap="xs">
         {exercise.isCustom ? (
-          <Badge variant="light" color="amber">
+          <Badge variant="light" color="sky">
             Custom
           </Badge>
         ) : null}

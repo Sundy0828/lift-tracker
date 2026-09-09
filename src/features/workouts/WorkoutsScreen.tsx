@@ -127,7 +127,7 @@ export default function WorkoutsScreen() {
                     )}
                     <Badge
                       variant="light"
-                      color={workout.currentVersion === 0 ? 'gray' : 'amber'}
+                      color={workout.currentVersion === 0 ? 'gray' : 'sky'}
                       size="sm"
                     >
                       {workout.currentVersion === 0

@@ -11,15 +11,15 @@
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  border: 1px solid light-dark(var(--mantine-color-amber-3), var(--mantine-color-amber-9));
+  border: 1px solid light-dark(var(--mantine-color-sky-3), var(--mantine-color-sky-9));
   border-radius: var(--mantine-radius-md);
-  background: light-dark(var(--mantine-color-amber-0), rgba(255, 166, 4, 0.06));
+  background: light-dark(var(--mantine-color-sky-0), rgba(86, 188, 237, 0.06));
 }
 
 .circuitLabel {
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: light-dark(var(--mantine-color-amber-8), var(--mantine-color-amber-4));
+  color: light-dark(var(--mantine-color-sky-8), var(--mantine-color-sky-4));
 }
 
 .circuitFoot {

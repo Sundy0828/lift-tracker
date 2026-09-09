@@ -262,7 +262,7 @@ export default function ActiveSessionScreen() {
           pr.e1rmKg,
           profile.displayUnit,
         )}${pr.previousE1rmKg === 0 ? ' (first time)' : ''}`,
-        color: 'amber',
+        color: 'sky',
         autoClose: 6000,
       });
     }
@@ -321,7 +321,7 @@ export default function ActiveSessionScreen() {
               ) : null}
             </Group>
           </Group>
-          <Progress value={percent} size="sm" color="amber" />
+          <Progress value={percent} size="sm" color="sky" />
           <Text size="xs" c="dimmed">
             {progress.completed} of {progress.total} sets · {totalPerformedSets(entries)} logged
             {draft.isDirty ? ' · saving' : ''}

@@ -1,24 +1,26 @@
 import { createTheme, type MantineColorsTuple } from '@mantine/core';
 
-// Amber: reads well against the near-black gym-lighting dark scheme and still
-// passes contrast on white.
-const amber: MantineColorsTuple = [
-  '#fff8e1',
-  '#ffeeba',
-  '#ffdb8a',
-  '#ffc757',
-  '#ffb62e',
-  '#ffac14',
-  '#ffa604',
-  '#e39100',
-  '#ca8000',
-  '#af6d00',
+// Baby blue: stays pastel at the shades the theme actually uses, and reads
+// clearly against the near-black gym-lighting dark scheme.
+const sky: MantineColorsTuple = [
+  '#eef8fd',
+  '#dcf0fa',
+  '#b8e2f6',
+  '#92d3f1',
+  '#74c7ee',
+  '#62c0ec',
+  '#56bced',
+  '#47a5d2',
+  '#3892bc',
+  '#237ea6',
 ];
 
 export const theme = createTheme({
-  primaryColor: 'amber',
+  primaryColor: 'sky',
   primaryShade: { light: 7, dark: 4 },
-  colors: { amber },
+  colors: { sky },
+  // A pastel primary needs dark label text on filled controls to stay readable.
+  autoContrast: true,
   defaultRadius: 'md',
   fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   headings: { fontWeight: '650' },

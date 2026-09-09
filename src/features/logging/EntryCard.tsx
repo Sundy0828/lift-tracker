@@ -154,7 +154,7 @@ export function EntryCard({
             )}
           </Stack>
           {overlay.kind === 'new' ? (
-            <Badge size="sm" variant="light" color="amber">
+            <Badge size="sm" variant="light" color="sky">
               NEW
             </Badge>
           ) : null}

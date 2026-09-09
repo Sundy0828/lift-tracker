@@ -180,7 +180,7 @@ export default function WorkoutEditorScreen() {
     void promise;
     notifications.show({
       message: `Published v${String(result.versionNumber)} — ${result.changeSummary}`,
-      color: 'amber',
+      color: 'sky',
     });
   };
 
@@ -215,14 +215,14 @@ export default function WorkoutEditorScreen() {
               ~{formatEstimate(estimateWorkoutSeconds(body, profile.defaultRestSeconds))}
             </Badge>
           )}
-          <Badge variant="light" color={workout.currentVersion === 0 ? 'gray' : 'amber'} size="sm">
+          <Badge variant="light" color={workout.currentVersion === 0 ? 'gray' : 'sky'} size="sm">
             {workout.currentVersion === 0 ? 'unpublished' : `v${String(workout.currentVersion)}`}
           </Badge>
         </Group>
       </Stack>
 
       {pendingDiff.hasChanges ? (
-        <Alert color="amber" variant="light" title="Unpublished changes">
+        <Alert color="sky" variant="light" title="Unpublished changes">
           <Stack gap="xs">
             <Text size="sm">{pendingDiff.summary}</Text>
             <Group>

@@ -31,8 +31,8 @@
 }
 
 .behind[data-tone='neutral'] {
-  background: light-dark(var(--mantine-color-amber-1), var(--mantine-color-amber-9));
-  color: light-dark(var(--mantine-color-amber-9), var(--mantine-color-amber-1));
+  background: light-dark(var(--mantine-color-sky-1), var(--mantine-color-sky-9));
+  color: light-dark(var(--mantine-color-sky-9), var(--mantine-color-sky-1));
 }
 
 /* Past the commit point, so it is obvious that releasing will act. */
@@ -42,7 +42,7 @@
 }
 
 .behind[data-tone='neutral'][data-armed='true'] {
-  background: light-dark(var(--mantine-color-amber-6), var(--mantine-color-amber-7));
+  background: light-dark(var(--mantine-color-sky-6), var(--mantine-color-sky-7));
   color: light-dark(var(--mantine-color-white), var(--mantine-color-black));
 }
 

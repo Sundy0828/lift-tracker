@@ -49,7 +49,7 @@ export function VersionHistory({ versions, currentVersion }: Props) {
                   v{version.versionNumber}
                 </Text>
                 {version.versionNumber === currentVersion ? (
-                  <Badge size="xs" variant="light" color="amber">
+                  <Badge size="xs" variant="light" color="sky">
                     current
                   </Badge>
                 ) : null}

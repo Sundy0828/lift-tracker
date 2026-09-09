@@ -48,7 +48,7 @@
 }
 
 .ordinal[aria-pressed='true'] {
-  color: light-dark(var(--mantine-color-amber-8), var(--mantine-color-amber-4));
+  color: light-dark(var(--mantine-color-sky-8), var(--mantine-color-sky-4));
   font-weight: 600;
 }
 

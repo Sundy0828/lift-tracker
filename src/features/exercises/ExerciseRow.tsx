@@ -40,7 +40,7 @@ export const ExerciseRow = memo(function ExerciseRow({
         <span className={classes.name}>{exercise.name}</span>
         <span className={classes.meta}>
           {exercise.isCustom ? (
-            <Badge size="xs" variant="light" color="amber">
+            <Badge size="xs" variant="light" color="sky">
               Custom
             </Badge>
           ) : null}

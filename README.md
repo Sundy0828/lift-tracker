@@ -272,7 +272,7 @@ circuit (pressing + on a member should add a member, not drop a loose exercise
 into the middle of a round), so a circuit at the end of a workout would
 otherwise be a dead end — able only to grow. The row _below_ the block passes
 `join: false` to `insertSlotAfter`, which places the new slot in the same
-position but leaves it ungrouped. The amber border is what tells the two apart,
+position but leaves it ungrouped. The blue border is what tells the two apart,
 and the labels say so: "after Pushups, in the circuit" against "after the
 circuit".
 
