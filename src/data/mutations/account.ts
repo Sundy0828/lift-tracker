@@ -1,5 +1,6 @@
 import {
   EmailAuthProvider,
+  browserPopupRedirectResolver,
   deleteUser,
   linkWithCredential,
   linkWithPopup,
@@ -68,7 +69,7 @@ export async function reauthenticate(user: User, password: string): Promise<void
   const method = reauthMethod(user);
 
   if (method === 'google') {
-    await reauthenticateWithPopup(user, googleProvider);
+    await reauthenticateWithPopup(user, googleProvider, browserPopupRedirectResolver);
     return;
   }
 
@@ -158,7 +159,7 @@ async function withFreshLogin<T>(
 
 /** Adds Google as a way into this account. Opens Google's own popup. */
 export async function linkGoogle(user: User): Promise<void> {
-  await linkWithPopup(user, googleProvider);
+  await linkWithPopup(user, googleProvider, browserPopupRedirectResolver);
 }
 
 /**

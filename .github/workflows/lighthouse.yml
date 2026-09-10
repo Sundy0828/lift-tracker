@@ -1,0 +1,46 @@
+name: Lighthouse
+
+# Its own workflow, and not part of `verify`, for the same reason as the
+# end-to-end suite: it does not produce the same answer twice.
+#
+# The performance score is a measurement, not a computation. Five runs of one
+# build on one machine spanned 0.89 to 0.98, because total blocking time
+# depends on what else the runner is doing — and it carries 30% of the score.
+# Gating a deploy on that would block a good build over a busy runner.
+#
+# So it reports its own check and holds nothing up. The bundle-size budgets in
+# `verify` are the deploy gate: same commit, same bytes, same verdict.
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+# A newer commit on the same ref makes an in-flight run pointless.
+concurrency:
+  group: lighthouse-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lighthouse:
+    name: lighthouse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      # A production build: it is the bundle that ships, and the one the §3
+      # budgets are about.
+      - run: npm run build
+      - run: npm run lighthouse
+      - name: Upload the reports
+        # Also on success: the numbers are the point, not just the failures.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: .lighthouseci/
+          retention-days: 7

@@ -11,6 +11,8 @@
     "lint": "eslint . --max-warnings 0 && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
+    "lighthouse": "lhci autorun",
+    "size": "node --import ./scripts/ts-resolve.mjs scripts/check-bundle-size.ts",
     "test:rules": "vitest run --config vitest.rules.config.ts",
     "test:rules:ci": "firebase emulators:exec --project demo-lift-tracker --only firestore \"npm run test:rules\"",
     "test:watch": "vitest",
@@ -44,6 +46,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@firebase/rules-unit-testing": "^5.0.2",
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.62.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",

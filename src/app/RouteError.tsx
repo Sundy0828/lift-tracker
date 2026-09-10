@@ -1,5 +1,6 @@
-import { Alert, Button, Card, Code, Group, Stack, Text, Title } from '@mantine/core';
+import { Button, Group, Paper, Stack, Text, Title } from '@mantine/core';
 import { Link, isRouteErrorResponse, useNavigate, useRouteError } from 'react-router';
+import classes from './RouteError.module.css';
 import { useOnline } from './useOnline';
 
 /**
@@ -69,7 +70,7 @@ export function RouteError() {
     return (
       <Stack maw={520} mx="auto" py="xl" px="md">
         <Title order={2}>{online ? 'That screen didn’t load' : 'You’re offline'}</Title>
-        <Card withBorder>
+        <Paper withBorder radius="md" p="md">
           <Stack gap="sm" align="flex-start">
             <Text size="sm">
               {online
@@ -87,7 +88,7 @@ export function RouteError() {
               </Button>
             </Group>
           </Stack>
-        </Card>
+        </Paper>
       </Stack>
     );
   }
@@ -95,25 +96,21 @@ export function RouteError() {
   return (
     <Stack maw={520} mx="auto" py="xl" px="md">
       <Title order={2}>Something broke</Title>
-      <Card withBorder>
+      <Paper withBorder radius="md" p="md">
         <Stack gap="sm" align="flex-start">
           <Text size="sm">
             Nothing you logged has been lost — sets are saved on this device as you enter them,
             before anything reaches the screen.
           </Text>
           {online ? null : (
-            <Alert variant="light" color="gray" w="100%">
-              <Text size="sm">
-                You are also offline, which may be all this is. Try again once you are back.
-              </Text>
-            </Alert>
+            <Text size="sm">
+              You are also offline, which may be all this is. Try again once you are back.
+            </Text>
           )}
           <Text size="xs" c="dimmed">
             If it keeps happening, this is the detail worth reporting:
           </Text>
-          <Code block w="100%">
-            {describe(error)}
-          </Code>
+          <pre className={classes.detail}>{describe(error)}</pre>
           <Group gap="xs">
             <Button
               onClick={() => {
@@ -127,7 +124,7 @@ export function RouteError() {
             </Button>
           </Group>
         </Stack>
-      </Card>
+      </Paper>
     </Stack>
   );
 }

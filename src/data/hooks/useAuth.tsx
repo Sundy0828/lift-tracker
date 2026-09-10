@@ -1,4 +1,5 @@
 import {
+  browserPopupRedirectResolver,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   sendEmailVerification,
@@ -74,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status,
       isEmailVerified,
       signInWithGoogle: async () => {
-        await signInWithPopup(auth, googleProvider);
+        await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
       },
       signInWithEmail: async (email, password) => {
         await signInWithEmailAndPassword(auth, email, password);

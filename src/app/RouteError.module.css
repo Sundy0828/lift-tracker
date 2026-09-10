@@ -1,0 +1,15 @@
+/* The error detail. A plain <pre> rather than Mantine's Code, which would put
+   its close button and card styles on the first-paint path (§3). */
+.detail {
+  margin: 0;
+  width: 100%;
+  overflow-x: auto;
+  padding: var(--mantine-spacing-xs);
+  border-radius: var(--mantine-radius-sm);
+  background-color: var(--mantine-color-default-hover);
+  color: var(--mantine-color-dimmed);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: var(--mantine-font-size-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

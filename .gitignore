@@ -18,3 +18,4 @@ ui-debug.log
 .emulator-data
 .DS_Store
 *.tsbuildinfo
+.lighthouseci/

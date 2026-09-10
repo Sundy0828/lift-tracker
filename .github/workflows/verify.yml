@@ -15,7 +15,7 @@ jobs:
   # Everything that needs nothing but node. Fast, and the first thing to fail
   # on an ordinary mistake.
   checks:
-    name: typecheck · lint · unit · build
+    name: typecheck · lint · unit · build · size
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +28,10 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      # Reads dist/ and fails on a §3 budget regression. Here rather than in
+      # its own workflow because it is deterministic — same commit, same bytes,
+      # same verdict — so it is fit to block a deploy.
+      - run: npm run size
 
   # The security rules, against the real emulator (Appendix A). Its own job so
   # it runs beside the others and gets its own emulator: the suite clears

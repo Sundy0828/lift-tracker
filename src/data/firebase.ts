@@ -1,5 +1,13 @@
 import { initializeApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app';
-import { connectAuthEmulator, getAuth, GoogleAuthProvider, type Auth } from 'firebase/auth';
+import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  connectAuthEmulator,
+  GoogleAuthProvider,
+  indexedDBLocalPersistence,
+  initializeAuth,
+  type Auth,
+} from 'firebase/auth';
 
 /**
  * App + Auth only. This module is on the first-paint path (the auth gate needs
@@ -21,7 +29,21 @@ export const useEmulators = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'tru
 
 export const app: FirebaseApp = initializeApp(options);
 
-export const auth: Auth = getAuth(app);
+/**
+ * `initializeAuth` rather than `getAuth`, for one difference: no
+ * `popupRedirectResolver`.
+ *
+ * `getAuth` attaches one, and attaching it loads the Google sign-in iframe
+ * from `apis.google.com` during startup — a third-party request and ~155 ms of
+ * main thread on a throttled mobile profile, on every visit, to support a
+ * redirect flow this app does not use. The popup calls pass the resolver
+ * themselves, so it now loads when somebody taps "Continue with Google".
+ *
+ * The persistence list is the one `getAuth` uses; nothing else changes.
+ */
+export const auth: Auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence],
+});
 
 export const googleProvider = new GoogleAuthProvider();
 
