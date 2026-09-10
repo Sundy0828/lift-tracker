@@ -18,6 +18,7 @@ import {
   previewMerge,
 } from '@/domain/sharing';
 import { describeChange } from '@/domain/workoutDiff';
+import { describeShareError } from './shareError';
 
 type Mode = 'new' | 'merge';
 
@@ -79,8 +80,12 @@ export function ImportPanel({ shared }: { shared: SharedWorkout }) {
       await promise;
       notifications.show({ message: `${shared.body.name} imported`, color: 'teal' });
       await navigate(`/workouts/${workoutId}`);
-    } catch {
-      notifications.show({ message: 'Could not import that workout', color: 'red' });
+    } catch (cause: unknown) {
+      notifications.show({
+        message: describeShareError(cause, 'Could not import that workout'),
+        color: 'red',
+        autoClose: false,
+      });
       setBusy(false);
     }
   };
@@ -97,8 +102,12 @@ export function ImportPanel({ shared }: { shared: SharedWorkout }) {
       await promise;
       notifications.show({ message: `Merged into ${target.name}`, color: 'teal' });
       await navigate(`/workouts/${target.id}`);
-    } catch {
-      notifications.show({ message: 'Could not merge that workout', color: 'red' });
+    } catch (cause: unknown) {
+      notifications.show({
+        message: describeShareError(cause, 'Could not merge that workout'),
+        color: 'red',
+        autoClose: false,
+      });
       setBusy(false);
     }
   };

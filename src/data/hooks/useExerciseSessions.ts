@@ -51,12 +51,12 @@ const PENDING: ExerciseSessionsState = {
 };
 
 function describe(error: unknown): string {
-  if (error instanceof FirebaseError && error.code === 'firestore/failed-precondition') {
+  if (error instanceof FirebaseError && error.code === 'failed-precondition') {
     // The one failure with a specific, actionable cause: the composite index
     // this query needs has not been deployed to the project.
     return 'This lift’s history needs a Firestore index that has not been deployed yet. Run `firebase deploy --only firestore:indexes`.';
   }
-  if (error instanceof FirebaseError && error.code === 'firestore/permission-denied') {
+  if (error instanceof FirebaseError && error.code === 'permission-denied') {
     return 'You do not have access to this history.';
   }
   return error instanceof Error ? error.message : 'Could not load this history.';

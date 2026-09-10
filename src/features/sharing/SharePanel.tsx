@@ -8,6 +8,7 @@ import { newShareId, publishShare, setShareRevoked } from '@/data/mutations/shar
 import { buildSharePayload } from '@/domain/sharing';
 import type { SharedWorkout } from '@/domain/sharing';
 import type { Workout, WorkoutVersion } from '@/domain/workouts';
+import { describeShareError } from './shareError';
 import { shareUrl } from './shareLink';
 
 /**
@@ -57,8 +58,12 @@ export function SharePanel({
         }),
       );
       notifications.show({ message: 'Link created', color: 'teal' });
-    } catch {
-      notifications.show({ message: 'Could not create the link', color: 'red' });
+    } catch (cause: unknown) {
+      notifications.show({
+        message: describeShareError(cause, 'Could not create the link'),
+        color: 'red',
+        autoClose: false,
+      });
     } finally {
       setBusy(false);
     }
@@ -115,8 +120,12 @@ function ShareRow({ share }: { share: SharedWorkout }) {
     try {
       await setShareRevoked(share.shareId, true);
       notifications.show({ message: 'Link turned off', color: 'gray' });
-    } catch {
-      notifications.show({ message: 'Could not turn the link off', color: 'red' });
+    } catch (cause: unknown) {
+      notifications.show({
+        message: describeShareError(cause, 'Could not turn the link off'),
+        color: 'red',
+        autoClose: false,
+      });
     } finally {
       setBusy(false);
     }

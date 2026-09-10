@@ -14,11 +14,42 @@ jobs:
   verify:
     uses: ./.github/workflows/verify.yml
 
-  build_and_deploy:
-    # The gate. Every check in `verify` has to pass before anything reaches the
-    # live channel — a red suite means the build is not fit to ship, so there
-    # is nothing to think about here.
+  # Rules ship before the client that depends on them.
+  #
+  # Hosting used to be the only thing deployed, so `firestore.rules` reached
+  # the project only when somebody ran `firebase deploy` by hand. Stale rules
+  # break exactly one thing — the share write, the only document outside
+  # `users/{uid}` — and break it silently.
+  #
+  # The service account needs `roles/firebaserules.admin` and
+  # `roles/datastore.indexAdmin`. Without them this step fails with a 403 and
+  # the hosting deploy below never runs, which is the point: a build served
+  # against rules it does not match is worse than no deploy.
+  deploy_rules:
     needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - name: Authenticate to Firebase
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LIFT_TRACKER_E4A9C }}
+        # Through the environment, not the command line: the key never appears
+        # in a process listing or in the run log.
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/service-account.json" >> "$GITHUB_ENV"
+      - run: npx firebase deploy --only firestore --project lift-tracker-e4a9c
+
+  build_and_deploy:
+    # The gate. Every check in `verify` has to pass, and the rules have to be
+    # live, before anything reaches the live channel — a red suite means the
+    # build is not fit to ship, so there is nothing to think about here.
+    needs: deploy_rules
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
