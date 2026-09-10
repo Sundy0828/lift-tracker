@@ -31,7 +31,16 @@ function flag(name: string): string | null {
 
 const has = (name: string): boolean => process.argv.includes(`--${name}`);
 
-function loadCredentials(): ServiceAccount {
+/**
+ * A key as it comes out of the console, which is snake_case, alongside the
+ * camelCase `ServiceAccount` the SDK's types describe. `cert()` accepts either
+ * spelling; this file has to read the project id itself, so it accepts both
+ * too — reading only `projectId` made the safety check below fire on every
+ * real key, which is the worst way for a guard to fail.
+ */
+type KeyFile = ServiceAccount & { project_id?: string };
+
+function loadCredentials(): KeyFile {
   const path = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
   if (path === undefined || path === '') {
     throw new Error(
@@ -39,7 +48,12 @@ function loadCredentials(): ServiceAccount {
         '(Firebase console → Project settings → Service accounts → Generate new private key).',
     );
   }
-  return JSON.parse(readFileSync(path, 'utf8')) as ServiceAccount;
+  return JSON.parse(readFileSync(path, 'utf8')) as KeyFile;
+}
+
+/** The project a key belongs to, whichever spelling it uses. */
+function projectOf(key: KeyFile): string | null {
+  return key.projectId ?? key.project_id ?? null;
 }
 
 /** The project the app itself points at, so this can refuse to stray. */
@@ -88,7 +102,10 @@ async function main(): Promise<void> {
   const auth = getAuth(app);
 
   const expected = appProjectId();
-  const actual = credentials.projectId ?? '(unknown)';
+  const actual = projectOf(credentials);
+  if (actual === null) {
+    throw new Error('That key file has no project id in it. Is it a service-account key?');
+  }
   if (expected !== null && actual !== expected) {
     throw new Error(`The key is for "${actual}" but the app points at "${expected}".`);
   }
