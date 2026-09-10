@@ -1,10 +1,19 @@
 import { Button, Group, Modal, Skeleton, Stack, Text, TextInput } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { useDeferredValue, useMemo, useState } from 'react';
+import { useAuth } from '@/data/hooks/useAuth';
 import { useExerciseLibrary } from '@/data/hooks/useExerciseLibrary';
+import { newCustomExerciseId, saveCustomExercise } from '@/data/mutations/exercises';
 import type { Exercise } from '@/domain/exercises';
+import { fromCustom } from '@/domain/exercises';
+import { MUSCLE_GROUPS_BY_REGION } from '@/domain/muscles';
 import { search } from '@/domain/search';
+import type { CustomExerciseDraft } from '@/features/exercises/CustomExerciseForm';
+import { CustomExerciseForm } from '@/features/exercises/CustomExerciseForm';
 import { ExerciseDetail } from '@/features/exercises/ExerciseDetail';
 import { ExerciseList } from '@/features/exercises/ExerciseList';
+import { useRecentSearches } from './useRecentSearches';
+import classes from './ExercisePicker.module.css';
 
 type Props = {
   opened: boolean;
@@ -20,21 +29,90 @@ type Props = {
  * near-identical lateral raises, and the name alone does not say which is
  * which. The preview shows both movement frames and the instructions, then
  * adds only on confirmation — so a mis-tap costs nothing.
+ *
+ * The body-part rail filters by display region, not by single muscle. "Back"
+ * is how someone picking an exercise thinks; "lats, middle back, lower back,
+ * traps" is how the data is stored, and making a person choose between those
+ * four to see any of them is a worse question than the one they asked.
+ *
+ * A custom exercise can be created from here as well as from the Exercises
+ * screen. This is where you find out the catalog is missing your lift, and
+ * leaving for another screen loses the workout you were building.
  */
 export function ExercisePicker({ opened, workoutName, onClose, onPick }: Props) {
-  const { index, isPending } = useExerciseLibrary();
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+  const { resolver, index, isPending } = useExerciseLibrary();
   const [query, setQuery] = useState('');
+  const [region, setRegion] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState<Exercise | null>(null);
+  const [creating, setCreating] = useState(false);
+  const { recent, remember } = useRecentSearches();
   const deferredQuery = useDeferredValue(query);
 
-  const results = useMemo(
-    () => search(index, deferredQuery, { limit: 300 }),
-    [index, deferredQuery],
+  // Empty means "every region", which is what `search` already does with an
+  // empty muscle filter.
+  const muscles = useMemo(
+    () => MUSCLE_GROUPS_BY_REGION.find((entry) => entry.region === region)?.muscles ?? [],
+    [region],
   );
 
-  const close = (): void => {
+  const results = useMemo(
+    () => search(index, deferredQuery, { limit: 300, muscles, musclesPrimaryOnly: true }),
+    [index, deferredQuery, muscles],
+  );
+
+  const existingNames = useMemo(
+    () =>
+      resolver
+        .all()
+        .filter((exercise) => exercise.isCustom)
+        .map((exercise) => exercise.name),
+    [resolver],
+  );
+
+  /**
+   * Back to a clean search. Every way out of the picker goes through this.
+   *
+   * The component stays mounted between visits — the parent only flips
+   * `opened` — so anything left here is still on screen next time. A stale
+   * query is the wrong starting point: the picker reopens from a different
+   * row, usually for a different lift.
+   */
+  const reset = (): void => {
     setPreviewing(null);
+    setCreating(false);
+    setQuery('');
+    setRegion(null);
+  };
+
+  const close = (): void => {
+    reset();
     onClose();
+  };
+
+  /**
+   * Adds one exercise. Both call sites close the picker on a pick, so this is
+   * the end of the visit and the search is cleared with it — `onClose` does
+   * not run on this path.
+   */
+  const add = (exercise: Exercise): void => {
+    remember(query);
+    reset();
+    onPick(exercise);
+  };
+
+  const saveNew = (draft: CustomExerciseDraft): void => {
+    if (uid === null) return;
+    const id = newCustomExerciseId();
+    // Not awaited: applied to the local cache immediately, flushed on reconnect.
+    void saveCustomExercise(uid, id, draft);
+    setCreating(false);
+    // Straight into the workout. Creating one here is only ever a step towards
+    // adding it, and the preview has nothing to show for a lift with no
+    // catalog frames.
+    add(fromCustom({ ...draft, id, isCustom: true, createdAt: null }));
+    notifications.show({ message: `Added ${draft.name}`, color: 'sky' });
   };
 
   return (
@@ -50,14 +128,72 @@ export function ExercisePicker({ opened, workoutName, onClose, onPick }: Props) 
               setQuery(event.currentTarget.value);
             }}
           />
+
+          {query === '' && recent.length > 0 ? (
+            <Group gap={6} role="group" aria-label="Recent searches">
+              <Text size="xs" c="dimmed">
+                Recent
+              </Text>
+              {recent.map((entry) => (
+                <Button
+                  key={entry}
+                  size="compact-xs"
+                  variant="light"
+                  onClick={() => {
+                    setQuery(entry);
+                  }}
+                >
+                  {entry}
+                </Button>
+              ))}
+            </Group>
+          ) : null}
+
+          <Group justify="space-between" wrap="nowrap" gap="xs">
+            <Text size="xs" c="dimmed">
+              Tap one to see the movement before adding it.
+            </Text>
+            <Button
+              size="compact-xs"
+              variant="light"
+              onClick={() => {
+                setCreating(true);
+              }}
+            >
+              New exercise
+            </Button>
+          </Group>
+
           {isPending ? (
             <Skeleton height={320} radius="md" />
           ) : (
-            <ExerciseList exercises={results} onSelect={setPreviewing} withChevron />
+            <div className={classes.body}>
+              <div className={classes.rail} role="group" aria-label="Filter by body part">
+                <RegionButton
+                  label="All"
+                  active={region === null}
+                  onClick={() => {
+                    setRegion(null);
+                  }}
+                />
+                {MUSCLE_GROUPS_BY_REGION.map((entry) => (
+                  <RegionButton
+                    key={entry.region}
+                    label={entry.region}
+                    active={region === entry.region}
+                    onClick={() => {
+                      // Tapping the active region clears it, so the rail needs
+                      // no "off" control of its own beyond All.
+                      setRegion(region === entry.region ? null : entry.region);
+                    }}
+                  />
+                ))}
+              </div>
+              <div className={classes.results}>
+                <ExerciseList exercises={results} onSelect={setPreviewing} withChevron />
+              </div>
+            </div>
           )}
-          <Text size="xs" c="dimmed">
-            Tap one to see the movement before adding it.
-          </Text>
         </Stack>
       </Modal>
 
@@ -86,9 +222,7 @@ export function ExercisePicker({ opened, workoutName, onClose, onPick }: Props) 
               </Button>
               <Button
                 onClick={() => {
-                  onPick(previewing);
-                  setPreviewing(null);
-                  setQuery('');
+                  add(previewing);
                 }}
               >
                 Add to {workoutName}
@@ -97,6 +231,36 @@ export function ExercisePicker({ opened, workoutName, onClose, onPick }: Props) 
           </Stack>
         )}
       </Modal>
+
+      {creating ? (
+        <CustomExerciseForm
+          opened
+          existingNames={existingNames}
+          onClose={() => {
+            setCreating(false);
+          }}
+          onSave={saveNew}
+          // Above the search modal, like the preview.
+          zIndex={400}
+        />
+      ) : null}
     </>
+  );
+}
+
+/** One section of the rail. A plain button, so the block reads as one control. */
+function RegionButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className={classes.railStep} aria-pressed={active} onClick={onClick}>
+      {label}
+    </button>
   );
 }

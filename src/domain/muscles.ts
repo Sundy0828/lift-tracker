@@ -188,6 +188,21 @@ export function regionOf(muscle: MuscleGroup): string | null {
 }
 
 /**
+ * Every muscle group in each display region. Extensions sit under their
+ * parent's region, so "Rear delts" belongs to "Shoulders".
+ *
+ * A region filter needs the whole list, not the region's base groups: an
+ * exercise tagged only "rear delts" must still match Shoulders.
+ */
+export const MUSCLE_GROUPS_BY_REGION: readonly {
+  readonly region: string;
+  readonly muscles: readonly MuscleGroup[];
+}[] = MUSCLE_REGIONS.map((region) => ({
+  region: region.name,
+  muscles: MUSCLE_GROUPS.filter((muscle) => region.muscles.includes(baseMuscleOf(muscle))),
+}));
+
+/**
  * Muscle options grouped by display region, for pickers. Extensions appear
  * under their parent's region, so "Rear delts" sits with "Shoulders".
  */
@@ -196,9 +211,7 @@ export function regionOf(muscle: MuscleGroup): string | null {
 export const MUSCLE_OPTIONS_BY_REGION: {
   group: string;
   items: { value: MuscleGroup; label: string }[];
-}[] = MUSCLE_REGIONS.map((region) => ({
-  group: region.name,
-  items: MUSCLE_GROUPS.filter((muscle) => region.muscles.includes(baseMuscleOf(muscle))).map(
-    (muscle) => ({ value: muscle, label: muscleLabel(muscle) }),
-  ),
+}[] = MUSCLE_GROUPS_BY_REGION.map(({ region, muscles }) => ({
+  group: region,
+  items: muscles.map((muscle) => ({ value: muscle, label: muscleLabel(muscle) })),
 }));

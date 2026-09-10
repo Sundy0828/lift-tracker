@@ -28,18 +28,32 @@ type Props = {
   existingNames: readonly string[];
   onClose: () => void;
   onSave: (draft: CustomExerciseDraft) => void;
+  /** Set when this opens over another modal, such as the exercise picker. */
+  zIndex?: number | undefined;
 };
 
 function normalizeName(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/gu, ' ');
 }
 
-export function CustomExerciseForm({ opened, editing, existingNames, onClose, onSave }: Props) {
+export function CustomExerciseForm({
+  opened,
+  editing,
+  existingNames,
+  onClose,
+  onSave,
+  zIndex,
+}: Props) {
   const [name, setName] = useState(editing?.name ?? '');
   const [primary, setPrimary] = useState<MuscleGroup[]>(editing?.primaryMuscles ?? []);
   const [secondary, setSecondary] = useState<MuscleGroup[]>(editing?.secondaryMuscles ?? []);
   const [equipment, setEquipment] = useState<Equipment | null>(editing?.equipment ?? null);
   const [submitted, setSubmitted] = useState(false);
+
+  // A dropdown renders in its own portal on a layer below an elevated modal,
+  // so without this its options paint underneath the form that opened them
+  // and cannot be tapped.
+  const dropdown = zIndex === undefined ? {} : { comboboxProps: { zIndex: zIndex + 1 } };
 
   const trimmed = name.trim();
   const duplicate =
@@ -70,6 +84,9 @@ export function CustomExerciseForm({ opened, editing, existingNames, onClose, on
       title={editing === undefined ? 'New exercise' : 'Edit exercise'}
       fullScreen
       transitionProps={{ duration: 120 }}
+      // Spread rather than passed: Modal's own default has to survive when
+      // this opens on its own screen.
+      {...(zIndex === undefined ? {} : { zIndex })}
     >
       <Stack>
         <TextInput
@@ -95,6 +112,7 @@ export function CustomExerciseForm({ opened, editing, existingNames, onClose, on
           onChange={(values) => {
             setPrimary(values.filter(isMuscleGroup));
           }}
+          {...dropdown}
         />
 
         <MultiSelect
@@ -106,6 +124,7 @@ export function CustomExerciseForm({ opened, editing, existingNames, onClose, on
           onChange={(values) => {
             setSecondary(values.filter(isMuscleGroup));
           }}
+          {...dropdown}
         />
 
         <Select
@@ -117,6 +136,7 @@ export function CustomExerciseForm({ opened, editing, existingNames, onClose, on
           onChange={(value) => {
             setEquipment(value !== null && isEquipment(value) ? value : null);
           }}
+          {...dropdown}
         />
 
         {submitted && !valid ? (

@@ -147,6 +147,19 @@ describe('search', () => {
       expect(names(search(index, '', { muscles: ['biceps'] }))).toEqual(['Pull-up']);
     });
 
+    it('can match primary muscles only, for a body-part tab', () => {
+      // Pull-up trains lats and only involves biceps, so a Biceps tab that
+      // offered it would be listing somebody else's exercise.
+      expect(names(search(index, '', { muscles: ['biceps'], musclesPrimaryOnly: true }))).toEqual(
+        [],
+      );
+      expect(names(search(index, '', { muscles: ['lats'], musclesPrimaryOnly: true }))).toEqual([
+        'Pull-up',
+      ]);
+      // Off by default, so the exercise-library filter keeps its wider reach.
+      expect(names(search(index, '', { muscles: ['biceps'] }))).toEqual(['Pull-up']);
+    });
+
     it('treats multiple muscles as OR', () => {
       const results = search(index, '', { muscles: ['quadriceps', 'lats'] });
       expect(names(results).sort()).toEqual(['Barbell Squat', 'Pull-up']);

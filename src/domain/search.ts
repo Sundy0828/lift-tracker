@@ -19,6 +19,15 @@ export type SearchIndex = {
 export type SearchFilters = {
   /** Matches an exercise whose primary *or* secondary muscles include any of these. */
   readonly muscles?: readonly MuscleGroup[];
+  /**
+   * Narrows `muscles` to primary muscles only.
+   *
+   * For a body-part tab, which means "this lift trains my back", not "this
+   * lift involves the back somewhere": a hang clean lists hamstrings and
+   * shows up under Back on secondary involvement alone, which reads as a
+   * broken filter rather than a generous one.
+   */
+  readonly musclesPrimaryOnly?: boolean;
   /** `null` matches entries with no equipment recorded. */
   readonly equipment?: readonly (Equipment | null)[];
   readonly customOnly?: boolean;
@@ -66,8 +75,11 @@ function matchesFilters(entry: Exercise, filters: SearchFilters): boolean {
 
   const muscles = filters.muscles;
   if (muscles !== undefined && muscles.length > 0) {
+    const primaryOnly = filters.musclesPrimaryOnly === true;
     const hit = muscles.some(
-      (muscle) => entry.primaryMuscles.includes(muscle) || entry.secondaryMuscles.includes(muscle),
+      (muscle) =>
+        entry.primaryMuscles.includes(muscle) ||
+        (!primaryOnly && entry.secondaryMuscles.includes(muscle)),
     );
     if (!hit) return false;
   }

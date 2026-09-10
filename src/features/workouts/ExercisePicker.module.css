@@ -1,0 +1,69 @@
+.body {
+  display: flex;
+  gap: var(--mantine-spacing-xs);
+  /* The results list sets the height; the rail stretches to match it. */
+  align-items: stretch;
+}
+
+/*
+ * One bordered block of joined sections, like the RIR field on a set row —
+ * not a stack of separate buttons.
+ *
+ * Wide enough for "Shoulders", narrow enough to leave the rows readable on a
+ * 412px phone.
+ */
+.rail {
+  flex: 0 0 92px;
+  /* Hugs its sections instead of stretching, so the block does not trail an
+     empty bordered box below the last region. It still cannot outgrow the
+     results beside it. */
+  align-self: flex-start;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-radius: var(--mantine-radius-sm);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.railStep {
+  all: unset;
+  box-sizing: border-box;
+  /* Comfortable thumb target, and it must not collapse when the rail scrolls. */
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 8px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  cursor: pointer;
+  font-size: var(--mantine-font-size-xs);
+  line-height: 1;
+  color: var(--mantine-color-dimmed);
+  touch-action: manipulation;
+}
+
+.railStep + .railStep {
+  border-top: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+}
+
+.railStep:hover,
+.railStep:focus-visible {
+  background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+  color: var(--mantine-color-text);
+}
+
+.railStep[aria-pressed='true'] {
+  background: var(--mantine-primary-color-filled);
+  color: var(--mantine-primary-color-contrast);
+  font-weight: 600;
+}
+
+.results {
+  flex: 1 1 auto;
+  /* Without this a long exercise name stretches the flex item and pushes the
+     rail off screen. */
+  min-width: 0;
+}
