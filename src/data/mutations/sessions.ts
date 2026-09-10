@@ -1,14 +1,27 @@
-import { Timestamp, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
+import type { Query } from 'firebase/firestore';
+import {
+  Timestamp,
+  deleteDoc,
+  getDocsFromServer,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore';
 import type { ExerciseStats, PersonalRecord } from '@/domain/overlay';
 import { buildStatsUpdate } from '@/domain/overlay';
+import { rebuildExerciseStats, rebuildWorkoutStats } from '@/domain/rebuild';
 import type { NewSessionInput, Session, SessionEntry } from '@/domain/sessions';
-import { newSession, sessionExerciseIds } from '@/domain/sessions';
+import { newSession, sessionExerciseIds, totalPerformedSets } from '@/domain/sessions';
 import type { Weight } from '@/domain/types';
+import { toSession } from '../converters/session';
 import { db } from '../firestore';
 import { paths } from '../paths';
 
 /**
- * Session writes. None are awaited by the UI: Firestore applies them to the
+ * Session writes. None but `deleteSession` are awaited by the UI: Firestore applies them to the
  * local cache immediately and flushes on reconnect (§2.8). The whole point is
  * that a workout logged in airplane mode behaves exactly like one logged on
  * wifi, including the rest timer and the overlay.
@@ -176,14 +189,98 @@ export function completeSession(
 /**
  * Abandons a session without writing any history.
  *
- * Kept rather than deleted: an abandoned session is a fact about the week, and
- * because it feeds no `workoutStats`, next week's overlay still resolves to
- * the last session that was actually finished.
+ * A session with a logged set is kept and marked abandoned: it is a fact about
+ * the week, and it feeds no `workoutStats`, so next week's overlay still
+ * resolves to the last session that was actually finished.
+ *
+ * A session with no logged set is deleted instead. It records nothing, so
+ * history has nothing to show for it. Neither an active nor an abandoned
+ * session writes to either stats index, so the delete repairs nothing.
  */
-export function abandonSession(uid: string, sessionId: string): Promise<void> {
+export function abandonSession(uid: string, session: Session): Promise<void> {
+  if (totalPerformedSets(session.entries) === 0) {
+    return deleteDoc(paths.session(uid, session.id));
+  }
+
   return setDoc(
-    paths.session(uid, sessionId),
+    paths.session(uid, session.id),
     { status: 'abandoned', completedAt: Timestamp.now(), updatedAt: serverTimestamp() },
     { merge: true },
   );
+}
+
+/** What a query returns from the server, without the session being deleted. */
+async function remaining(source: Query, deletedId: string): Promise<Session[]> {
+  const snapshot = await getDocsFromServer(source);
+  return snapshot.docs
+    .filter((document) => document.id !== deletedId)
+    .map((document) => toSession(document.id, document.data()));
+}
+
+/**
+ * Deletes a past session and repairs the overlay indexes it fed.
+ *
+ * The only awaited write here: `bestE1rm` and `totalSessions` are running
+ * aggregates, so both stats tiers are recomputed from the sessions that
+ * remain, read from the server. Rejects when offline or when the session is
+ * still active.
+ */
+export async function deleteSession(uid: string, session: Session): Promise<void> {
+  if (session.status === 'active') {
+    throw new Error('A session in progress is discarded from Today, not deleted here.');
+  }
+  if (!navigator.onLine) {
+    throw new Error('Deleting a session needs a connection, so records can be recalculated.');
+  }
+
+  const batch = writeBatch(db);
+  batch.delete(paths.session(uid, session.id));
+
+  // An abandoned session wrote no stats, so its delete needs no rebuild.
+  if (session.status === 'completed') {
+    const exercises = await Promise.all(
+      sessionExerciseIds(session.entries).map(async (exerciseId) => ({
+        exerciseId,
+        stats: rebuildExerciseStats(
+          exerciseId,
+          await remaining(
+            query(
+              paths.sessions(uid),
+              where('exerciseIds', 'array-contains', exerciseId),
+              orderBy('performedOn', 'desc'),
+            ),
+            session.id,
+          ),
+        ),
+      })),
+    );
+
+    for (const { exerciseId, stats } of exercises) {
+      if (stats === null) {
+        batch.delete(paths.exerciseStat(uid, exerciseId));
+      } else {
+        batch.set(paths.exerciseStat(uid, exerciseId), { ...stats, updatedAt: serverTimestamp() });
+      }
+    }
+
+    const workoutId = session.workoutId;
+    if (workoutId !== null) {
+      // No `orderBy`: the rebuild sorts, and one equality filter runs on
+      // Firestore's automatic index.
+      const sessions = await remaining(
+        query(paths.sessions(uid), where('workoutId', '==', workoutId)),
+        session.id,
+      );
+      const stats = rebuildWorkoutStats(workoutId, sessions);
+      if (stats === null) {
+        batch.delete(paths.workoutStat(uid, workoutId));
+      } else {
+        batch.set(paths.workoutStat(uid, workoutId), { ...stats, updatedAt: serverTimestamp() });
+      }
+    }
+  }
+
+  // One batch, so a half-applied delete cannot leave an index describing a
+  // session that is gone.
+  await batch.commit();
 }

@@ -27,7 +27,7 @@ function messageFor(cause: unknown): string {
 }
 
 export default function VerifyEmailScreen() {
-  const { user, sendVerification, refreshVerification, signOutUser } = useAuth();
+  const { user, sendVerification, refreshVerification, signOutUser, verificationSend } = useAuth();
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +45,12 @@ export default function VerifyEmailScreen() {
     // `refreshVerification` is stable between auth state changes, so this
     // restarts the timer only when the signed-in account itself changes.
   }, [refreshVerification]);
+
+  const sendFailed = verificationSend.state === 'failed';
+  // One message, newest first: an error from this screen's own button is more
+  // recent than the send that registration recorded.
+  const problem =
+    error ?? (verificationSend.state === 'failed' ? messageFor(verificationSend.cause) : null);
 
   const resend = async (): Promise<void> => {
     setBusy(true);
@@ -80,20 +86,29 @@ export default function VerifyEmailScreen() {
           Confirm your email
         </Title>
         <Text c="dimmed" size="sm" ta="center">
-          One click and you are in.
+          We email a link, not a code. One click and you are in.
         </Text>
       </Stack>
 
       <Card withBorder>
         <Stack>
-          <Text size="sm">
-            We sent a link to <strong>{user?.email ?? 'your address'}</strong>. Open it and this
-            screen will let you through on its own.
-          </Text>
-          <Text size="sm" c="dimmed">
-            Check the spam folder if it is not there after a minute — confirmation mail from a new
-            project often lands in it.
-          </Text>
+          {sendFailed ? (
+            <Text size="sm">
+              We could not send the link to <strong>{user?.email ?? 'your address'}</strong>. Your
+              account is made — tap <strong>Send it again</strong> to try once more.
+            </Text>
+          ) : (
+            <>
+              <Text size="sm">
+                We sent a link to <strong>{user?.email ?? 'your address'}</strong>. Open it and this
+                screen will let you through on its own.
+              </Text>
+              <Text size="sm" c="dimmed">
+                Check the spam folder if it is not there after a minute — confirmation mail from a
+                new project often lands in it.
+              </Text>
+            </>
+          )}
 
           {sent ? (
             <Alert color="green" variant="light" role="status">
@@ -109,9 +124,9 @@ export default function VerifyEmailScreen() {
             </Alert>
           )}
 
-          {error === null ? null : (
+          {problem === null ? null : (
             <Alert color="red" variant="light" role="alert">
-              {error}
+              {problem}
             </Alert>
           )}
 

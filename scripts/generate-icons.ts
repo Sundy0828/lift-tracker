@@ -9,7 +9,7 @@ import { deflateSync } from 'node:zlib';
 type Rgba = readonly [number, number, number, number];
 
 const BG: Rgba = [18, 16, 15, 255]; // #12100f
-const FG: Rgba = [255, 178, 64, 255]; // amber
+const FG: Rgba = [116, 199, 238, 255]; // #74c7ee
 const OUT_DIR = fileURLToPath(new URL('../public/icons/', import.meta.url));
 
 function crc32(buf: Buffer): number {

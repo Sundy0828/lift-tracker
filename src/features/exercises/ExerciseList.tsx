@@ -14,13 +14,15 @@ type Props = {
   onSelect: (exercise: Exercise) => void;
   /** Hint that tapping opens a preview rather than acting immediately. */
   withChevron?: boolean;
+  /** Takes the free height of a flex parent instead of a fixed height. */
+  fill?: boolean;
 };
 
 /**
  * Virtualised so that matching 876 exercises renders a screenful of rows
  * rather than 876 of them (§3).
  */
-export function ExerciseList({ exercises, onSelect, withChevron = false }: Props) {
+export function ExerciseList({ exercises, onSelect, withChevron = false, fill = false }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
 
   // React Compiler cannot auto-memoise a component holding a virtualiser,
@@ -35,7 +37,11 @@ export function ExerciseList({ exercises, onSelect, withChevron = false }: Props
   });
 
   return (
-    <div className={classes.viewport} ref={viewportRef} data-testid="exercise-list">
+    <div
+      className={fill ? `${classes.viewport} ${classes.fill}` : classes.viewport}
+      ref={viewportRef}
+      data-testid="exercise-list"
+    >
       {exercises.length === 0 ? (
         <Center h="100%" p="md">
           <Text c="dimmed" size="sm" ta="center">

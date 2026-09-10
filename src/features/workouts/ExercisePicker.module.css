@@ -1,7 +1,44 @@
+/* Modal content as a column: static header, scrolling body, static actions. */
+.pane {
+  display: flex;
+  flex-direction: column;
+}
+
+.paneHeader {
+  flex: 0 0 auto;
+}
+
+.paneBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Button row at the bottom of the pane, clear of the home indicator. */
+.actions {
+  flex: 0 0 auto;
+  padding: var(--mantine-spacing-md);
+  padding-bottom: calc(var(--mantine-spacing-md) + env(safe-area-inset-bottom));
+  border-top: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  background-color: var(--mantine-color-body);
+}
+
+/* Passes the pane height down to the results list. */
+.searchStack {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .body {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   gap: var(--mantine-spacing-xs);
-  /* The results list sets the height; the rail stretches to match it. */
+  /* The rail stretches to the height of the row. */
   align-items: stretch;
 }
 
@@ -66,4 +103,6 @@
   /* Without this a long exercise name stretches the flex item and pushes the
      rail off screen. */
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }

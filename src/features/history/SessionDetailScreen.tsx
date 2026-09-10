@@ -1,8 +1,13 @@
-import { Alert, Badge, Card, Group, Skeleton, Stack, Text, Title } from '@mantine/core';
-import { Link, useParams } from 'react-router';
+import { Alert, Badge, Button, Card, Group, Skeleton, Stack, Text, Title } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router';
+import { useOnline } from '@/app/useOnline';
+import { useAuth } from '@/data/hooks/useAuth';
 import { useProfile } from '@/data/hooks/useProfile';
 import { useSession } from '@/data/hooks/useSession';
 import { useWorkoutVersion } from '@/data/hooks/useWorkout';
+import { deleteSession } from '@/data/mutations/sessions';
 import {
   formatDayLabel,
   formatElapsed,
@@ -11,7 +16,7 @@ import {
   sessionDurationSeconds,
   sessionTotals,
 } from '@/domain/history';
-import type { LoggedSet, SessionEntry } from '@/domain/sessions';
+import type { LoggedSet, Session, SessionEntry } from '@/domain/sessions';
 import { workedSets } from '@/domain/sessions';
 import { adjustedE1rm, bestSet, formatE1rm, formatSet } from '@/domain/strength';
 import type { Unit } from '@/domain/types';
@@ -195,6 +200,88 @@ function EntryRow({ row, displayUnit }: { row: Row; displayUnit: Unit }) {
   );
 }
 
+/** Two taps to delete a past session, at the foot of what it will destroy. */
+function DeleteCluster({ session }: { session: Session }) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+  const online = useOnline();
+  const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const remove = async (): Promise<void> => {
+    if (uid === null) return;
+    setBusy(true);
+    try {
+      await deleteSession(uid, session);
+      notifications.show({ message: 'Session deleted', color: 'gray' });
+      void navigate('/history');
+    } catch (cause: unknown) {
+      setArmed(false);
+      notifications.show({
+        message: cause instanceof Error ? cause.message : 'Could not delete this session.',
+        color: 'red',
+        autoClose: false,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card withBorder padding="sm" data-testid="delete-session">
+      <Stack gap="xs" align="flex-start">
+        <Text size="sm" c="dimmed">
+          This removes the session and recalculates any records it set.
+        </Text>
+        {online ? null : (
+          <Text size="xs" c="dimmed">
+            Offline — records can only be recalculated with a connection.
+          </Text>
+        )}
+        <Group gap="xs" wrap="wrap">
+          {armed ? (
+            <>
+              <Button
+                size="compact-sm"
+                color="red"
+                loading={busy}
+                onClick={() => {
+                  void remove();
+                }}
+              >
+                Delete for good
+              </Button>
+              <Button
+                size="compact-sm"
+                variant="subtle"
+                disabled={busy}
+                onClick={() => {
+                  setArmed(false);
+                }}
+              >
+                Keep it
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="compact-sm"
+              variant="subtle"
+              color="red"
+              disabled={!online}
+              onClick={() => {
+                setArmed(true);
+              }}
+            >
+              Delete session
+            </Button>
+          )}
+        </Group>
+      </Stack>
+    </Card>
+  );
+}
+
 export default function SessionDetailScreen() {
   const { sessionId } = useParams();
   const { session, isPending, notFound } = useSession(sessionId ?? null);
@@ -309,6 +396,8 @@ export default function SessionDetailScreen() {
           <EntryRow key={row.key} row={row} displayUnit={displayUnit} />
         ))}
       </Stack>
+
+      {session.status === 'active' ? null : <DeleteCluster session={session} />}
     </Stack>
   );
 }

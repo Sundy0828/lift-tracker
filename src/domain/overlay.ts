@@ -177,7 +177,8 @@ export type StatsUpdate = {
   prs: PersonalRecord[];
 };
 
-function toPerformance(session: Session, entry: SessionEntry): LastPerformance {
+/** One entry of one session, as a stats document stores it. Warmups dropped. */
+export function toPerformance(session: Session, entry: SessionEntry): LastPerformance {
   return {
     sessionId: session.id,
     performedOn: session.performedOn,

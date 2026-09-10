@@ -1,4 +1,5 @@
 .viewport {
+  /* Height for a parent that gives none. A flex parent overrides it. */
   height: min(56dvh, 520px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -6,6 +7,13 @@
   border-radius: var(--mantine-radius-md);
   /* Keeps momentum scrolling smooth on iOS inside a fixed-height box. */
   -webkit-overflow-scrolling: touch;
+}
+
+/* Fills the free space of a flex parent, and stays at least 240px tall. */
+.fill {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 240px;
 }
 
 .spacer {

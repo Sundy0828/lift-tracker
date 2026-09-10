@@ -15,17 +15,19 @@
     <link rel="icon" href="/icons/icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <script>
-      // Applies the stored color scheme before first paint so a dark-mode
-      // launch never flashes white. Mirrors Mantine's ColorSchemeScript.
+      // Applies the color scheme before first paint so a launch never flashes
+      // white. Dark is the default; a stored choice wins.
       (function () {
         try {
           var stored = localStorage.getItem('mantine-color-scheme-value');
           var scheme =
             stored === 'light' || stored === 'dark'
               ? stored
-              : window.matchMedia('(prefers-color-scheme: dark)').matches
-                ? 'dark'
-                : 'light';
+              : stored === 'auto'
+                ? window.matchMedia('(prefers-color-scheme: dark)').matches
+                  ? 'dark'
+                  : 'light'
+                : 'dark';
           document.documentElement.setAttribute('data-mantine-color-scheme', scheme);
         } catch (e) {
           /* private mode: fall through to Mantine's runtime default */

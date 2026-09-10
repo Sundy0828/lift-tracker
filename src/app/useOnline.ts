@@ -5,9 +5,11 @@ import { useSyncExternalStore } from 'react';
  *
  * `navigator.onLine` is a weak signal — it reports the link, not whether
  * anything at the other end answers, so it says `true` on hotel wifi that goes
- * nowhere. That is fine for what it is used for here: an honest hint that
- * explains why something did not load, never a gate on any action. Logging
- * works offline by design (§2.8) and nothing in the app waits on this.
+ * nowhere. It is mostly an honest hint that explains why something did not
+ * load. Logging works offline by design (§2.8).
+ *
+ * Deleting a session is the one action it gates: that write rebuilds the
+ * record indexes from a server read, which a cache-only read would get wrong.
  */
 
 function subscribe(onChange: () => void): () => void {

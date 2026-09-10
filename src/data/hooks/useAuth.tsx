@@ -14,6 +14,12 @@ import { auth, googleProvider } from '../firebase';
 
 export type AuthStatus = 'loading' | 'signed-in' | 'signed-out';
 
+/** The result of the last confirmation link this session tried to send. */
+export type VerificationSend =
+  { state: 'idle' } | { state: 'sent' } | { state: 'failed'; cause: unknown };
+
+const SEND_IDLE: VerificationSend = { state: 'idle' };
+
 export type AuthValue = {
   user: User | null;
   status: AuthStatus;
@@ -32,6 +38,8 @@ export type AuthValue = {
   signOutUser: () => Promise<void>;
   /** Sends (or resends) the confirmation link to the signed-in address. */
   sendVerification: () => Promise<void>;
+  /** Whether the last confirmation link went out, and why it did not. */
+  verificationSend: VerificationSend;
   /** Re-reads the account from Firebase. True once the address is confirmed. */
   refreshVerification: () => Promise<boolean>;
   /**
@@ -54,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [providerIds, setProviderIds] = useState<readonly string[]>([]);
+  const [verificationSend, setVerificationSend] = useState<VerificationSend>(SEND_IDLE);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (next) => {
@@ -61,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStatus(next === null ? 'signed-out' : 'signed-in');
       setIsEmailVerified(next?.emailVerified ?? false);
       setProviderIds(next?.providerData.map((entry) => entry.providerId) ?? []);
+      if (next === null) setVerificationSend(SEND_IDLE);
       // No profile write happens here on purpose. This provider renders on
       // first paint, so touching Firestore would pull its SDK (~149 kB
       // gzipped — larger than the whole initial-JS budget in §3) into the
@@ -84,15 +94,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const credential = await createUserWithEmailAndPassword(auth, email, password);
         // Sent here rather than from the gate screen, so the link is already
         // in flight by the time the new account lands on it.
-        await sendEmailVerification(credential.user);
+        // A failed send is recorded, not thrown: the account already exists.
+        try {
+          await sendEmailVerification(credential.user);
+          setVerificationSend({ state: 'sent' });
+        } catch (cause) {
+          setVerificationSend({ state: 'failed', cause });
+        }
       },
       signOutUser: async () => {
         await signOut(auth);
       },
       sendVerification: async () => {
         if (auth.currentUser === null) throw new Error('Not signed in.');
-        await sendEmailVerification(auth.currentUser);
+        try {
+          await sendEmailVerification(auth.currentUser);
+          setVerificationSend({ state: 'sent' });
+        } catch (cause) {
+          setVerificationSend({ state: 'failed', cause });
+          throw cause;
+        }
       },
+      verificationSend,
       refreshVerification: async () => {
         const current = auth.currentUser;
         if (current === null) return false;
@@ -125,7 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
     }),
-    [user, status, isEmailVerified, providerIds],
+    [user, status, isEmailVerified, providerIds, verificationSend],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

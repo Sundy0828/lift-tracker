@@ -1,5 +1,6 @@
 import {
   Accordion,
+  ActionIcon,
   Alert,
   Badge,
   Button,
@@ -14,13 +15,14 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { MuscleMap } from '@/components/MuscleMap';
 import { useAuth } from '@/data/hooks/useAuth';
 import { useMuscleLookup } from '@/data/hooks/useMuscleLookup';
 import { useProfile } from '@/data/hooks/useProfile';
 import { useWorkout } from '@/data/hooks/useWorkout';
 import {
+  deleteWorkout,
   discardWorkoutChanges,
   newId,
   publishWorkoutVersion,
@@ -68,6 +70,7 @@ import classes from './WorkoutEditorScreen.module.css';
  */
 export default function WorkoutEditorScreen() {
   const { workoutId = null } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const uid = user?.uid ?? null;
 
@@ -86,6 +89,7 @@ export default function WorkoutEditorScreen() {
   );
   const [name, setName] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
+  const [armedToDelete, setArmedToDelete] = useState(false);
 
   if (isPending) return <Skeleton height={400} radius="md" />;
 
@@ -175,6 +179,17 @@ export default function WorkoutEditorScreen() {
     });
   };
 
+  /** Deletes the workout and leaves. Published versions stay for history. */
+  const remove = (): void => {
+    if (uid === null) return;
+    setArmedToDelete(false);
+    // Not awaited: applied to the local cache immediately, like every other
+    // edit on this screen.
+    void deleteWorkout(uid, workout.id);
+    notifications.show({ message: `Deleted ${workout.name}`, color: 'gray' });
+    void navigate('/workouts');
+  };
+
   const publish = (): void => {
     if (uid === null || !pendingDiff.hasChanges) return;
     const { promise, result } = publishWorkoutVersion(uid, workout, body, published);
@@ -188,21 +203,34 @@ export default function WorkoutEditorScreen() {
   return (
     <Stack>
       <Stack gap={2}>
-        <TextInput
-          aria-label="Workout name"
-          variant="unstyled"
-          size="lg"
-          fw={650}
-          value={name ?? workout.name}
-          onChange={(event) => {
-            setName(event.currentTarget.value);
-          }}
-          onBlur={() => {
-            const trimmed = (name ?? workout.name).trim();
-            if (trimmed !== '' && trimmed !== workout.name) commit({ ...body, name: trimmed });
-            setName(null);
-          }}
-        />
+        <Group gap="xs" wrap="nowrap">
+          <ActionIcon
+            component={Link}
+            to="/workouts"
+            variant="subtle"
+            size="lg"
+            fz="lg"
+            aria-label="Back to workouts"
+          >
+            <span aria-hidden="true">←</span>
+          </ActionIcon>
+          <TextInput
+            aria-label="Workout name"
+            variant="unstyled"
+            size="lg"
+            fw={650}
+            style={{ flex: 1, minWidth: 0 }}
+            value={name ?? workout.name}
+            onChange={(event) => {
+              setName(event.currentTarget.value);
+            }}
+            onBlur={() => {
+              const trimmed = (name ?? workout.name).trim();
+              if (trimmed !== '' && trimmed !== workout.name) commit({ ...body, name: trimmed });
+              setName(null);
+            }}
+          />
+        </Group>
         <Group gap="xs">
           <Badge variant="light" color="gray" size="sm">
             {/* Exercises, not rows: a rest row is a pause, not an exercise. */}
@@ -372,10 +400,41 @@ export default function WorkoutEditorScreen() {
         </Accordion.Item>
       </Accordion>
 
-      <Card withBorder padding="sm">
-        <Button component={Link} to="/workouts" variant="subtle" size="compact-sm">
-          Back to workouts
-        </Button>
+      <Card withBorder padding="sm" data-testid="delete-workout">
+        <Stack gap="xs" align="flex-start">
+          <Text size="sm" c="dimmed">
+            Deleting removes the workout. Sessions you already logged against it stay in history.
+          </Text>
+          <Group gap="xs" wrap="wrap">
+            {armedToDelete ? (
+              <>
+                <Button size="compact-sm" color="red" onClick={remove}>
+                  Delete for good
+                </Button>
+                <Button
+                  size="compact-sm"
+                  variant="subtle"
+                  onClick={() => {
+                    setArmedToDelete(false);
+                  }}
+                >
+                  Keep it
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="compact-sm"
+                variant="subtle"
+                color="red"
+                onClick={() => {
+                  setArmedToDelete(true);
+                }}
+              >
+                Delete workout
+              </Button>
+            )}
+          </Group>
+        </Stack>
       </Card>
 
       <PrescriptionEditor
@@ -389,7 +448,6 @@ export default function WorkoutEditorScreen() {
 
       <ExercisePicker
         opened={picking !== null}
-        workoutName={workout.name}
         onClose={() => {
           setPicking(null);
         }}

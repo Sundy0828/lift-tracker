@@ -17,7 +17,7 @@ if (container === null) {
 
 createRoot(container).render(
   <StrictMode>
-    <ColorSchemeScript defaultColorScheme="auto" />
+    <ColorSchemeScript defaultColorScheme="dark" />
     <Providers>
       <RouterProvider router={router} />
     </Providers>

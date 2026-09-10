@@ -41,7 +41,7 @@ async function addExercise(page: Page, query: string): Promise<void> {
   await page.getByTestId('insert-exercise').last().click();
   await page.getByRole('textbox', { name: 'Search exercises to add' }).fill(query);
   await page.getByTestId('exercise-list').getByRole('button').first().click();
-  const confirm = page.getByRole('button', { name: /^Add to /u });
+  const confirm = page.getByRole('button', { name: 'Add to workout' });
   await confirm.click();
   await expect(confirm).toBeHidden();
   await expect(page.getByRole('dialog')).toHaveCount(0);

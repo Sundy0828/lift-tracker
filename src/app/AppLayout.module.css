@@ -1,9 +1,17 @@
 .shell {
   /* Mobile-first: a single scrolling column under a fixed bottom bar. */
+  --app-column-width: 720px;
+
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--mantine-color-body);
+}
+
+@media (min-width: $mantine-breakpoint-sm) {
+  .shell {
+    --app-column-width: 840px;
+  }
 }
 
 /* A thin strip, not an alert: it must never push the set grid down the page
@@ -24,7 +32,7 @@
   padding: var(--mantine-spacing-md);
   /* Clear the bottom bar plus the home-indicator inset. */
   padding-bottom: calc(72px + env(safe-area-inset-bottom) + var(--mantine-spacing-md));
-  max-width: 720px;
+  max-width: var(--app-column-width);
   width: 100%;
   margin-inline: auto;
 }
@@ -35,7 +43,11 @@
   bottom: 0;
   z-index: 200;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  /* One equal column per item, whatever the item count is. */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  /* The items track the main column; the bar itself stays full width. */
+  padding-inline: max(0px, calc((100% - var(--app-column-width)) / 2));
   padding-bottom: env(safe-area-inset-bottom);
   background: var(--mantine-color-body);
   border-top: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
@@ -59,6 +71,18 @@
 
 .navItem[aria-current='page'] {
   color: var(--mantine-color-anchor);
+}
+
+@media (hover: hover) {
+  .navItem:hover {
+    color: var(--mantine-color-text);
+    background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6));
+  }
+}
+
+.navItem:focus-visible {
+  outline: 2px solid var(--mantine-color-anchor);
+  outline-offset: -3px;
 }
 
 .glyph {

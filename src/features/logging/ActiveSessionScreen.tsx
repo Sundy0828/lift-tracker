@@ -378,7 +378,7 @@ export default function ActiveSessionScreen() {
 
   const abandon = (): void => {
     if (uid === null) return;
-    void abandonSession(uid, session.id);
+    void abandonSession(uid, session);
     stopRest();
     notifications.show({ message: 'Session discarded', color: 'gray' });
     void navigate('/');
@@ -512,7 +512,9 @@ export default function ActiveSessionScreen() {
                   }}
                 >
                   {armedToDiscard
-                    ? 'Tap again to discard everything logged here'
+                    ? totalPerformedSets(entries) === 0
+                      ? 'Tap again to discard it'
+                      : 'Tap again to discard everything logged here'
                     : 'Discard this session'}
                 </Button>
               </>
@@ -587,7 +589,6 @@ export default function ActiveSessionScreen() {
 
       <ExercisePicker
         opened={picking}
-        workoutName={session.workoutName}
         onClose={() => {
           setPicking(false);
         }}

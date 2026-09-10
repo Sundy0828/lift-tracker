@@ -37,14 +37,15 @@ export default function TodayScreen() {
   /**
    * Clearing a session that was never finished.
    *
-   * Not awaited, like every other write (§2.8): `abandonSession` marks the
-   * document abandoned in the local cache, the active-session listener drops
-   * it on the next snapshot, and this alert disappears — offline included.
+   * Not awaited, like every other write (§2.8): `abandonSession` writes to the
+   * local cache, the active-session listener drops the session on the next
+   * snapshot, and this alert disappears — offline included. A session with no
+   * logged set is deleted rather than kept, so it never reaches history.
    */
   const discard = (): void => {
     if (uid === null || active === null) return;
     setArmedToDiscard(false);
-    void abandonSession(uid, active.id);
+    void abandonSession(uid, active);
     notifications.show({ message: 'Session discarded', color: 'gray' });
   };
 
@@ -97,7 +98,7 @@ export default function TodayScreen() {
                   : `${String(strandedCount)} older sessions were also never finished. Clearing this one will offer them next.`}
               </Text>
             )}
-            <Group gap="xs">
+            <Group gap="xs" wrap="wrap">
               <Button component={Link} to={`/session/${active.id}`} size="compact-sm">
                 Resume
               </Button>
@@ -144,7 +145,7 @@ export default function TodayScreen() {
             <Text size="sm" c="dimmed">
               A workout is one reusable list — PUSH, PULL, ABS. Build one and it is here every time.
             </Text>
-            <Button component={Link} to="/workouts" variant="light">
+            <Button component={Link} to="/workouts" variant="light" fullWidth>
               Build a workout
             </Button>
           </Stack>
@@ -201,7 +202,7 @@ export default function TodayScreen() {
             An ad-hoc session logs whatever you feel like doing. It feeds each exercise&apos;s own
             history, but no workout&apos;s — there is no workout for it to belong to.
           </Text>
-          <Button variant="default" size="compact-sm" onClick={startAdHoc}>
+          <Button variant="default" fullWidth onClick={startAdHoc}>
             Start an ad-hoc session
           </Button>
         </Stack>

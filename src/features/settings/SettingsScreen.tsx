@@ -17,7 +17,7 @@ import {
   useMantineColorScheme,
 } from '@mantine/core';
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useAuth } from '@/data/hooks/useAuth';
 import { useProfile } from '@/data/hooks/useProfile';
 import {
@@ -261,6 +261,18 @@ export default function SettingsScreen() {
               />
             </>
           )}
+        </Stack>
+      </Card>
+
+      <Card withBorder>
+        <Stack gap="sm">
+          <Text fw={600}>Exercises</Text>
+          <Text size="sm" c="dimmed">
+            Browse the catalog and manage your custom exercises.
+          </Text>
+          <Button component={Link} to="/exercises" variant="default">
+            Exercise library
+          </Button>
         </Stack>
       </Card>
 

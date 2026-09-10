@@ -1,7 +1,13 @@
 # lift-tracker
 
 A React 19 + TypeScript PWA for planning, logging, and reviewing lifting sessions.
-See [BUILD_PLAN.md](BUILD_PLAN.md) for the architecture and the phase plan.
+
+Docs live in [docs/](docs/):
+
+- [BUILD_PLAN.md](docs/BUILD_PLAN.md) — the architecture and the phase plan.
+- [IDEAS.md](docs/IDEAS.md) — a backlog of things to build only if users ask.
+- [EMAIL_VERIFICATION.md](docs/EMAIL_VERIFICATION.md) — how the confirmation link works, and what to
+  check when no mail arrives.
 
 **Status: phase 2 complete.** On the phase 0 foundation (auth, offline
 Firestore, unit preference, installable shell) sit a bundled catalog of 876

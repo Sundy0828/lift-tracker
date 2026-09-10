@@ -32,19 +32,20 @@ async function addExercise(page: Page, query: string): Promise<void> {
   await openPicker(page);
   await page.getByRole('textbox', { name: 'Search exercises to add' }).fill(query);
   await page.getByTestId('exercise-list').getByRole('button').first().click();
-  const confirm = page.getByRole('button', { name: /^Add to /u });
+  const confirm = page.getByRole('button', { name: 'Add to workout' });
   await confirm.click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
 test.describe('exercise picker', () => {
-  test('the exercise library is reachable from the bottom navigation', async ({ page }) => {
+  test('the exercise library is reachable from settings', async ({ page }) => {
     await signUp(page, 'pick-a');
 
     await page
       .getByRole('navigation', { name: 'Main' })
-      .getByRole('link', { name: 'Exercises' })
+      .getByRole('link', { name: 'Settings' })
       .click();
+    await page.getByRole('link', { name: 'Exercise library' }).click();
 
     await expect(page).toHaveURL(/\/exercises$/u);
     await expect(page.getByRole('heading', { name: 'Exercises' })).toBeVisible();
@@ -106,8 +107,9 @@ test.describe('exercise picker', () => {
     // And it really exists in their library, not just in this workout.
     await page
       .getByRole('navigation', { name: 'Main' })
-      .getByRole('link', { name: 'Exercises' })
+      .getByRole('link', { name: 'Settings' })
       .click();
+    await page.getByRole('link', { name: 'Exercise library' }).click();
     await page.getByRole('textbox', { name: 'Search exercises' }).fill('yankee');
     await expect(page.getByTestId('exercise-list').getByText(CUSTOM)).toBeVisible();
   });

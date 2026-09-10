@@ -16,7 +16,7 @@ import { Link, useNavigate } from 'react-router';
 import { useAuth } from '@/data/hooks/useAuth';
 import { useProfile } from '@/data/hooks/useProfile';
 import { useWorkouts } from '@/data/hooks/useWorkouts';
-import { archiveWorkout, createWorkout, deleteWorkout, newId } from '@/data/mutations/workouts';
+import { archiveWorkout, createWorkout, newId } from '@/data/mutations/workouts';
 import {
   estimateWorkoutSeconds,
   exerciseSlots,
@@ -141,28 +141,16 @@ export default function WorkoutsScreen() {
                     </Text>
                   ) : null}
                 </Stack>
-                <Group gap={2} wrap="nowrap">
-                  <ActionIcon
-                    variant="subtle"
-                    color="gray"
-                    aria-label={`Archive ${workout.name}`}
-                    onClick={() => {
-                      if (uid !== null) void archiveWorkout(uid, workout.id, true);
-                    }}
-                  >
-                    ▽
-                  </ActionIcon>
-                  <ActionIcon
-                    variant="subtle"
-                    color="red"
-                    aria-label={`Delete ${workout.name}`}
-                    onClick={() => {
-                      if (uid !== null) void deleteWorkout(uid, workout.id);
-                    }}
-                  >
-                    ✕
-                  </ActionIcon>
-                </Group>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  aria-label={`Archive ${workout.name}`}
+                  onClick={() => {
+                    if (uid !== null) void archiveWorkout(uid, workout.id, true);
+                  }}
+                >
+                  ▽
+                </ActionIcon>
               </Group>
             </Card>
           );

@@ -52,7 +52,7 @@ test.describe('exercise preview before adding', () => {
     await expect(page.getByText('Start', { exact: true })).toBeVisible();
     await expect(page.getByText('Finish', { exact: true })).toBeVisible();
     await expect(page.getByText('Instructions')).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Add to DELTS$/u })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add to workout' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
   });
 
@@ -67,7 +67,7 @@ test.describe('exercise preview before adding', () => {
 
     // Back on the search list, query intact.
     await expect(box).toHaveValue('side lateral raise');
-    await expect(page.getByRole('button', { name: /^Add to DELTS$/u })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Add to workout' })).toBeHidden();
 
     await page.keyboard.press('Escape');
     await expect(page.getByText('No exercises yet.')).toBeVisible();
@@ -79,16 +79,19 @@ test.describe('exercise preview before adding', () => {
 
     await page.getByRole('textbox', { name: 'Search exercises to add' }).fill('side lateral raise');
     await page.getByTestId('exercise-list').getByRole('button').first().click();
-    await page.getByRole('button', { name: /^Add to DELTS$/u }).click();
+    await page.getByRole('button', { name: 'Add to workout' }).click();
 
     await expect(page.getByText('1 exercise', { exact: true })).toBeVisible();
     await expect(page.getByText('3 x 8-12 @ 1-2 RIR')).toBeVisible();
   });
 
-  test('the picker names the workout it will add to', async ({ page }) => {
+  test('the picker chrome does not carry the workout name', async ({ page }) => {
     await signIn(page);
     await openPicker(page);
-    await expect(page.getByText('Add to DELTS')).toBeVisible();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: 'Add exercise' })).toBeVisible();
+    await expect(dialog.getByText('DELTS')).toHaveCount(0);
   });
 
   test('browsing exercises shows the same pictures', async ({ page }) => {

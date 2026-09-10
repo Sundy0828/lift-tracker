@@ -63,7 +63,7 @@ export function Providers({ children }: { children: ReactNode }) {
   useEffect(hideSplash, []);
 
   return (
-    <MantineProvider theme={theme} defaultColorScheme="auto">
+    <MantineProvider theme={theme} defaultColorScheme="dark">
       <DeferredNotifications />
       <AuthProvider>{children}</AuthProvider>
     </MantineProvider>

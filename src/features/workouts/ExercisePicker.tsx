@@ -17,7 +17,6 @@ import classes from './ExercisePicker.module.css';
 
 type Props = {
   opened: boolean;
-  workoutName: string;
   onClose: () => void;
   onPick: (exercise: Exercise) => void;
 };
@@ -39,7 +38,7 @@ type Props = {
  * screen. This is where you find out the catalog is missing your lift, and
  * leaving for another screen loses the workout you were building.
  */
-export function ExercisePicker({ opened, workoutName, onClose, onPick }: Props) {
+export function ExercisePicker({ opened, onClose, onPick }: Props) {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const { resolver, index, isPending } = useExerciseLibrary();
@@ -91,6 +90,10 @@ export function ExercisePicker({ opened, workoutName, onClose, onPick }: Props) 
     onClose();
   };
 
+  const closePreview = (): void => {
+    setPreviewing(null);
+  };
+
   /**
    * Adds one exercise. Both call sites close the picker on a pick, so this is
    * the end of the visit and the search is cleared with it — `onClose` does
@@ -117,120 +120,133 @@ export function ExercisePicker({ opened, workoutName, onClose, onPick }: Props) 
 
   return (
     <>
-      <Modal opened={opened} onClose={close} title={`Add to ${workoutName}`} fullScreen>
-        <Stack>
-          <TextInput
-            placeholder="Search exercises"
-            aria-label="Search exercises to add"
-            data-autofocus
-            value={query}
-            onChange={(event) => {
-              setQuery(event.currentTarget.value);
-            }}
-          />
+      <Modal.Root
+        opened={opened}
+        onClose={close}
+        fullScreen
+        classNames={{ content: classes.pane, header: classes.paneHeader, body: classes.paneBody }}
+      >
+        <Modal.Overlay />
+        <Modal.Content>
+          <Modal.Header>
+            <Modal.Title>Add exercise</Modal.Title>
+            <Modal.CloseButton />
+          </Modal.Header>
+          <Modal.Body>
+            <Stack className={classes.searchStack}>
+              <TextInput
+                placeholder="Search exercises"
+                aria-label="Search exercises to add"
+                data-autofocus
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.currentTarget.value);
+                }}
+              />
 
-          {query === '' && recent.length > 0 ? (
-            <Group gap={6} role="group" aria-label="Recent searches">
-              <Text size="xs" c="dimmed">
-                Recent
-              </Text>
-              {recent.map((entry) => (
+              {query === '' && recent.length > 0 ? (
+                <Group gap={6} role="group" aria-label="Recent searches">
+                  <Text size="xs" c="dimmed">
+                    Recent
+                  </Text>
+                  {recent.map((entry) => (
+                    <Button
+                      key={entry}
+                      size="compact-xs"
+                      variant="light"
+                      onClick={() => {
+                        setQuery(entry);
+                      }}
+                    >
+                      {entry}
+                    </Button>
+                  ))}
+                </Group>
+              ) : null}
+
+              <Group justify="space-between" wrap="nowrap" gap="xs">
+                <Text size="xs" c="dimmed">
+                  Tap one to see the movement before adding it.
+                </Text>
                 <Button
-                  key={entry}
                   size="compact-xs"
                   variant="light"
                   onClick={() => {
-                    setQuery(entry);
+                    setCreating(true);
                   }}
                 >
-                  {entry}
+                  New exercise
                 </Button>
-              ))}
-            </Group>
-          ) : null}
+              </Group>
 
-          <Group justify="space-between" wrap="nowrap" gap="xs">
-            <Text size="xs" c="dimmed">
-              Tap one to see the movement before adding it.
-            </Text>
-            <Button
-              size="compact-xs"
-              variant="light"
-              onClick={() => {
-                setCreating(true);
-              }}
-            >
-              New exercise
-            </Button>
-          </Group>
+              {isPending ? (
+                <Skeleton height={320} radius="md" />
+              ) : (
+                <div className={classes.body}>
+                  <div className={classes.rail} role="group" aria-label="Filter by body part">
+                    <RegionButton
+                      label="All"
+                      active={region === null}
+                      onClick={() => {
+                        setRegion(null);
+                      }}
+                    />
+                    {MUSCLE_GROUPS_BY_REGION.map((entry) => (
+                      <RegionButton
+                        key={entry.region}
+                        label={entry.region}
+                        active={region === entry.region}
+                        onClick={() => {
+                          // Tapping the active region clears it, so the rail needs
+                          // no "off" control of its own beyond All.
+                          setRegion(region === entry.region ? null : entry.region);
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div className={classes.results}>
+                    <ExerciseList exercises={results} onSelect={setPreviewing} withChevron fill />
+                  </div>
+                </div>
+              )}
+            </Stack>
+          </Modal.Body>
+        </Modal.Content>
+      </Modal.Root>
 
-          {isPending ? (
-            <Skeleton height={320} radius="md" />
-          ) : (
-            <div className={classes.body}>
-              <div className={classes.rail} role="group" aria-label="Filter by body part">
-                <RegionButton
-                  label="All"
-                  active={region === null}
-                  onClick={() => {
-                    setRegion(null);
-                  }}
-                />
-                {MUSCLE_GROUPS_BY_REGION.map((entry) => (
-                  <RegionButton
-                    key={entry.region}
-                    label={entry.region}
-                    active={region === entry.region}
-                    onClick={() => {
-                      // Tapping the active region clears it, so the rail needs
-                      // no "off" control of its own beyond All.
-                      setRegion(region === entry.region ? null : entry.region);
-                    }}
-                  />
-                ))}
-              </div>
-              <div className={classes.results}>
-                <ExerciseList exercises={results} onSelect={setPreviewing} withChevron />
-              </div>
-            </div>
-          )}
-        </Stack>
-      </Modal>
-
-      <Modal
+      <Modal.Root
         opened={previewing !== null}
-        onClose={() => {
-          setPreviewing(null);
-        }}
-        title={previewing?.name ?? ''}
+        onClose={closePreview}
         fullScreen
         // Sits above the search modal, which stays mounted behind it so the
         // query and scroll position survive a cancel.
         zIndex={400}
+        classNames={{ content: classes.pane, header: classes.paneHeader, body: classes.paneBody }}
       >
-        {previewing === null ? null : (
-          <Stack>
-            <ExerciseDetail exercise={previewing} />
-            <Group justify="flex-end" mt="sm">
-              <Button
-                variant="default"
-                onClick={() => {
-                  setPreviewing(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  add(previewing);
-                }}
-              >
-                Add to {workoutName}
-              </Button>
-            </Group>
-          </Stack>
-        )}
-      </Modal>
+        <Modal.Overlay />
+        <Modal.Content>
+          <Modal.Header>
+            <Modal.Title>{previewing?.name ?? ''}</Modal.Title>
+            <Modal.CloseButton />
+          </Modal.Header>
+          <Modal.Body>
+            {previewing === null ? null : <ExerciseDetail exercise={previewing} />}
+          </Modal.Body>
+          <Group justify="flex-end" className={classes.actions}>
+            <Button variant="default" onClick={closePreview}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (previewing === null) return;
+                add(previewing);
+              }}
+            >
+              Add to workout
+            </Button>
+          </Group>
+        </Modal.Content>
+      </Modal.Root>
 
       {creating ? (
         <CustomExerciseForm
