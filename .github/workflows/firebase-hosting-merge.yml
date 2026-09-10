@@ -4,8 +4,21 @@ on:
     branches:
       - master
 
+# A newer push to master makes an in-flight run pointless: it would verify and
+# deploy a commit that is already behind.
+concurrency:
+  group: deploy-live
+  cancel-in-progress: true
+
 jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+
   build_and_deploy:
+    # The gate. Every check in `verify` has to pass before anything reaches the
+    # live channel — a red suite means the build is not fit to ship, so there
+    # is nothing to think about here.
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

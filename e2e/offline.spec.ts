@@ -82,16 +82,23 @@ async function takeControl(page: Page): Promise<void> {
 
 type Account = { localId: string; email: string };
 
-/** The uid behind a test address, straight from the auth emulator. */
+/**
+ * The uid behind a test address, straight from the auth emulator.
+ *
+ * Looked up **by email** rather than by downloading the account list and
+ * filtering: `accounts:batchGet` pages, so with the rest of the suite creating
+ * accounts alongside this one the address is not reliably on the first page.
+ * `Bearer owner` is the emulator's stand-in for an admin credential.
+ */
 async function uidFor(page: Page, email: string): Promise<string> {
-  const response = await page.request.get(
-    `${AUTH_EMULATOR}/identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts`,
-    { headers: { Authorization: 'Bearer owner' } },
+  const response = await page.request.post(
+    `${AUTH_EMULATOR}/identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:lookup`,
+    { headers: { Authorization: 'Bearer owner' }, data: { email: [email] } },
   );
-  expect(response.ok(), 'the auth emulator should list its accounts').toBe(true);
+  expect(response.ok(), `the auth emulator should resolve ${email}`).toBe(true);
 
-  const { userInfo = [] } = (await response.json()) as { userInfo?: Account[] };
-  const uid = userInfo.find((account) => account.email === email)?.localId;
+  const { users = [] } = (await response.json()) as { users?: Account[] };
+  const uid = users[0]?.localId;
   expect(uid, `${email} should have an account`).toBeTruthy();
   return uid ?? '';
 }
@@ -167,6 +174,9 @@ test.describe('offline', () => {
     await logSet(page, 2, '100', '7');
     await logSet(page, 3, '95', '6');
 
+    // All three logged, by the app's own count.
+    await expect(page.getByText(/3 of 3 sets · 3 logged/u)).toBeVisible();
+
     // The strip says both halves at once: no network, and the sets are safe.
     await expect(page.getByText(/saved on this device/iu)).toBeVisible();
 
@@ -177,6 +187,11 @@ test.describe('offline', () => {
 
     // --- reload, still offline: the shell comes from the precache and the
     // sets come back out of IndexedDB.
+    //
+    // Waited on rather than raced: the set grid is a debounced draft, and until
+    // the screen stops saying "saving" the write has not been handed to
+    // Firestore at all. Reloading before that tests nothing about the cache.
+    await expect(page.getByText(/· saving/u)).toHaveCount(0);
     await page.reload();
     await expect(page.getByRole('heading', { name: WORKOUT })).toBeVisible();
     await expect(page.getByRole('spinbutton', { name: 'Set 1 weight' })).toHaveValue('100');

@@ -57,7 +57,7 @@ test.describe('workouts', () => {
     await addExercise(page, 'barbell row');
     await addExercise(page, 'barbell squat');
 
-    await expect(page.getByText('3 exercises')).toBeVisible();
+    await expect(page.getByText('3 exercises', { exact: true })).toBeVisible();
     // Three exercises at the default 3 sets each.
     await expect(page.getByText('9 sets', { exact: true })).toBeVisible();
   });
@@ -144,7 +144,7 @@ test.describe('workouts', () => {
     await addExercise(page, 'barbell bench press');
 
     await expect(page.getByText('(again)')).toBeVisible();
-    await expect(page.getByText('2 exercises')).toBeVisible();
+    await expect(page.getByText('2 exercises', { exact: true })).toBeVisible();
   });
 
   test('publishing snapshots the workout, and editing it later leaves that snapshot alone', async ({

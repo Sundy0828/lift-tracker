@@ -7,11 +7,45 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
-    // Shared workouts are public-read; hardened with rules tests in phase 6.
+    /**
+     * Shared workouts (§2.9) — the one collection outside users/{uid}, and so
+     * the only place these rules carry real weight.
+     *
+     * `get` and `list` are split on purpose. A share is public to fetch **one
+     * at a time**, because an unguessable link is the whole access control; it
+     * is never listable by a stranger, or the collection would be a directory
+     * of everyone's workouts. Listing is confined to your own shares, which is
+     * also what makes the owner's inventory query legal: rules are evaluated
+     * per candidate document, so a query that does not constrain `ownerUid` is
+     * refused outright rather than quietly filtered.
+     *
+     * `ownerUid` is immutable after create. Without that, an owner could hand
+     * a share to someone else — or a third party could take one — and every
+     * check below keys on it.
+     */
     match /sharedWorkouts/{shareId} {
-      allow read: if resource.data.revoked == false;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerUid;
-      allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+      function isOwner() {
+        return request.auth != null
+               && resource.data.ownerUid is string
+               && request.auth.uid == resource.data.ownerUid;
+      }
+
+      // Revoked means gone. The owner keeps reading theirs so they can see
+      // what they have turned off.
+      allow get: if resource.data.revoked == false || isOwner();
+      allow list: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+
+      // A share you create is yours and starts live. Claiming someone else's
+      // uid is the attack this closes.
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUid is string
+                    && request.auth.uid == request.resource.data.ownerUid
+                    && request.resource.data.revoked == false;
+
+      allow update: if isOwner()
+                    && request.resource.data.ownerUid == resource.data.ownerUid;
+
+      allow delete: if isOwner();
     }
 
     match /{document=**} {

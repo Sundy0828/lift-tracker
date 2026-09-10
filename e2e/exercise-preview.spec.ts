@@ -81,7 +81,7 @@ test.describe('exercise preview before adding', () => {
     await page.getByTestId('exercise-list').getByRole('button').first().click();
     await page.getByRole('button', { name: /^Add to DELTS$/u }).click();
 
-    await expect(page.getByText('1 exercise')).toBeVisible();
+    await expect(page.getByText('1 exercise', { exact: true })).toBeVisible();
     await expect(page.getByText('3 x 8-12 @ 1-2 RIR')).toBeVisible();
   });
 

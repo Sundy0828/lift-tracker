@@ -32,6 +32,16 @@ const routes: RouteObject[] = [
     ...screen(() => import('@/features/auth/SignInScreen')),
   },
   {
+    /**
+     * The one public route (§2.9). Outside `RequireAuth` deliberately: a share
+     * link has to open for someone with no account, which is what sharing is
+     * for. It renders its own shell rather than the signed-in layout, so
+     * nothing on it assumes a user.
+     */
+    path: '/share/:shareId',
+    ...screen(() => import('@/features/sharing/SharedWorkoutScreen')),
+  },
+  {
     path: '/',
     element: (
       <RequireAuth>

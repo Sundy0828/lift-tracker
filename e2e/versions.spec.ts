@@ -44,18 +44,46 @@ async function dragOnto(page: Page, name: string, onto: string): Promise<void> {
   const handle = page.getByRole('button', { name: new RegExp(`^Reorder or group ${name}$`, 'u') });
   const target = page.getByRole('button', { name: new RegExp(`^Reorder or group ${onto}$`, 'u') });
 
-  const from = await handle.boundingBox();
-  const to = await target.boundingBox();
-  expect(from, `no box for ${name}`).not.toBeNull();
-  expect(to, `no box for ${onto}`).not.toBeNull();
-  if (from === null || to === null) return;
-
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  // `hover` rather than a box captured up front: it waits for the row to stop
+  // moving and scrolls it into view. Adding an exercise closes two modals and
+  // reflows the list, so coordinates read before that settles can point at
+  // empty space by the time the button goes down — and a mousedown that misses
+  // the handle starts no drag at all.
+  await handle.hover();
   await page.mouse.down();
   await page.waitForTimeout(DRAG_HOLD_MS);
-  // Nudge clear of the row, then travel to the target.
+
+  const from = await handle.boundingBox();
+  expect(from, `no box for ${name}`).not.toBeNull();
+  if (from === null) return;
+  // Nudge clear of the row so the sortable picks it up.
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 - 10, { steps: 5 });
+
+  // Read after the drag has started: the rows have shifted to make room, so a
+  // box read before it is stale.
+  const to = await target.boundingBox();
+  expect(to, `no box for ${onto}`).not.toBeNull();
+  if (to === null) return;
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await holdToGroup(page, to.x + to.width / 2, to.y + to.height / 2);
+}
+/**
+ * Holds over the target until it offers to group, jiggling as a finger would.
+ *
+ * The app arms grouping on a dwell, and dnd-kit re-evaluates the drop target on
+ * every pointer move, so the rows shifting to make room can flip that target
+ * away the instant a *synthetic* pointer stops dead — cancelling the dwell with
+ * nothing left to restart it. A real hand is never that still. These 1px nudges
+ * stay inside the target, which the app treats as the same hover and so does not
+ * restart, and are what make the gesture land reliably.
+ */
+async function holdToGroup(page: Page, x: number, y: number): Promise<void> {
+  const hint = page.getByText('release to group');
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if (await hint.isVisible()) return;
+    await page.mouse.move(x + (attempt % 2 === 0 ? 1 : -1), y, { steps: 2 });
+    await page.waitForTimeout(100);
+  }
 }
 
 /**
@@ -79,7 +107,7 @@ async function buildBodyweightWorkout(page: Page): Promise<void> {
   await addExercise(page, 'pushups');
   await addExercise(page, 'crunches');
   await addExercise(page, 'pullups');
-  await expect(page.getByText('4 exercises')).toBeVisible();
+  await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
 }
 
 test.describe('circuits', () => {
@@ -166,13 +194,13 @@ test.describe('discarding workout edits', () => {
     await nameField.fill('PUSH EXPERIMENT');
     await nameField.blur();
     await expect(page.getByText('Unpublished changes')).toBeVisible();
-    await expect(page.getByText('2 exercises')).toBeVisible();
+    await expect(page.getByText('2 exercises', { exact: true })).toBeVisible();
 
     // Back it all out.
     await page.getByRole('button', { name: /^Discard, back to v1$/u }).click();
 
     await expect(page.getByText('Unpublished changes')).toBeHidden();
-    await expect(page.getByText('1 exercise')).toBeVisible();
+    await expect(page.getByText('1 exercise', { exact: true })).toBeVisible();
     await expect(nameField).toHaveValue('PUSH');
     // Discarding is not a publish, so the version does not move.
     await expect(page.getByText('v1', { exact: true }).first()).toBeVisible();
@@ -196,7 +224,7 @@ test.describe('discarding workout edits', () => {
       'Autosave Workout',
     );
 
-    await expect(page.getByText('1 exercise')).toBeVisible();
+    await expect(page.getByText('1 exercise', { exact: true })).toBeVisible();
     await expect(page.getByText('Unpublished changes')).toBeVisible();
   });
 

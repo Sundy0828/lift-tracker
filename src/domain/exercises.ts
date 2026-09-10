@@ -136,6 +136,33 @@ export function isExerciseCategory(value: unknown): value is ExerciseCategory {
   return typeof value === 'string' && (EXERCISE_CATEGORIES as readonly string[]).includes(value);
 }
 
+/**
+ * Prefix on every custom-exercise id, so a reference can be classified without
+ * a lookup.
+ *
+ * That matters for sharing (§2.9): a share payload has to inline the full
+ * definition of every *custom* exercise it uses and reference catalog ones by
+ * id alone, and the recipient has no way to resolve the sender's ids. The
+ * prefix is what makes "is this mine to inline?" a decidable question.
+ */
+export const CUSTOM_ID_PREFIX = 'custom_';
+
+export function isCustomExerciseId(id: string): boolean {
+  return id.startsWith(CUSTOM_ID_PREFIX);
+}
+
+/**
+ * The key custom exercises are deduped on when importing a share.
+ *
+ * Case and surrounding space only. Nothing cleverer on purpose: collapsing
+ * "DB Bench" into "Dumbbell Bench Press" would be a guess about the sender's
+ * intent, and merging two exercises that are not the same silently corrupts
+ * the importer's history.
+ */
+export function normalizeExerciseName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/gu, ' ');
+}
+
 export function fromCatalog(entry: CatalogExercise): Exercise {
   return {
     id: entry.id,

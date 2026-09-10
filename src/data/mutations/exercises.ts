@@ -1,5 +1,6 @@
 import { deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import type { Equipment } from '@/domain/exercises';
+import { CUSTOM_ID_PREFIX } from '@/domain/exercises';
 import type { MuscleGroup } from '@/domain/muscles';
 import { paths } from '../paths';
 
@@ -15,7 +16,7 @@ export type CustomExerciseInput = {
  * offline. `custom_` keeps them from ever colliding with a catalog id.
  */
 export function newCustomExerciseId(): string {
-  return `custom_${crypto.randomUUID()}`;
+  return `${CUSTOM_ID_PREFIX}${crypto.randomUUID()}`;
 }
 
 export function saveCustomExercise(

@@ -47,6 +47,7 @@ import {
   withGroupRounds,
 } from '@/domain/workouts';
 import { SESSION_STOPS, workoutVolume } from '@/domain/volume';
+import { SharePanel } from '@/features/sharing/SharePanel';
 import { ExercisePicker } from './ExercisePicker';
 import { PrescriptionEditor, type SlotEdit } from './PrescriptionEditor';
 import { SlotList } from './SlotList';
@@ -339,6 +340,15 @@ export default function WorkoutEditorScreen() {
           <Accordion.Control>Version history</Accordion.Control>
           <Accordion.Panel>
             <VersionHistory versions={versions} currentVersion={workout.currentVersion} />
+          </Accordion.Panel>
+        </Accordion.Item>
+
+        <Accordion.Item value="share">
+          <Accordion.Control>Share</Accordion.Control>
+          <Accordion.Panel>
+            {/* The published version, not the draft on screen: a link has to
+                carry a snapshot that cannot move under the recipient. */}
+            <SharePanel workout={workout} version={published} />
           </Accordion.Panel>
         </Accordion.Item>
       </Accordion>

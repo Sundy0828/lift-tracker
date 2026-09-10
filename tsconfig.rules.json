@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node", "vitest/globals"],
+    "outDir": "./node_modules/.tmp/types/rules",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.rules.tsbuildinfo"
+  },
+  "include": ["rules", "vitest.rules.config.ts"]
+}

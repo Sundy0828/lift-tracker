@@ -18,6 +18,8 @@ export const paths = {
   user: (uid: string): DocumentReference => doc(db, 'users', uid),
   customExercises: (uid: string): CollectionReference =>
     collection(db, 'users', uid, 'customExercises'),
+  customExercise: (uid: string, id: string): DocumentReference =>
+    doc(db, 'users', uid, 'customExercises', id),
   workouts: (uid: string): CollectionReference => collection(db, 'users', uid, 'workouts'),
   workout: (uid: string, workoutId: string): DocumentReference =>
     doc(db, 'users', uid, 'workouts', workoutId),
@@ -39,4 +41,6 @@ export const paths = {
   exerciseStat: (uid: string, exerciseId: string): DocumentReference =>
     doc(db, 'users', uid, 'exerciseStats', exerciseId),
   sharedWorkouts: (): CollectionReference => collection(db, 'sharedWorkouts'),
+  /** Public-read, owner-only-write: the one collection outside `users/` (§2.9). */
+  sharedWorkout: (shareId: string): DocumentReference => doc(db, 'sharedWorkouts', shareId),
 } as const;

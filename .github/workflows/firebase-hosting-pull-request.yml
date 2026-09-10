@@ -7,9 +7,21 @@ permissions:
   contents: read
   pull-requests: write
 
+# A new push to the branch supersedes the run in flight.
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
+  # Runs for every pull request, forks included: the checks are the point of a
+  # pull request, and none of them need a secret.
+  verify:
+    uses: ./.github/workflows/verify.yml
+
   build_and_preview:
-    # Skip PRs from forks: they can't see repo secrets, so the deploy step would fail.
+    needs: verify
+    # Skip PRs from forks: they can't see repo secrets, so the deploy step would
+    # fail. `verify` above still runs for them.
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:

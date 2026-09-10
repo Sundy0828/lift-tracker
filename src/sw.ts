@@ -1,8 +1,12 @@
 /// <reference lib="webworker" />
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { ExpirationPlugin } from 'workbox-expiration';
-import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
-import { registerRoute } from 'workbox-routing';
+import {
+  cleanupOutdatedCaches,
+  createHandlerBoundToURL,
+  precacheAndRoute,
+} from 'workbox-precaching';
+import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst } from 'workbox-strategies';
 import type { WorkboxPlugin } from 'workbox-core';
 
@@ -14,6 +18,25 @@ declare const self: ServiceWorkerGlobalScope;
  */
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
+
+/**
+ * Every in-app path falls back to the shell, the way the hosting rewrite does.
+ *
+ * The app is one page with client-side routes, so `/session/abc123` is not a
+ * file and is not in the precache manifest. Online, Firebase Hosting rewrites
+ * it to `/index.html` (see firebase.json) — offline, that rewrite is this
+ * worker's job. Without it a reload anywhere but `/` fails outright, which is
+ * precisely the case §2.8 cares about: mid-session, no signal, screen locked,
+ * the tab gets reloaded and the workout has to still be there.
+ *
+ * The denylist keeps Firebase's own reserved `/__/*` paths (auth helpers,
+ * hosting internals) going to the network instead of being handed the shell.
+ * Cross-origin navigations need no exclusion — they are outside this worker's
+ * scope, so it never sees them.
+ */
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL('index.html'), { denylist: [/^\/__\//u] }),
+);
 
 /**
  * Exercise images are remote (free-exercise-db on raw.githubusercontent.com)

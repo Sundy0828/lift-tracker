@@ -47,7 +47,7 @@ async function buildWorkout(page: Page, name: string): Promise<void> {
   await addExercise(page, 'pushups');
   await addExercise(page, 'crunches');
   await addExercise(page, 'pullups');
-  await expect(page.getByText('4 exercises')).toBeVisible();
+  await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
 }
 
 /** Picks up `name`'s handle and holds it over `onto`'s, without releasing. */
@@ -55,18 +55,46 @@ async function dragOnto(page: Page, name: string, onto: string): Promise<void> {
   const handle = page.getByRole('button', { name: new RegExp(`^Reorder or group ${name}$`, 'u') });
   const target = page.getByRole('button', { name: new RegExp(`^Reorder or group ${onto}$`, 'u') });
 
-  const from = await handle.boundingBox();
-  const to = await target.boundingBox();
-  expect(from, `no box for ${name}`).not.toBeNull();
-  expect(to, `no box for ${onto}`).not.toBeNull();
-  if (from === null || to === null) return;
-
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  // `hover` rather than a box captured up front: it waits for the row to stop
+  // moving and scrolls it into view. Adding an exercise closes two modals and
+  // reflows the list, so coordinates read before that settles can point at
+  // empty space by the time the button goes down — and a mousedown that misses
+  // the handle starts no drag at all.
+  await handle.hover();
   await page.mouse.down();
   await page.waitForTimeout(DRAG_HOLD_MS);
-  // Nudge clear of the row, then travel to the target.
+
+  const from = await handle.boundingBox();
+  expect(from, `no box for ${name}`).not.toBeNull();
+  if (from === null) return;
+  // Nudge clear of the row so the sortable picks it up.
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 - 10, { steps: 5 });
+
+  // Read after the drag has started: the rows have shifted to make room, so a
+  // box read before it is stale.
+  const to = await target.boundingBox();
+  expect(to, `no box for ${onto}`).not.toBeNull();
+  if (to === null) return;
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await holdToGroup(page, to.x + to.width / 2, to.y + to.height / 2);
+}
+/**
+ * Holds over the target until it offers to group, jiggling as a finger would.
+ *
+ * The app arms grouping on a dwell, and dnd-kit re-evaluates the drop target on
+ * every pointer move, so the rows shifting to make room can flip that target
+ * away the instant a *synthetic* pointer stops dead — cancelling the dwell with
+ * nothing left to restart it. A real hand is never that still. These 1px nudges
+ * stay inside the target, which the app treats as the same hover and so does not
+ * restart, and are what make the gesture land reliably.
+ */
+async function holdToGroup(page: Page, x: number, y: number): Promise<void> {
+  const hint = page.getByText('release to group');
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if (await hint.isVisible()) return;
+    await page.mouse.move(x + (attempt % 2 === 0 ? 1 : -1), y, { steps: 2 });
+    await page.waitForTimeout(100);
+  }
 }
 
 async function group(page: Page, name: string, onto: string, members: number): Promise<void> {
@@ -145,7 +173,7 @@ test.describe('drag to group', () => {
 
     // Released before the dwell settled, so it stayed a reorder.
     await expect(page.getByTestId('circuit-block')).toHaveCount(0);
-    await expect(page.getByText('4 exercises')).toBeVisible();
+    await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
   });
 
   test('two members of the same circuit offer no grouping', async ({ page }) => {
@@ -246,7 +274,7 @@ test.describe('adding in place, and uneven rests', () => {
     const names = await page.getByTestId('slot-name').allTextContents();
     expect(names[0]).toContain('Bench Jump');
     expect(names[1]).toContain('Barbell Squat');
-    await expect(page.getByText('5 exercises')).toBeVisible();
+    await expect(page.getByText('5 exercises', { exact: true })).toBeVisible();
   });
 
   test('the plus on a circuit member adds another member', async ({ page }) => {
@@ -283,10 +311,14 @@ test.describe('adding in place, and uneven rests', () => {
     const lengths = page.getByRole('textbox', { name: 'Rest length' });
     await expect(lengths).toHaveCount(2);
     await lengths.nth(1).fill('90');
+    await lengths.nth(1).blur();
+    // Asserted before the reload: the write is fire-and-forget (§2.8), so this
+    // is what waits for it instead of racing it.
+    await expect(lengths.nth(1)).toHaveValue(/90/);
 
     // Rests sit inside the circuit but are not exercises: still 3 rounds of 3.
     await expect(page.getByText(/3 rounds of these 3, in order/u)).toBeVisible();
-    await expect(page.getByText('4 exercises')).toBeVisible();
+    await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
 
     await page.reload();
     const after = page.getByRole('textbox', { name: 'Rest length' });
@@ -305,7 +337,7 @@ test.describe('adding in place, and uneven rests', () => {
 
     // Still 12 sets, and the exercise count is unchanged.
     await expect(page.getByText('12 sets', { exact: true })).toBeVisible();
-    await expect(page.getByText('4 exercises')).toBeVisible();
+    await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
   });
 
   test('the round rest label explains itself on hover', async ({ page }) => {
@@ -313,7 +345,7 @@ test.describe('adding in place, and uneven rests', () => {
     await buildWorkout(page, 'Round Rest Tooltip Workout');
     await group(page, 'Crunches', 'Pushups', 2);
 
-    await page.getByText('round rest').hover();
+    await page.getByTestId('circuit-block').getByText('round rest').hover();
     await expect(page.getByText(/Pause after a whole round/u)).toBeVisible();
   });
 });
@@ -325,7 +357,7 @@ test.describe('deleting rows', () => {
 
     await page.getByRole('button', { name: /^Delete Crunches$/u }).click();
 
-    await expect(page.getByText('3 exercises')).toBeVisible();
+    await expect(page.getByText('3 exercises', { exact: true })).toBeVisible();
     await expect(page.getByTestId('slot-name').filter({ hasText: 'Crunches' })).toHaveCount(0);
   });
 
@@ -338,7 +370,7 @@ test.describe('deleting rows', () => {
 
     await page.getByRole('button', { name: /^Delete rest$/u }).click();
     await expect(page.getByRole('textbox', { name: 'Rest length' })).toHaveCount(0);
-    await expect(page.getByText('4 exercises')).toBeVisible();
+    await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
   });
 
   test('deleting down to one member dissolves the circuit', async ({ page }) => {
@@ -349,7 +381,7 @@ test.describe('deleting rows', () => {
     // A circuit of one is just an exercise, so the block goes with it.
     await page.getByRole('button', { name: /^Delete Crunches$/u }).click();
     await expect(page.getByTestId('circuit-block')).toHaveCount(0);
-    await expect(page.getByText('3 exercises')).toBeVisible();
+    await expect(page.getByText('3 exercises', { exact: true })).toBeVisible();
   });
 
   test('the round rest label is not truncated', async ({ page }) => {
@@ -394,7 +426,7 @@ test.describe('swipe to delete', () => {
     await page.mouse.up();
 
     await expect(page.getByTestId('slot-name').filter({ hasText: 'Crunches' })).toHaveCount(0);
-    await expect(page.getByText('3 exercises')).toBeVisible();
+    await expect(page.getByText('3 exercises', { exact: true })).toBeVisible();
   });
 
   test('a short swipe springs back and deletes nothing', async ({ page }) => {
@@ -404,7 +436,7 @@ test.describe('swipe to delete', () => {
     await swipeRow(page, 'Crunches', -40);
     await page.mouse.up();
 
-    await expect(page.getByText('4 exercises')).toBeVisible();
+    await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
     await expect(page.getByTestId('slot-name').filter({ hasText: 'Crunches' })).toHaveCount(1);
     // The swipe swallowed its own click, so the edit sheet never opened.
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -436,7 +468,7 @@ test.describe('adding at the start', () => {
 
     const names = await page.getByTestId('slot-name').allTextContents();
     expect(names[0]).toContain('Barbell Squat');
-    await expect(page.getByText('5 exercises')).toBeVisible();
+    await expect(page.getByText('5 exercises', { exact: true })).toBeVisible();
   });
 
   test('an empty workout is filled from its insert row alone', async ({ page }) => {
@@ -449,7 +481,7 @@ test.describe('adding at the start', () => {
     await expect(page.getByTestId('insert-exercise')).toHaveCount(1);
 
     await addExercise(page, 'bench jump');
-    await expect(page.getByText('1 exercise')).toBeVisible();
+    await expect(page.getByText('1 exercise', { exact: true })).toBeVisible();
   });
 });
 
@@ -492,7 +524,7 @@ test.describe('leaving a circuit', () => {
 
     // A circuit of one is just an exercise, so the whole block dissolves.
     await expect(page.getByTestId('circuit-block')).toHaveCount(0);
-    await expect(page.getByText('2 exercises')).toBeVisible();
+    await expect(page.getByText('2 exercises', { exact: true })).toBeVisible();
   });
 
   test('swiping a member right leaves the rest of the circuit intact', async ({ page }) => {
@@ -507,7 +539,7 @@ test.describe('leaving a circuit', () => {
     // Down to two members, still one block, and nothing deleted.
     await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
     await expect(page.getByTestId('circuit-block')).toHaveCount(1);
-    await expect(page.getByText('4 exercises')).toBeVisible();
+    await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
   });
 
   test('a short right swipe springs back and stays in the circuit', async ({ page }) => {
@@ -530,7 +562,7 @@ test.describe('leaving a circuit', () => {
     await expect(page.getByText('Leave circuit', { exact: true })).toHaveCount(0);
     await page.mouse.up();
 
-    await expect(page.getByText('4 exercises')).toBeVisible();
+    await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
   });
 });
 
@@ -545,16 +577,19 @@ test.describe('leaving a circuit', () => {
  */
 async function dragBy(page: Page, name: string, dx: number, dy: number): Promise<void> {
   const handle = page.getByRole('button', { name: new RegExp(`^Reorder or group ${name}$`, 'u') });
+  // Hovered first, for the same reason as `dragOnto`: the row has to have
+  // stopped moving before the button goes down, or the press misses the
+  // handle and no drag starts at all.
+  await handle.hover();
+  await page.mouse.down();
+  await page.waitForTimeout(DRAG_HOLD_MS);
+
   const from = await handle.boundingBox();
   expect(from, `no box for ${name}`).not.toBeNull();
   if (from === null) return;
-
-  const x = from.x + from.width / 2;
-  const y = from.y + from.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.waitForTimeout(DRAG_HOLD_MS);
-  await page.mouse.move(x + dx, y + dy, { steps: 10 });
+  await page.mouse.move(from.x + from.width / 2 + dx, from.y + from.height / 2 + dy, {
+    steps: 10,
+  });
 }
 
 test.describe('dragging out of a circuit', () => {
@@ -574,7 +609,7 @@ test.describe('dragging out of a circuit', () => {
 
     // A circuit of one is just an exercise, so the block dissolves.
     await expect(page.getByTestId('circuit-block')).toHaveCount(0);
-    await expect(page.getByText('2 exercises')).toBeVisible();
+    await expect(page.getByText('2 exercises', { exact: true })).toBeVisible();
     await expect(page.getByTestId('slot-name').filter({ hasText: 'Crunches' })).toHaveCount(1);
   });
 
@@ -623,7 +658,7 @@ test.describe('dragging out of a circuit', () => {
     await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
     await expect(page.getByTestId('circuit-block')).toHaveCount(1);
     // Nothing was deleted — it is just no longer a member.
-    await expect(page.getByText('4 exercises')).toBeVisible();
+    await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
   });
 
   test('dragging up out of the block works too, which is the phone case', async ({ page }) => {
@@ -639,7 +674,7 @@ test.describe('dragging out of a circuit', () => {
     await page.mouse.up();
 
     await expect(page.getByTestId('circuit-block')).toHaveCount(0);
-    await expect(page.getByText('4 exercises')).toBeVisible();
+    await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
   });
 
   test('a small wobble still reorders rather than leaving', async ({ page }) => {
@@ -680,7 +715,7 @@ test.describe('dragging out of a circuit', () => {
     await expect(page.getByText('release to leave')).toHaveCount(0);
     await page.mouse.up();
 
-    await expect(page.getByText('4 exercises')).toBeVisible();
+    await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
   });
 
   test('the keyboard leaves with u, which needs no sideways room', async ({ page }) => {
@@ -696,7 +731,7 @@ test.describe('dragging out of a circuit', () => {
     await page.keyboard.press('Space');
 
     await expect(page.getByTestId('circuit-block')).toHaveCount(0);
-    await expect(page.getByText('4 exercises')).toBeVisible();
+    await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
   });
 });
 
@@ -717,7 +752,7 @@ test.describe('adding after a circuit', () => {
     // Landed loose after the block, so the circuit is unchanged.
     await expect(page.getByText(/2 rounds of these 2, in order/u)).toBeVisible();
     await expect(page.getByTestId('circuit-block')).toHaveCount(1);
-    await expect(page.getByText('5 exercises')).toBeVisible();
+    await expect(page.getByText('5 exercises', { exact: true })).toBeVisible();
 
     const names = await page.getByTestId('slot-name').allTextContents();
     expect(names.at(-1)).toContain('Barbell Squat');
