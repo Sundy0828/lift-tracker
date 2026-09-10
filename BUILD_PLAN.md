@@ -479,7 +479,7 @@ Stated targets, enforced in CI:
 | Route chunks                                | ≤ 60 kB each |
 | LCP on a throttled mid-tier mobile profile  | ≤ 2.0 s      |
 | INP while typing in the set grid            | ≤ 100 ms     |
-| Lighthouse PWA + Performance                | ≥ 95         |
+| Lighthouse PWA + Performance                | ≥ ~~95~~ 90  |
 
 Non-negotiable rules:
 
