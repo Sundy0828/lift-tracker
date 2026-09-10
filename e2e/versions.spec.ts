@@ -173,6 +173,13 @@ test.describe('circuits', () => {
     await roundRest.fill('45');
     await expect(roundRest).toHaveValue(/45/);
 
+    // `toHaveValue` only proves React re-rendered. The write is fire-and-forget
+    // into Firestore's cache (§2.8), so reloading here races its flush to
+    // IndexedDB — and losing that race looks exactly like the round rest not
+    // persisting at all. The sync chip is the app's own statement that the
+    // write has landed, so it is the thing to wait on.
+    await expect(page.getByTestId('workout-sync')).toHaveText('saved');
+
     await page.reload();
     await expect(page.getByTestId('circuit-block')).toHaveCount(1);
     await expect(page.getByRole('textbox', { name: /^Rest between rounds/u })).toHaveValue(/45/);

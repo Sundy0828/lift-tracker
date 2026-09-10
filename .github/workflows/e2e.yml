@@ -1,0 +1,52 @@
+name: End-to-end
+
+# Its own top-level workflow, and that is the whole point.
+#
+# `verify.yml` is a reusable workflow because both deploy pipelines *depend* on
+# it: nothing ships unless typecheck, lint, unit tests, build and the security
+# rules all pass. The end-to-end suite is deliberately not in that set. It
+# drives a real browser against real emulators, takes around ten minutes, and
+# leans on gesture timing that can wobble — so gating a deploy on it would mean
+# a slow release at best and a blocked one over a flake at worst.
+#
+# Run separately, it reports its own check on the commit and the pull request
+# and holds nothing up. A red run here is a signal to go and look, not a
+# barrier: the live deploy and the preview deploy both proceed on `verify`
+# alone.
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+# A newer commit on the same ref makes an in-flight run pointless.
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: end-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      # The Firestore and Auth emulators are Java processes.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      # Only chromium: the suite runs one project, a Pixel 7 profile.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e:ci
+      - name: Upload the report when it fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

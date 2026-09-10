@@ -1,0 +1,277 @@
+[36m[1mi  emulators:[22m[39m Starting emulators: auth, firestore
+[36m[1mi  emulators:[22m[39m Detected demo project ID "demo-lift-tracker", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail.
+[36m[1mi  firestore:[22m[39m Firestore Emulator logging to [1mfirestore-debug.log[22m
+[32m[1m+  firestore:[22m[39m Firestore Emulator was started in standard edition.
+[32m[1m+  firestore:[22m[39m Firestore Emulator UI websocket is running on 9150.
+[36m[1mi [22m[39m Running script: [1mnpx playwright test e2e/circuit-gestures.spec.ts e2e/versions.spec.ts --workers=1[22m
+[WebServer] 
+[WebServer]  WARN  advancedChunks option is deprecated, please use codeSplitting instead.
+[WebServer] 
+[WebServer] [plugin builtin:vite-reporter] 
+[WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
+[WebServer] - Using dynamic import() to code-split the application
+[WebServer] - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+[WebServer] - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[WebServer] 
+[WebServer]  WARN  inlineDynamicImports option is deprecated, please use codeSplitting: false instead.
+[WebServer] 
+[WebServer] [PLUGIN_TIMINGS] Plugin hooks ran for 49.5s. The build took 18.0s. Hooks such as `closeBundle` run after the build ends, so hook time can be more than build time.
+[WebServer] The slowest hooks, timed inside each callback (the wait before a callback starts is excluded, the time it awaits is included):
+[WebServer]   - vite-plugin-pwa:build closeBundle (100%, 46.3s, 1 call)
+[WebServer]   - vite:css-post renderChunk (7%, 1.2s, 61 calls)
+[WebServer] Additional hook time came from the hooks below and from hooks under 1s.
+[WebServer] 1 hook is listed without a time. Its calls overlapped, so the time inside one call includes work from other calls. To find its cost, profile the build with `node --cpu-prof`:
+[WebServer]   - vite:asset load (2 calls)
+[WebServer] See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+[WebServer] 
+
+Running 46 tests using 1 worker
+
+[36m[1mi [22m[39m To verify the email address cg-1789052332732-52613@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=BBmhXgHF3Tkn0fIDXKreeke2_7LgD03g7xb7a4wxzCb-5lgl5r0zDX&apiKey=fake-api-key
+  ok  1 [mobile-chrome] › e2e\circuit-gestures.spec.ts:124:3 › drag to group › holding over another exercise groups them on release (16.3s)
+[36m[1mi [22m[39m To verify the email address cg-1789052346509-73733@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=Jj291SX5QYDkfSCgXpfUl4eKn4WWm83-TEY-4sHK6lWpnDxgm_EyMd&apiKey=fake-api-key
+  ok  2 [mobile-chrome] › e2e\circuit-gestures.spec.ts:137:3 › drag to group › holding squarely on the target is enough, with no extra movement (8.9s)
+[36m[1mi [22m[39m To verify the email address cg-1789052355420-59961@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=Mv5JobHYhKF7CGA2lYxh88GYnckVb5iyWUqwljFS5LmP7S4a2U2NdH&apiKey=fake-api-key
+  ok  3 [mobile-chrome] › e2e\circuit-gestures.spec.ts:162:3 › drag to group › a third exercise joins the same circuit, not a second one (10.5s)
+[36m[1mi [22m[39m To verify the email address cg-1789052365953-38807@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=B6G2pwOW5aFd_H06dVSfJSyIEfIjhkk0bgtF4M2yfTsCVAy7RjXkl4&apiKey=fake-api-key
+  ok  4 [mobile-chrome] › e2e\circuit-gestures.spec.ts:172:3 › drag to group › a quick drag still reorders instead of grouping (8.6s)
+[36m[1mi [22m[39m To verify the email address cg-1789052374589-51646@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=_voog9FYpKwdSM923fElzJn_e1XMcjXnAYvopiiWwOY8YVQG9KkfVI&apiKey=fake-api-key
+  ok  5 [mobile-chrome] › e2e\circuit-gestures.spec.ts:193:3 › drag to group › two members of the same circuit offer no grouping (15.5s)
+[36m[1mi [22m[39m To verify the email address cg-1789052390177-50806@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=A0kqrrIP05OUx1yNHrK1Px64_bNavwUWMxB7lnnd3Z1bqnEdztovFm&apiKey=fake-api-key
+  ok  6 [mobile-chrome] › e2e\circuit-gestures.spec.ts:205:3 › drag to group › the keyboard can group too, with g (9.3s)
+[36m[1mi [22m[39m To verify the email address cg-1789052399372-24297@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=7AUMWfbTVEiguvobMETwILwDZQZh5eG599miDACsBSteikxsJEH49w&apiKey=fake-api-key
+  ok  7 [mobile-chrome] › e2e\circuit-gestures.spec.ts:223:3 › drag to group › the gesture is explained where it is used (7.8s)
+[36m[1mi [22m[39m To verify the email address cg-1789052407144-84722@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=GsnCV30Z4u_XoGlDJDUT_wt1z-CkyGO8GtEsLs_rFzy39xiG7VeQGf&apiKey=fake-api-key
+  x   8 [mobile-chrome] › e2e\circuit-gestures.spec.ts:231:3 › drag out of a circuit › dragging a member clear of the block removes it (16.3s)
+[36m[1mi [22m[39m To verify the email address cg-1789052432656-75420@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=SiN23ZewrKCIoWP4_K2vnQNh-FYxIA3hKZLBeVl11W9Fcicf6utE1j&apiKey=fake-api-key
+  ok  9 [mobile-chrome] › e2e\circuit-gestures.spec.ts:256:3 › drag out of a circuit › the keyboard can leave a circuit by arrowing out (13.9s)
+[36m[1mi [22m[39m To verify the email address cg-1789052444024-46316@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=Ushi0WHL50gyHEPdWCmJapYfzYmhVWLhM9Zb7usEZimjeYUCYll4HZ&apiKey=fake-api-key
+  ok 10 [mobile-chrome] › e2e\circuit-gestures.spec.ts:277:3 › adding in place, and uneven rests › the plus on a row inserts directly after it (9.0s)
+[36m[1mi [22m[39m To verify the email address cg-1789052452948-22839@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=aO9up90RXZ-Wty0ky9XE9uEweLoWYHVxMm75g6GiXEL46MZXbqJBwP&apiKey=fake-api-key
+  ok 11 [mobile-chrome] › e2e\circuit-gestures.spec.ts:294:3 › adding in place, and uneven rests › the plus on a circuit member adds another member (10.2s)
+[36m[1mi [22m[39m To verify the email address cg-1789052463087-69@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=WmGZo7uBLizuJ-I5iLX3vD9zvuElefftYgHkrpjzBT59YTH329J26R&apiKey=fake-api-key
+  ok 12 [mobile-chrome] › e2e\circuit-gestures.spec.ts:312:3 › adding in place, and uneven rests › a rest row can be placed between exercises, with its own length (11.5s)
+[36m[1mi [22m[39m To verify the email address cg-1789052474645-16603@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=iItSk-Ec5TPs1gIW50QxRSFJFVZIbjCigpw8M6LWLTPHA-riMs9ORO&apiKey=fake-api-key
+  ok 13 [mobile-chrome] › e2e\circuit-gestures.spec.ts:348:3 › adding in place, and uneven rests › a rest row adds no sets and no volume (8.1s)
+[36m[1mi [22m[39m To verify the email address cg-1789052482803-67373@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=ffO55RN2rGU6TfA6_t9KeyVL1QEjX4e77qvpm0XRImikKjT6qJ5Wz6&apiKey=fake-api-key
+  ok 14 [mobile-chrome] › e2e\circuit-gestures.spec.ts:361:3 › adding in place, and uneven rests › the round rest label explains itself on hover (9.6s)
+[36m[1mi [22m[39m To verify the email address cg-1789052492383-41619@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=sQ5zdX3qmJtJ5NOCUA_c2tVz9IJXAxPu_o8bfpHyZ1i2NLbytfK9FW&apiKey=fake-api-key
+  ok 15 [mobile-chrome] › e2e\circuit-gestures.spec.ts:372:3 › deleting rows › an exercise can be deleted from its row (7.9s)
+[36m[1mi [22m[39m To verify the email address cg-1789052500429-13047@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=32JqDIHWiP4Y7YfHEVdSH3JkEgk0T8oxQ3RJ-VX9yFsknY5Wz_U5wP&apiKey=fake-api-key
+  ok 16 [mobile-chrome] › e2e\circuit-gestures.spec.ts:382:3 › deleting rows › a rest row can be deleted too (7.9s)
+[36m[1mi [22m[39m To verify the email address cg-1789052508321-30963@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=h3s3NN6H9zPiyjZCyxNy0_thQtFawTKBTQe2dwGT8RXgSXVQ9cUt34&apiKey=fake-api-key
+  ok 17 [mobile-chrome] › e2e\circuit-gestures.spec.ts:394:3 › deleting rows › deleting down to one member dissolves the circuit (9.3s)
+[36m[1mi [22m[39m To verify the email address cg-1789052517558-51427@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=jq0oxFdb5D53SZLWdR90q0WoZVK0UDhCTH18-GzWvZvQHonjIplYZx&apiKey=fake-api-key
+  ok 18 [mobile-chrome] › e2e\circuit-gestures.spec.ts:405:3 › deleting rows › the round rest label is not truncated (9.2s)
+[36m[1mi [22m[39m To verify the email address cg-1789052526822-17776@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=yLPNME0rFhwlfLs0CehmrCDN-uhJ36AmL3yXSOxEVv0JhfcsgHb9Pc&apiKey=fake-api-key
+  ok 19 [mobile-chrome] › e2e\circuit-gestures.spec.ts:437:3 › swipe to delete › swiping a row far enough left deletes it (8.2s)
+[36m[1mi [22m[39m To verify the email address cg-1789052535047-96887@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=RSweyo7dYeFQo_hXNc5S0K7GOjH_i1eCtLHoQkzUpjwQTbk77ep7EH&apiKey=fake-api-key
+  ok 20 [mobile-chrome] › e2e\circuit-gestures.spec.ts:450:3 › swipe to delete › a short swipe springs back and deletes nothing (8.3s)
+[36m[1mi [22m[39m To verify the email address cg-1789052543289-79235@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=ZRbzOTFCuH5YaCocOLEc2hJTAOFAr80ykWoWkc484PK5U0HrB3I7-k&apiKey=fake-api-key
+  ok 21 [mobile-chrome] › e2e\circuit-gestures.spec.ts:463:3 › swipe to delete › a circuit member can be swiped away too (10.8s)
+[36m[1mi [22m[39m To verify the email address cg-1789052554090-47878@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=dcN3SUwzmHOdCBhzjkmlAb5obmlLW-8-fu2Z2BTWp2rLTcRtDfcPbk&apiKey=fake-api-key
+  ok 22 [mobile-chrome] › e2e\circuit-gestures.spec.ts:477:3 › adding at the start › the insert row above the first exercise adds at the top (8.7s)
+[36m[1mi [22m[39m To verify the email address cg-1789052562894-74816@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=IPB1ID8aeTjYhMVDoYEMHfNkzil6LSXQVSI3450S3MkVSVJ5QWYhh_&apiKey=fake-api-key
+  ok 23 [mobile-chrome] › e2e\circuit-gestures.spec.ts:492:3 › adding at the start › an empty workout is filled from its insert row alone (5.1s)
+[36m[1mi [22m[39m To verify the email address cg-1789052568025-565@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=yZu-D26I_7gUt7IXcdqAfP7WDHt1sZwCO6YVtUf-y1UA_vEqmcSFeY&apiKey=fake-api-key
+  ok 24 [mobile-chrome] › e2e\circuit-gestures.spec.ts:507:3 › row layout › the drag handle sits left of the exercise name (8.1s)
+[36m[1mi [22m[39m To verify the email address cg-1789052576110-21302@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=PnmZhsewx3ggDIQ4UhMJQD7i5sf7_k4IRtcaU6K5jv2l8p8pl9w093&apiKey=fake-api-key
+  ok 25 [mobile-chrome] › e2e\circuit-gestures.spec.ts:529:3 › leaving a circuit › a two-exercise workout that is all circuit can still be broken up (7.5s)
+[36m[1mi [22m[39m To verify the email address cg-1789052583488-7529@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=tANuCrSUQFZsunMhogAVYIh1pqs3NXRn_5nR_f4C1z_CKz7IBbQZNP&apiKey=fake-api-key
+  x  26 [mobile-chrome] › e2e\circuit-gestures.spec.ts:548:3 › leaving a circuit › swiping a member right leaves the rest of the circuit intact (15.7s)
+[36m[1mi [22m[39m To verify the email address cg-1789052605917-5276@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=P3AgA4pqr_ZYlWpAvMKe8j9-0IsqjdfDMRigQVAMn9NeBS93j0AI3g&apiKey=fake-api-key
+  ok 27 [mobile-chrome] › e2e\circuit-gestures.spec.ts:563:3 › leaving a circuit › a short right swipe springs back and stays in the circuit (12.5s)
+[36m[1mi [22m[39m To verify the email address cg-1789052616045-65716@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=rdcv_zx9LKBH1XKp_UZOspgfm6PbnLVFOOq1ePUvpOR4pO3_VhDb46&apiKey=fake-api-key
+  ok 28 [mobile-chrome] › e2e\circuit-gestures.spec.ts:575:3 › leaving a circuit › a row outside a circuit has nothing to reveal on the right (9.0s)
+[36m[1mi [22m[39m To verify the email address cg-1789052624963-60702@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=csMtA-SmOpDVsWj_GnrJ-xqrN5Z5GTBsd8J0Fwei3Q46FNXuL6Jchn&apiKey=fake-api-key
+  ok 29 [mobile-chrome] › e2e\circuit-gestures.spec.ts:614:3 › dragging out of a circuit › a workout that is entirely one circuit can still be broken up (8.5s)
+[36m[1mi [22m[39m To verify the email address cg-1789052633490-20369@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=z4AFj4LLmvZEI813FrPAy3H3LleeK0zeX2iBZPR6J50Didjbxr_EL9&apiKey=fake-api-key
+  x  30 [mobile-chrome] › e2e\circuit-gestures.spec.ts:634:3 › dragging out of a circuit › the row lands on the side it was dropped, not back where it started (10.6s)
+[36m[1mi [22m[39m To verify the email address cg-1789052649933-62307@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=IU97DIJ7yF1UAsxVqTrPtctNh4c9hffSQlByBIfTASQpDpOTiQIXb2&apiKey=fake-api-key
+  x  31 [mobile-chrome] › e2e\circuit-gestures.spec.ts:651:3 › dragging out of a circuit › pulling a member down puts it below the block (14.3s)
+[36m[1mi [22m[39m To verify the email address cg-1789052668812-9631@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=-pM3Dp-3_iIj1yRJ8MiAXEDDPd3R0bBCCbF6w76atkOEncebAZjHbF&apiKey=fake-api-key
+  ok 32 [mobile-chrome] › e2e\circuit-gestures.spec.ts:667:3 › dragging out of a circuit › pulling one member out leaves the rest of the circuit intact (14.7s)
+[36m[1mi [22m[39m To verify the email address cg-1789052680742-95928@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=ERpoYkwj-rSsFJ1DtY4oPUgHlmPb_retf7KXPw4R1h9-BCGBrdaa2d&apiKey=fake-api-key
+  ok 33 [mobile-chrome] › e2e\circuit-gestures.spec.ts:682:3 › dragging out of a circuit › dragging up out of the block works too, which is the phone case (10.2s)
+[36m[1mi [22m[39m To verify the email address cg-1789052690964-75777@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=FsWa47pkkYDUgba-EE9RurY2foV3uD03z_rYzvDw0WshGkFtxGlT-h&apiKey=fake-api-key
+  ok 34 [mobile-chrome] › e2e\circuit-gestures.spec.ts:698:3 › dragging out of a circuit › a small wobble still reorders rather than leaving (10.5s)
+[36m[1mi [22m[39m To verify the email address cg-1789052701533-33207@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=ByKYcB6i3FqhdC-8gMrgKLQYhcqGvT6gzLTz_GspbpOQPe2wAyHx0B&apiKey=fake-api-key
+  ok 35 [mobile-chrome] › e2e\circuit-gestures.spec.ts:711:3 › dragging out of a circuit › reordering inside the block does not leave it (11.9s)
+[36m[1mi [22m[39m To verify the email address cg-1789052713392-70549@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=iZ6pNZNWwZ558HGniionyHG66kqOrD0OEEQQOmn-ftgd_y_YBlqxv2&apiKey=fake-api-key
+  ok 36 [mobile-chrome] › e2e\circuit-gestures.spec.ts:726:3 › dragging out of a circuit › a row outside a circuit is not freed sideways (8.8s)
+[36m[1mi [22m[39m To verify the email address cg-1789052722242-3412@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=c-EEhMUvuc9phG89Ar5n7U1vKsnHLiHv3Aanf4aXenppSA0XxNR6sW&apiKey=fake-api-key
+  ok 37 [mobile-chrome] › e2e\circuit-gestures.spec.ts:739:3 › dragging out of a circuit › the keyboard leaves with u, which needs no sideways room (10.3s)
+[36m[1mi [22m[39m To verify the email address cg-1789052732692-48288@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=JHpMu5kv6xbJoQrTjOcVRORaQqRacvRaJlZdyB99Hp1s_0SlV_MFrV&apiKey=fake-api-key
+  x  38 [mobile-chrome] › e2e\circuit-gestures.spec.ts:757:3 › adding after a circuit › the insert row below the block adds outside it (16.0s)
+[36m[1mi [22m[39m To verify the email address cg-1789052755061-4243@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=o2KKf6-l4boIERKU3xfiZNGurYFEMcUtLHcDhqeGGeRADZs21-I5af&apiKey=fake-api-key
+  x  39 [mobile-chrome] › e2e\circuit-gestures.spec.ts:785:3 › adding after a circuit › a rest can be placed after a circuit rather than inside it (17.9s)
+[36m[1mi [22m[39m To verify the email address ci-1789052775935-7629@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=lBsBJW2EDBvNSuohPv6RRq4AoqsyQRjUj8QzXbPdgvRj8fAoHW8RO1&apiKey=fake-api-key
+  ok 40 [mobile-chrome] › e2e\versions.spec.ts:114:3 › circuits › three exercises can be grouped into one circuit (13.0s)
+[36m[1mi [22m[39m To verify the email address ci-1789052786773-83319@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=gUwHm99JkPWSaMQ9ytSsTqHxiUOjLLlMwdxTTd-Bt7JROiePuJeRm2&apiKey=fake-api-key
+  ok 41 [mobile-chrome] › e2e\versions.spec.ts:133:3 › circuits › the circuit owns its rounds, and rounds apply to every member (11.0s)
+[36m[1mi [22m[39m To verify the email address ci-1789052797750-25597@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=xr8M-ykeGVUElUlARvfKSooNrXF4laKyU9AIWUhi1N4lO2ovumUslk&apiKey=fake-api-key
+  ok 42 [mobile-chrome] › e2e\versions.spec.ts:149:3 › circuits › a circuit adds no pause of its own until you place one (9.6s)
+[36m[1mi [22m[39m To verify the email address ci-1789052807304-94525@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=Yy0k79i3L-F6LTmjm-PmwtQJMx-fEdvSkaHxLMTQmS318ziSZIlGPL&apiKey=fake-api-key
+  ok 43 [mobile-chrome] › e2e\versions.spec.ts:166:3 › circuits › a circuit survives a reload (10.1s)
+[36m[1mi [22m[39m To verify the email address ci-1789052817372-45563@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=1wyS3H5afat7Yy9tMTG6mPYS-7-U3eU1Skmt9UyEX64MXX5xr-9dou&apiKey=fake-api-key
+  ok 44 [mobile-chrome] › e2e\versions.spec.ts:190:3 › discarding workout edits › discard reverts the working copy to the last published version (6.9s)
+[36m[1mi [22m[39m To verify the email address ci-1789052824212-55191@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=8KzWgkDf-eUHjBv7lsO2MBqo3nlDDZ9m50K2NdKG2ol4m_GTJUVY2Z&apiKey=fake-api-key
+  ok 45 [mobile-chrome] › e2e\versions.spec.ts:216:3 › discarding workout edits › edits survive leaving the screen, so nothing is lost by accident (5.5s)
+[36m[1mi [22m[39m To verify the email address ci-1789052829785-53596@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=cIuvQMPoKWsegEd055jwDvtaonsAPYZXnl4maM37ISvUbY1hFlT1r1&apiKey=fake-api-key
+  ok 46 [mobile-chrome] › e2e\versions.spec.ts:238:3 › discarding workout edits › a never-published workout is offered publish but no discard (5.6s)
+
+
+  1) [mobile-chrome] › e2e\circuit-gestures.spec.ts:231:3 › drag out of a circuit › dragging a member clear of the block removes it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('/3 rounds of these 2, in order/u')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('/3 rounds of these 2, in order/u')
+
+
+      250 |
+      251 |     // The circuit is down to two and still one block.
+    > 252 |     await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
+          |                                                                    ^
+      253 |     await expect(page.getByTestId('circuit-block')).toHaveCount(1);
+      254 |   });
+      255 |
+        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:252:68
+
+    Error Context: test-results\circuit-gestures-drag-out--28510-ear-of-the-block-removes-it-mobile-chrome\error-context.md
+
+  2) [mobile-chrome] › e2e\circuit-gestures.spec.ts:548:3 › leaving a circuit › swiping a member right leaves the rest of the circuit intact 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('/3 rounds of these 2, in order/u')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('/3 rounds of these 2, in order/u')
+
+
+      556 |
+      557 |     // Down to two members, still one block, and nothing deleted.
+    > 558 |     await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
+          |                                                                    ^
+      559 |     await expect(page.getByTestId('circuit-block')).toHaveCount(1);
+      560 |     await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
+      561 |   });
+        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:558:68
+
+    Error Context: test-results\circuit-gestures-leaving-a-acdbf--rest-of-the-circuit-intact-mobile-chrome\error-context.md
+
+  3) [mobile-chrome] › e2e\circuit-gestures.spec.ts:634:3 › dragging out of a circuit › the row lands on the side it was dropped, not back where it started 
+
+    Error: expect(received).toBeLessThan(expected)
+
+    Expected: < 1
+    Received:   2
+
+      646 |     const crunches = names.findIndex((name) => name.includes('Crunches'));
+      647 |     const pushups = names.findIndex((name) => name.includes('Pushups'));
+    > 648 |     expect(crunches).toBeLessThan(pushups);
+          |                      ^
+      649 |   });
+      650 |
+      651 |   test('pulling a member down puts it below the block', async ({ page }) => {
+        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:648:22
+
+    Error Context: test-results\circuit-gestures-dragging--1a5dd-d-not-back-where-it-started-mobile-chrome\error-context.md
+
+  4) [mobile-chrome] › e2e\circuit-gestures.spec.ts:651:3 › dragging out of a circuit › pulling a member down puts it below the block 
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected substring: "Pushups"
+    Received string:    "Pullups"
+
+      660 |
+      661 |     const names = await page.getByTestId('slot-name').allTextContents();
+    > 662 |     expect(names.at(-1)).toContain('Pushups');
+          |                          ^
+      663 |     // The remaining two closed up and are still a circuit.
+      664 |     await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
+      665 |   });
+        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:662:26
+
+    Error Context: test-results\circuit-gestures-dragging--3715f-own-puts-it-below-the-block-mobile-chrome\error-context.md
+
+  5) [mobile-chrome] › e2e\circuit-gestures.spec.ts:757:3 › adding after a circuit › the insert row below the block adds outside it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('/2 rounds of these 2, in order/u')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('/2 rounds of these 2, in order/u')
+
+
+      769 |
+      770 |     // Landed loose after the block, so the circuit is unchanged.
+    > 771 |     await expect(page.getByText(/2 rounds of these 2, in order/u)).toBeVisible();
+          |                                                                    ^
+      772 |     await expect(page.getByTestId('circuit-block')).toHaveCount(1);
+      773 |     await expect(page.getByText('5 exercises', { exact: true })).toBeVisible();
+      774 |
+        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:771:68
+
+    Error Context: test-results\circuit-gestures-adding-af-d5c11-w-the-block-adds-outside-it-mobile-chrome\error-context.md
+
+  6) [mobile-chrome] › e2e\circuit-gestures.spec.ts:785:3 › adding after a circuit › a rest can be placed after a circuit rather than inside it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('/2 rounds of these 2, in order/u')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('/2 rounds of these 2, in order/u')
+
+
+      792 |     await expect(page.getByRole('textbox', { name: 'Rest length' })).toHaveCount(1);
+      793 |     // Outside the block, so the round count is untouched.
+    > 794 |     await expect(page.getByText(/2 rounds of these 2, in order/u)).toBeVisible();
+          |                                                                    ^
+      795 |     await expect(
+      796 |       page.getByTestId('circuit-block').getByRole('textbox', { name: 'Rest length' }),
+      797 |     ).toHaveCount(0);
+        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:794:68
+
+    Error Context: test-results\circuit-gestures-adding-af-0f2d1-rcuit-rather-than-inside-it-mobile-chrome\error-context.md
+
+  6 failed
+    [mobile-chrome] › e2e\circuit-gestures.spec.ts:231:3 › drag out of a circuit › dragging a member clear of the block removes it 
+    [mobile-chrome] › e2e\circuit-gestures.spec.ts:548:3 › leaving a circuit › swiping a member right leaves the rest of the circuit intact 
+    [mobile-chrome] › e2e\circuit-gestures.spec.ts:634:3 › dragging out of a circuit › the row lands on the side it was dropped, not back where it started 
+    [mobile-chrome] › e2e\circuit-gestures.spec.ts:651:3 › dragging out of a circuit › pulling a member down puts it below the block 
+    [mobile-chrome] › e2e\circuit-gestures.spec.ts:757:3 › adding after a circuit › the insert row below the block adds outside it 
+    [mobile-chrome] › e2e\circuit-gestures.spec.ts:785:3 › adding after a circuit › a rest can be placed after a circuit rather than inside it 
+  40 passed (9.8m)
+[33m[1m! [22m[39m Script exited unsuccessfully (code 1)
+[36m[1mi  emulators:[22m[39m Shutting down emulators.
+[36m[1mi  firestore:[22m[39m Stopping Firestore Emulator
+[33m[1m! [22m[39m Firestore Emulator has exited upon receiving signal: SIGINT
+[36m[1mi  auth:[22m[39m Stopping Authentication Emulator
+[36m[1mi  hub:[22m[39m Stopping emulator hub
+[36m[1mi  logging:[22m[39m Stopping Logging Emulator
+
+[1m[31mError:[39m[22m Script "[1mnpx playwright test e2e/circuit-gestures.spec.ts e2e/versions.spec.ts --workers=1[22m" exited with code 1
+EXIT=1

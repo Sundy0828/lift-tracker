@@ -14,6 +14,23 @@ import { signUp } from './signUp';
  */
 const DRAG_HOLD_MS = 260;
 
+/**
+ * Mirrors `GROUP_DWELL_MS` in SortableList: how long a row must rest over
+ * another before the app offers to group them. The suite has to outwait it,
+ * so it has to know it.
+ */
+const GROUP_DWELL_MS = 420;
+/**
+ * One unhurried frame between the last pointer move and the release.
+ *
+ * dnd-kit recomputes the drop target on an animation frame, and the app judges
+ * leaving a circuit against the block's box *at the moment of the drop*.
+ * Releasing in the same tick as the final move therefore drops against
+ * whatever the previous frame thought was true, so the gesture landed or not
+ * depending on how busy the machine was.
+ */
+const SETTLE_MS = 120;
+
 async function signIn(page: Page): Promise<void> {
   await signUp(page, 'cg');
 }
@@ -90,11 +107,60 @@ async function dragOnto(page: Page, name: string, onto: string): Promise<void> {
  */
 async function holdToGroup(page: Page, x: number, y: number): Promise<void> {
   const hint = page.getByText('release to group');
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
     if (await hint.isVisible()) return;
     await page.mouse.move(x + (attempt % 2 === 0 ? 1 : -1), y, { steps: 2 });
-    await page.waitForTimeout(100);
+    // Longer than the app's dwell, and that is the whole point. dnd-kit picks
+    // its drop target from the dragged row's rectangle rather than the pointer,
+    // so a nudge can flip `over` to a neighbour and back — which restarts the
+    // dwell. Nudging every 100ms against a 420ms dwell meant the timer could
+    // only ever fire in a window the nudges themselves kept interrupting, so
+    // the gesture landed or not depending on machine load. Waiting past the
+    // dwell after each nudge gives it an uninterrupted run every time.
+    await page.waitForTimeout(GROUP_DWELL_MS + 120);
   }
+}
+
+/**
+ * Drags a circuit member right out past the block's edge.
+ *
+ * The app decides a row has left by comparing the drop against the **block's
+ * box on screen**, so how far is far enough is a property of the block, not a
+ * number a test can know. Hard-coded offsets encoded one particular block
+ * height: 200px cleared a two-member block and sat comfortably inside a
+ * three-member one, so the same gesture passed or failed purely on how many
+ * rows the circuit happened to have. Measuring the block and stepping past its
+ * edge is the same rule the app itself applies.
+ */
+async function dragClearOfBlock(page: Page, name: string, direction: 'up' | 'down'): Promise<void> {
+  const handle = page.getByRole('button', { name: new RegExp(`^Reorder or group ${name}$`, 'u') });
+
+  await handle.hover();
+  await page.mouse.down();
+  await page.waitForTimeout(DRAG_HOLD_MS);
+
+  const from = await handle.boundingBox();
+  expect(from, `no box for ${name}`).not.toBeNull();
+  if (from === null) return;
+
+  // Measured *after* the press, not before: `hover()` may scroll the row into
+  // view, which moves the block and would leave the distance below derived
+  // from where the block used to be.
+  const block = await page.getByTestId('circuit-block').boundingBox();
+  expect(block, 'no box for the circuit block').not.toBeNull();
+  if (block === null) return;
+
+  const x = from.x + from.width / 2;
+  const y = from.y + from.height / 2;
+  // Clear of the edge, not merely level with it: a drop exactly on the
+  // boundary is the one case the rule cannot answer.
+  const target = direction === 'up' ? block.y - from.height : block.y + block.height + from.height;
+
+  // Through the block rather than teleporting past it, so dnd-kit sees the row
+  // cross the rows it is leaving and reorders them as it goes.
+  await page.mouse.move(x, y + (direction === 'up' ? -10 : 10), { steps: 5 });
+  await page.mouse.move(x, target, { steps: 12 });
+  await page.waitForTimeout(SETTLE_MS);
 }
 
 async function group(page: Page, name: string, onto: string, members: number): Promise<void> {
@@ -221,17 +287,30 @@ test.describe('drag out of a circuit', () => {
     await group(page, 'Pullups', 'Crunches', 3);
 
     // Drag the last member up above the warm-up, clear of the circuit.
+    //
+    // Both boxes used to be read before the button went down, which is the one
+    // thing `dragOnto` and `dragBy` exist to avoid: grouping twice reflows the
+    // list, so a box read beforehand can point at empty space and the press
+    // then starts no drag at all — leaving the workout untouched and the
+    // failure looking like the app ignored the gesture.
     const handle = page.getByRole('button', { name: /^Reorder or group Pullups$/u });
     const target = page.getByRole('button', { name: /^Reorder or group Bench Jump$/u });
-    const from = await handle.boundingBox();
-    const to = await target.boundingBox();
-    if (from === null || to === null) return;
 
-    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await handle.hover();
     await page.mouse.down();
     await page.waitForTimeout(DRAG_HOLD_MS);
+
+    const from = await handle.boundingBox();
+    expect(from, 'no box for Pullups').not.toBeNull();
+    if (from === null) return;
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 - 10, { steps: 5 });
+
+    // Read after the drag has started: the rows have shifted to make room.
+    const to = await target.boundingBox();
+    expect(to, 'no box for Bench Jump').not.toBeNull();
+    if (to === null) return;
     await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2 - 24, { steps: 12 });
+    await page.waitForTimeout(SETTLE_MS);
     await page.mouse.up();
 
     // The circuit is down to two and still one block.
@@ -320,6 +399,10 @@ test.describe('adding in place, and uneven rests', () => {
     await expect(page.getByText(/3 rounds of these 3, in order/u)).toBeVisible();
     await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
 
+    // The edits above are fire-and-forget into the local cache; wait for the
+    // app to say they landed before throwing the page away.
+    await expect(page.getByTestId('workout-sync')).toHaveText('saved');
+
     await page.reload();
     const after = page.getByRole('textbox', { name: 'Rest length' });
     await expect(after).toHaveCount(2);
@@ -404,6 +487,10 @@ test.describe('deleting rows', () => {
  */
 async function swipeRow(page: Page, name: string, dx: number): Promise<void> {
   const row = page.getByTestId('slot-name').filter({ hasText: name });
+  // Hovered first, like the drag helpers: grouping reflows the list, so a box
+  // read before the row has stopped moving can point at where it used to be
+  // and the press then starts no swipe at all.
+  await row.hover();
   const box = await row.boundingBox();
   expect(box, `no box for ${name}`).not.toBeNull();
   if (box === null) return;
@@ -413,6 +500,7 @@ async function swipeRow(page: Page, name: string, dx: number): Promise<void> {
   await page.mouse.down();
   // Straight across: a move with any vertical bias is left to the page scroll.
   await page.mouse.move(box.x + box.width / 2 + dx, y, { steps: 10 });
+  await page.waitForTimeout(SETTLE_MS);
 }
 
 test.describe('swipe to delete', () => {
@@ -590,6 +678,7 @@ async function dragBy(page: Page, name: string, dx: number, dy: number): Promise
   await page.mouse.move(from.x + from.width / 2 + dx, from.y + from.height / 2 + dy, {
     steps: 10,
   });
+  await page.waitForTimeout(SETTLE_MS);
 }
 
 test.describe('dragging out of a circuit', () => {
@@ -621,7 +710,7 @@ test.describe('dragging out of a circuit', () => {
     await group(page, 'Crunches', 'Pushups', 2);
 
     // Pushups, Crunches is the circuit; pull Crunches out upwards.
-    await dragBy(page, 'Crunches', 0, -110);
+    await dragClearOfBlock(page, 'Crunches', 'up');
     await page.mouse.up();
 
     const names = await page.getByTestId('slot-name').allTextContents();
@@ -637,7 +726,7 @@ test.describe('dragging out of a circuit', () => {
     await group(page, 'Pullups', 'Crunches', 3);
 
     // The first member, dragged downwards, ends up after the whole block.
-    await dragBy(page, 'Pushups', 0, 200);
+    await dragClearOfBlock(page, 'Pushups', 'down');
     await page.mouse.up();
 
     const names = await page.getByTestId('slot-name').allTextContents();
@@ -750,7 +839,7 @@ test.describe('adding after a circuit', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
     // Landed loose after the block, so the circuit is unchanged.
-    await expect(page.getByText(/2 rounds of these 2, in order/u)).toBeVisible();
+    await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
     await expect(page.getByTestId('circuit-block')).toHaveCount(1);
     await expect(page.getByText('5 exercises', { exact: true })).toBeVisible();
 
@@ -773,7 +862,7 @@ test.describe('adding after a circuit', () => {
 
     await expect(page.getByRole('textbox', { name: 'Rest length' })).toHaveCount(1);
     // Outside the block, so the round count is untouched.
-    await expect(page.getByText(/2 rounds of these 2, in order/u)).toBeVisible();
+    await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
     await expect(
       page.getByTestId('circuit-block').getByRole('textbox', { name: 'Rest length' }),
     ).toHaveCount(0);

@@ -1,0 +1,235 @@
+
+> lift-tracker@0.0.0 e2e:ci
+> firebase emulators:exec --project demo-lift-tracker --only auth,firestore "npm run e2e"
+
+[36m[1mi  emulators:[22m[39m Starting emulators: auth, firestore
+[36m[1mi  emulators:[22m[39m Detected demo project ID "demo-lift-tracker", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail.
+[36m[1mi  firestore:[22m[39m Firestore Emulator logging to [1mfirestore-debug.log[22m
+[32m[1m+  firestore:[22m[39m Firestore Emulator was started in standard edition.
+[32m[1m+  firestore:[22m[39m Firestore Emulator UI websocket is running on 9150.
+[36m[1mi [22m[39m Running script: [1mnpm run e2e[22m
+
+> lift-tracker@0.0.0 e2e
+> playwright test
+
+[WebServer] [warn] `advancedChunks` option is deprecated, please use `codeSplitting` instead.
+[WebServer] [plugin builtin:vite-reporter] 
+[WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
+[WebServer] - Using dynamic import() to code-split the application
+[WebServer] - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+[WebServer] - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[WebServer] [warn] `inlineDynamicImports` option is deprecated, please use `codeSplitting: false` instead.
+
+Running 90 tests using 1 worker
+[36m[1mi [22m[39m To verify the email address cg-1789054184420-75560@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=Fy3G7lr-NgtRuxDLVKEXbDcW9066WArpNCU3MK3_xhBX0nlGt58zBz&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054192546-57664@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=aUv0T63G7ZIyYt0yVRdlvPBst8UDnJAI4Jwm0IlMTapikFSJkaOu8H&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054200028-8495@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=3NRN_qj8rT9BXLWP06-31b53Z_vbvMfqPlYwfIb7JN20yulgRUr3Ky&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054209349-80170@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=iRzwxrA4w-LIRYRPtsnnx521tner2FtLdgV820jLOreXJb7aTVScEm&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054216757-19792@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=2H5-pfyHoSwXItCtZdv4xSEuwcSfxK3ZJxiU0Jf3pA2CVTPZLAkO9I&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054230779-83730@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=1KDbCKDza-CMEjDTIH-i7T0z806QNBr9GHYuhtsEQM9T2Ob6yPdrkn&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054245265-77301@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=bgkolHu0AL-RiqJI7o-6KO-x-lNPKv3v0tyc_qINYGCYj5nMI86Vpv&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054251707-78886@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=PxhNEyHflRtsGlJ8Tdo3btqYultstUDUTi4Suzn9OgQbVlED0SFj7b&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054261531-21992@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=gQ8BTpXQcQnTX-kPW_-NJvq208h3zug61aJcE8gC4uS-x7Trzl53oc&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054270663-75772@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=T7TeU4mJqHB_q-i6eH8VqVy6jQmMTBJ55YGOYWjhiG1f-mHw0eD08v&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054277879-94719@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=uaSWZusDlAqz8U_A1sQk-2oe320mgl_k73a9wcy8VU36N2obv5rUcR&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054286123-9736@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=FlmSYo1XiptJyyfHLb3XDM4RkhwdSlc0cHYKH3Pq-fuE6tZzotLB13&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054295478-8211@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=5gN4S2JGY4lrzOtlb70FUYoi_UlkFG4ZMJjE2o4AC8A1AKkzOyFteO&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054301563-61470@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=Ac_BlMcMAGOooQ0JUPuks6SDdVcShShBsoKj3YQoSquUreyqczAf78&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054309262-58813@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=qULJW0OMAf46wSr-Y-C-1t_OmsBDUJYfJ0e7NvZmUukOSOubGFj8Xv&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054315822-84122@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=j5ibVCUzPzlOjLK6BMwTaZA1LgnO_nHykEcS1_rtN7S2Iqyy4N395p&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054322176-97311@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=C9cChE6Afu7HlDVlKkx3oPZwOyXbqn6H6mkomciCE3lFSThmwwdlmM&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054329806-54609@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=xsQZ4s0cNFP2HWr2zRjGz0OUCgI_gStgB3_Y7dNXpLAK8WW4nrmtpo&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054337547-52909@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=jbcqx2ohbNsOCiI6d1PeynjjLkl3dxfIZUy6eeNQ0vwIkLfWev9mcc&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054344042-67763@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=YBFL5QovUHT92s1R9Big5UOgDzMAHaDI3iErtbXh0VsRuGxOTAfg9T&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054350758-8709@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=Sif0kQSF2WGpiKzAaOd64S9YL1ksT2-Qa872L_5cmfiFXF3AMmtLJw&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054360113-64794@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=S8FDiR2qfbKRx30k14wrCLOpd1b92rl0KAsAYddH0vXjrEjN8JC2ZI&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054367584-7627@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=dSOGt0z_m1T0EdQCYhYVHXkdTvD0VHsmB3ou7Kelbh_0coSAURv34r&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054371283-63806@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=GoLX5K1oQlt8Q_EFrrcRN2qkqOhq-OTzob6fjdrGWziYOba1lcwJvW&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054377644-89002@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=Z2kuAP9ZBWPz1CNi1UqF_4obRx7kQsxq6wpDaYXlr_PtirNnOGU_pT&apiKey=fake-api-key
+×[36m[1mi [22m[39m To verify the email address cg-1789054395653-45865@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=UKPnCItYpOcdf6LSZoFRXAkYYcJBOdL77tL3zos58u-v3MPUt_Sqh1&apiKey=fake-api-key
+×[36m[1mi [22m[39m To verify the email address cg-1789054411815-49696@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=KXzwfLRb5frNiwrcX3xipmuuazZV4OyMSEnWMrpn0UDkRPMm-kG9Vi&apiKey=fake-api-key
+±
+::error file=e2e\circuit-gestures.spec.ts,title=[mobile-chrome] › e2e\circuit-gestures.spec.ts:591:3 › leaving a circuit › a two-exercise workout that is all circuit can still be broken up,line=602,col=68::  1) [mobile-chrome] › e2e\circuit-gestures.spec.ts:591:3 › leaving a circuit › a two-exercise workout that is all circuit can still be broken up %0A    Error: expect(locator).toBeVisible() failed%0A%0A    Locator: getByText('Leave circuit', { exact: true })%0A    Expected: visible%0A    Timeout: 5000ms%0A    Error: element(s) not found%0A%0A    Call log:%0A      - Expect "toBeVisible" with timeout 5000ms%0A      - waiting for getByText('Leave circuit', { exact: true })%0A%0A%0A      600 |     await swipeRow(page, 'Crunches', 140);%0A      601 |     // The action names itself before you let go.%0A    > 602 |     await expect(page.getByText('Leave circuit', { exact: true })).toBeVisible();%0A          |                                                                    ^%0A      603 |     await page.mouse.up();%0A      604 |%0A      605 |     // A circuit of one is just an exercise, so the whole block dissolves.%0A        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:602:68
+::error file=e2e\circuit-gestures.spec.ts,title=[mobile-chrome] › e2e\circuit-gestures.spec.ts:591:3 › leaving a circuit › a two-exercise workout that is all circuit can still be broken up,line=602,col=68::  1) [mobile-chrome] › e2e\circuit-gestures.spec.ts:591:3 › leaving a circuit › a two-exercise workout that is all circuit can still be broken up %0A%0A    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────%0A    Error: expect(locator).toBeVisible() failed%0A%0A    Locator: getByText('Leave circuit', { exact: true })%0A    Expected: visible%0A    Timeout: 5000ms%0A    Error: element(s) not found%0A%0A    Call log:%0A      - Expect "toBeVisible" with timeout 5000ms%0A      - waiting for getByText('Leave circuit', { exact: true })%0A%0A%0A      600 |     await swipeRow(page, 'Crunches', 140);%0A      601 |     // The action names itself before you let go.%0A    > 602 |     await expect(page.getByText('Leave circuit', { exact: true })).toBeVisible();%0A          |                                                                    ^%0A      603 |     await page.mouse.up();%0A      604 |%0A      605 |     // A circuit of one is just an exercise, so the whole block dissolves.%0A        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:602:68
+[36m[1mi [22m[39m To verify the email address cg-1789054418651-34340@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=0V-VVyKgIiEwD57LizXYWU8wsnVfS2S-5QKq2eJMSGNqnDNv_QPzRC&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054427793-29255@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=2NQZqHficuSJM7lK8QqAcxKUJidcf-dzbwebU0izVmYr79i2tuGCbi&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054435959-43901@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=MK4gYs3eriuxBatYW0AhQsiZ6bCOzgXJi8nSNAiB7QcsrbrJw_SInC&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054442359-44335@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=6Ye6XVrdgkSb4t6c68jyobzC6LuO3KfSBCYuOPMhfvGYjKRCGhC3Os&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054449179-13178@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=-YNbtTs5pIes7egyAZPKLiO7V0WkhD0Uawv2uBWcWH92oWJIAZOmSO&apiKey=fake-api-key
+×[36m[1mi [22m[39m To verify the email address cg-1789054461287-64858@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=OwotHyLTtgWB32qYDHO4fLgL5BfRydv5_B_leSWLS4wmHvJYIkbgvI&apiKey=fake-api-key
+±
+::error file=e2e\circuit-gestures.spec.ts,title=[mobile-chrome] › e2e\circuit-gestures.spec.ts:697:3 › dragging out of a circuit › the row lands on the side it was dropped, not back where it started,line=711,col=22::  2) [mobile-chrome] › e2e\circuit-gestures.spec.ts:697:3 › dragging out of a circuit › the row lands on the side it was dropped, not back where it started %0A    Error: expect(received).toBeLessThan(expected)%0A%0A    Expected: < 1%0A    Received:   2%0A%0A      709 |     const crunches = names.findIndex((name) => name.includes('Crunches'));%0A      710 |     const pushups = names.findIndex((name) => name.includes('Pushups'));%0A    > 711 |     expect(crunches).toBeLessThan(pushups);%0A          |                      ^%0A      712 |   });%0A      713 |%0A      714 |   test('pulling a member down puts it below the block', async ({ page }) => {%0A        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:711:22
+[36m[1mi [22m[39m To verify the email address cg-1789054471987-17521@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=P1KzT7pi8vQ91GfC95nw2eEM4ngfpkU9ieN5iJ71ataggZRzq8uB6L&apiKey=fake-api-key
+×[36m[1mi [22m[39m To verify the email address cg-1789054485463-30232@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=KD_Abagq7ZPCdB5YqwL1K5vsFx7-OUgFvWFkn9xS_PmQEG4jaCwSGr&apiKey=fake-api-key
+±
+::error file=e2e\circuit-gestures.spec.ts,title=[mobile-chrome] › e2e\circuit-gestures.spec.ts:714:3 › dragging out of a circuit › pulling a member down puts it below the block,line=725,col=26::  3) [mobile-chrome] › e2e\circuit-gestures.spec.ts:714:3 › dragging out of a circuit › pulling a member down puts it below the block %0A    Error: expect(received).toContain(expected) // indexOf%0A%0A    Expected substring: "Pushups"%0A    Received string:    "Pullups"%0A%0A      723 |%0A      724 |     const names = await page.getByTestId('slot-name').allTextContents();%0A    > 725 |     expect(names.at(-1)).toContain('Pushups');%0A          |                          ^%0A      726 |     // The remaining two closed up and are still a circuit.%0A      727 |     await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();%0A      728 |   });%0A        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:725:26
+[36m[1mi [22m[39m To verify the email address cg-1789054497881-43666@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=K2ij0b_22bQmuTFdMxfssqwIxwE4L8XB7izTenC184GEgnqSoTJQD5&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054507557-9820@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=exZNhsmBIhkJbH2t_1CrKXl5oqeAILGj5I85crB5I-e6oAG_lPg48H&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054515925-81255@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=7pryB3riwMv2UTJzil9PiAJwDjUP3q62AmbdjihqOv0CsTePQqruh3&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054524574-3661@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=8PLV-5LX3Nl_2aCmW9Xn-6Es1o4W3xOooIK85ANeBvplDUI2x7_MrH&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054534358-9815@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=Ubye9R2zw2NIsmXOX7HAWNvIJ408rBs82bwHqemTiWsT2pGO903gh3&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054541238-70575@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=hsHVmfVVTAS3QxAs5-JxORMmcCBY6uv9wPxFiXHuR9gQvB4aBtxj-u&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054549216-93525@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=xEb-yPzAM33K0M9JliTK1JuTEKtHDdcV5E5WAGf48VY5S21_Bree-W&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address cg-1789054557646-23791@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=jRq6gIoGSBLMFlLosn-utxKh6q_kvBohHiRKCQU6ThiPsS_MwaTa8J&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address pv-1789054565361-74994@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=_-mNNQya6wDmONOEDBPeewR23zu8pQlo5vkkPpWpO2YV5hTT61fC3a&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address pv-1789054568198-43332@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=J8OjPYXj75qNjRWbfy5lNrjG6t3aoDK_N_68wXatulfvKkj6ZVn19p&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address pv-1789054571383-73784@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=wmJVtEq_t2GKSxANiF-5TCxBZJDWiHx0ZYDcY13JddIULEYNsNsCTS&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address pv-1789054574785-94387@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=A58EuUKYcJ3rs0vga3b2j5xoF3FBVDo6ymiL6FEpWbO8wAK6fYf0fe&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address pv-1789054578269-74239@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=7cz7tPDW2CLGfVMsM1rPLaCwS2nREEhszGvGeRi3HSF9oslr0Qk4eK&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address pv-1789054581103-93536@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=EboJ5tuabI0rJoBqj46b1ceNnP9oVDLzGfxwbumRadsPzraRaaXDDh&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address pv-1789054583780-17357@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=VIuG-IJT1HDe2MqIxM5YnI5UB6d8FkHcsOAB7T8KpQ4qszslDrDAo_&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ex-1789054586632-12416@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=EwG6iUQf4D-zoSdQOOa6tyi6P-v6gpP7BLTKXEGcaa9_I_F8HQ5bVc&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ex-1789054589167-15997@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=Y4thWkj7sH5qLoEwlhenVcTpoeOtH8m9qpiNHe8EDKhunryBuWGJs1&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ex-1789054591821-42546@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=G9Va-73Vi_Q7Pu2cdie08C2j2Gu3kMurfasSqK_cbjP94TUimdH9Q5&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ex-1789054594458-23759@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=oySeaTXZiwEjerG7KG87H-gFf_yczbf-AZwPuLruPP00cbNEWSr4cA&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ex-1789054596958-19004@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=UDEwc26nKjxagqys80Ejz_qN0QeaDa6MAcS4U3lgDj4ucP-WTVZj_e&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ex-1789054599671-93927@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=SClL5o88USMCsaPkoP_C3DcLKnGUIKTvGrBTYxUarbTwwMpaE0HMWf&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ex-1789054602253-7405@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=DME5zI1YKGtRX-x5Gcf7W3ApEzkAhHh_botrAOEm6ElEOQJV-GKWv3&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ex-1789054605175-75992@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=dI3q9xgKQABRdk_K763nRQWBaE-hYnl8OL4Zcm3CIns-RDohhPN1fb&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ex-1789054607915-17419@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=L4JouMYeab4UfZ-5uYHK4t0xIlP0sJ2_egS_OtGiEm3Khy8qEGmqmt&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ex-1789054610463-40478@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=bJU7oh8zQPBQCHHpicuxRIT1hLQMBWX9Lqjbpaem5bhMc3N63DC3wy&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ex-1789054613621-61627@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=MlCSBCnR6NXx4C3MKE3vaLlu596mUwPPcr2Uv5naOpoOubYKV-00N5&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address offline-1789054616746-67472@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=9SMcolDiqbiw-eiFwT1roi37pLupokI65hUKTcWUs2bwC8qOZOYaKo&apiKey=fake-api-key
+··[36m[1mi [22m[39m To verify the email address share-a-1789054624749-31798@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=qjIEP7mUNriJWYNv5ht6PpTH4AqS2kdfKTzhH7uBkk3FBddSeb2k2N&apiKey=fake-api-key
+[36m[1mi [22m[39m To verify the email address share-b-1789054630368-68181@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=pxVqAauujeFIbLdl4SJzKabvzz5vEKW6ixNphbbGrPntZRwLz9ypDN&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address share-c-1789054633786-61417@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=-IHkxCkBooO5MWi65XmShrWObMc3HHeJCy4vbLauE3sLJl_HQimjFr&apiKey=fake-api-key
+[36m[1mi [22m[39m To verify the email address share-d-1789054638817-98118@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=yuGQK-bggY6j6lb6pVDjsVRiCZbVB0JdzYcdHdbzc-We_4nUgmijfB&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address share-e-1789054642243-225@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=r_1GE01CuM7RnRon-MGWhebWIEOMApRWtXC7-1_Sduvb-3zZ9Q80t7&apiKey=fake-api-key
+[36m[1mi [22m[39m To verify the email address share-f-1789054647112-67207@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=I6ivLDeaasNQ4VVj3gPMfI3iDNbhfMTMMqN7p4yAsTpPNdaxWguRAe&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address share-g-1789054651757-24590@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=UpPxxT1FqRmgjQwxkRdp-F2VjY-dM48Ix99rSWiaxGvYuKKLkZ5Rgt&apiKey=fake-api-key
+[36m[1mi [22m[39m To verify the email address share-h-1789054656065-45640@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=uYtdqlMpMSSCtzF3HoZm7eH8q_mgtK-Y6MWbHcLSe8zHozyfR8e0xn&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address share-i-1789054658962-69385@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=LbxyFcRYFxoz1Ldg58MlppfknUCajKe-mvr36bvy1lqyFMI8FDSvPX&apiKey=fake-api-key
+····[36m[1mi [22m[39m To verify the email address phase0-1789054668890-4872@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=OJO6YCsS_rOIWS7QujTZpUwQi7d8E7o0rlCPnQVPE2Ka5bM6KtPtCt&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address rest-1789054671394-28973@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=ZLSOHWtfRUvvfryqG53efh9Qx74az5Jy0Y0taSfV1Thy-UbviLfcxB&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ci-1789054674127-82749@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=SwjmGssOTwEMZu6WS0CDMpZVU0_Qh55NDyRil8o0NBkw6IOXAGXxsE&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ci-1789054682654-83192@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=Tc55Jcz3_nNyGiZFvFYqdPhe-cF_4n9h-z138KZv227tRhM0FoobDg&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ci-1789054691294-84802@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=wQTvfp_FDQXnQJljXM1vaQU4I-byceLpuBVQvMdWHKf_4AhSZRu6ti&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ci-1789054698602-14168@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=5hwUh3Hsk-5EC9pSC1fEeG6e7mEFlBP3UWjooWDzl9qZzKv5cBco6g&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ci-1789054706169-1562@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=tjshO6sfQNwKasDk7N4YkuWw-Gk3yh5XMWzZ1uSR31-I3NdykVfSHy&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ci-1789054711235-9227@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=Q-iqpx9Fbg3kqokrAMX6LxjeewMJyILeKGVrJ7VpIQCZuNGPOGA1Vb&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address ci-1789054715217-37420@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=PBNAZWrkusZUqooekJNTBrvf2A4kB2QQ_sO-cA7zjqxH9_FwQyCHw2&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address wo-1789054718913-90829@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=3QDxEiHaBBIIDwu4iYzvYbNe6kSLq6dFTJKDbXPTgJTpwCzdUgB4DD&apiKey=fake-api-key
+
+·[36m[1mi [22m[39m To verify the email address wo-1789054724372-7241@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=ta8iFolesfN6cQBkAX83YoYM-vdRd1Znz6LZoJ9q68mAMPQTCD6hMe&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address wo-1789054730323-33351@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=-4otklxsfQGL7F1yJBBGxLoFb49OEqSXsHlRd-9wy2MBqpzQS0MN6N&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address wo-1789054733090-70008@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=l5VfahKnw0FTqyC9MY9jIDAaOa9nwWndU8u67Do98-WV7JQbbXx0l3&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address wo-1789054737560-71799@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=x3YYm7u5y_sLL2qWy1pYFAlealbGyjh6md8yl-CXIW2QmoI40HH4xi&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address wo-1789054742380-36984@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=K2soGqGICUB4Ffc-XdMXmkvls5SA5533E5pWElEl59-ryj8s6hYXuC&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address wo-1789054746337-80223@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=5OTdBT6R3l71TWyJI_vKG-ZuTzY6II384hURPzjA4m2TMs_-3Ljrgu&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address wo-1789054751149-75249@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=w5NJNH0110GQ81Oi17zAjWPj74btY7w206tQCfnoKXl97OnzSgbx3l&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address wo-1789054756423-96839@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=S4ryQJ2GkViUfn5EcpLYOzqFuSxtl9OR2KpXdUoI8yxrWgEzJgXdNW&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address wo-1789054760993-96166@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=-gXmXoqgMMiSVom1Pk38URKkCE3WFoo5rHBbGYfU1jdDvKaFbt7ui6&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address wo-1789054765211-48134@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=FhEUF8kDeHsG5He6tiYhmb4vnPRhZR9VF6CdJ7bIuIBgRp2dG4AnQs&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address wo-1789054769322-28133@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=OTfCJqYShn1rzlH7s5CEAA9e6RlzH3d-Ly021woHEDBQ4lIuRiVLbA&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address wo-1789054773383-83384@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=WUfj1504nuJAn8rGLoy-h-VeBaBBhLMA7p1v0OsLrdNjclN4CtE83p&apiKey=fake-api-key
+·[36m[1mi [22m[39m To verify the email address wo-1789054778125-41718@example.com, follow this link: http://127.0.0.1:9099/emulator/action?mode=verifyEmail&lang=en&oobCode=uHQhu9tdIeF9ScTtTpu0hhQ3gMD3DFdpuikaZw2NNIrOtXfiKhdfWg&apiKey=fake-api-key
+·
+
+  1) [mobile-chrome] › e2e\circuit-gestures.spec.ts:591:3 › leaving a circuit › a two-exercise workout that is all circuit can still be broken up 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Leave circuit', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('Leave circuit', { exact: true })
+
+
+      600 |     await swipeRow(page, 'Crunches', 140);
+      601 |     // The action names itself before you let go.
+    > 602 |     await expect(page.getByText('Leave circuit', { exact: true })).toBeVisible();
+          |                                                                    ^
+      603 |     await page.mouse.up();
+      604 |
+      605 |     // A circuit of one is just an exercise, so the whole block dissolves.
+        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:602:68
+
+    Error Context: test-results\circuit-gestures-leaving-a-336dd-cuit-can-still-be-broken-up-mobile-chrome\error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Leave circuit', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('Leave circuit', { exact: true })
+
+
+      600 |     await swipeRow(page, 'Crunches', 140);
+      601 |     // The action names itself before you let go.
+    > 602 |     await expect(page.getByText('Leave circuit', { exact: true })).toBeVisible();
+          |                                                                    ^
+      603 |     await page.mouse.up();
+      604 |
+      605 |     // A circuit of one is just an exercise, so the whole block dissolves.
+        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:602:68
+
+    Error Context: test-results\circuit-gestures-leaving-a-336dd-cuit-can-still-be-broken-up-mobile-chrome-retry1\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\circuit-gestures-leaving-a-336dd-cuit-can-still-be-broken-up-mobile-chrome-retry1\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\circuit-gestures-leaving-a-336dd-cuit-can-still-be-broken-up-mobile-chrome-retry1\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile-chrome] › e2e\circuit-gestures.spec.ts:697:3 › dragging out of a circuit › the row lands on the side it was dropped, not back where it started 
+
+    Error: expect(received).toBeLessThan(expected)
+
+    Expected: < 1
+    Received:   2
+
+      709 |     const crunches = names.findIndex((name) => name.includes('Crunches'));
+      710 |     const pushups = names.findIndex((name) => name.includes('Pushups'));
+    > 711 |     expect(crunches).toBeLessThan(pushups);
+          |                      ^
+      712 |   });
+      713 |
+      714 |   test('pulling a member down puts it below the block', async ({ page }) => {
+        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:711:22
+
+    Error Context: test-results\circuit-gestures-dragging--1a5dd-d-not-back-where-it-started-mobile-chrome\error-context.md
+
+  3) [mobile-chrome] › e2e\circuit-gestures.spec.ts:714:3 › dragging out of a circuit › pulling a member down puts it below the block 
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected substring: "Pushups"
+    Received string:    "Pullups"
+
+      723 |
+      724 |     const names = await page.getByTestId('slot-name').allTextContents();
+    > 725 |     expect(names.at(-1)).toContain('Pushups');
+          |                          ^
+      726 |     // The remaining two closed up and are still a circuit.
+      727 |     await expect(page.getByText(/3 rounds of these 2, in order/u)).toBeVisible();
+      728 |   });
+        at C:\git\lift-tracker\e2e\circuit-gestures.spec.ts:725:26
+
+    Error Context: test-results\circuit-gestures-dragging--3715f-own-puts-it-below-the-block-mobile-chrome\error-context.md
+
+  3 flaky
+    [mobile-chrome] › e2e\circuit-gestures.spec.ts:591:3 › leaving a circuit › a two-exercise workout that is all circuit can still be broken up 
+    [mobile-chrome] › e2e\circuit-gestures.spec.ts:697:3 › dragging out of a circuit › the row lands on the side it was dropped, not back where it started 
+    [mobile-chrome] › e2e\circuit-gestures.spec.ts:714:3 › dragging out of a circuit › pulling a member down puts it below the block 
+  87 passed (10.2m)
+::notice title=🎭 Playwright Run Summary::  3 flaky%0A    [mobile-chrome] › e2e\circuit-gestures.spec.ts:591:3 › leaving a circuit › a two-exercise workout that is all circuit can still be broken up %0A    [mobile-chrome] › e2e\circuit-gestures.spec.ts:697:3 › dragging out of a circuit › the row lands on the side it was dropped, not back where it started %0A    [mobile-chrome] › e2e\circuit-gestures.spec.ts:714:3 › dragging out of a circuit › pulling a member down puts it below the block %0A  87 passed (10.2m)
+[32m[1m+ [22m[39m Script exited successfully (code 0)
+[36m[1mi  emulators:[22m[39m Shutting down emulators.
+[36m[1mi  firestore:[22m[39m Stopping Firestore Emulator
+[33m[1m! [22m[39m Firestore Emulator has exited upon receiving signal: SIGINT
+[36m[1mi  auth:[22m[39m Stopping Authentication Emulator
+[36m[1mi  hub:[22m[39m Stopping emulator hub
+[36m[1mi  logging:[22m[39m Stopping Logging Emulator
+EXIT=0

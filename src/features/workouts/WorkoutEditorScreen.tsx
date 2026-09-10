@@ -71,7 +71,7 @@ export default function WorkoutEditorScreen() {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
 
-  const { workout, versions, isPending, notFound } = useWorkout(workoutId);
+  const { workout, versions, isPending, hasPendingWrites, notFound } = useWorkout(workoutId);
   const { lookup } = useMuscleLookup();
   const { profile } = useProfile();
 
@@ -219,6 +219,25 @@ export default function WorkoutEditorScreen() {
           <Badge variant="light" color={workout.currentVersion === 0 ? 'gray' : 'sky'} size="sm">
             {workout.currentVersion === 0 ? 'unpublished' : `v${String(workout.currentVersion)}`}
           </Badge>
+          {/*
+            Sync state, stated rather than implied (§2.8).
+      
+            Every edit here is fire-and-forget into the local cache, so the
+            screen is already correct the instant you type and there is nothing
+            to wait for. That is exactly why the chip is needed: without it
+            "saved" and "saved *everywhere*" look identical, and closing the tab
+            on a slow connection silently loses the last edit. Settings has
+            carried this chip since phase 0; the editor never got one.
+          */}
+          {hasPendingWrites ? (
+            <Badge variant="light" color="gray" size="sm" data-testid="workout-sync">
+              saving…
+            </Badge>
+          ) : (
+            <Badge variant="light" color="gray" size="sm" data-testid="workout-sync">
+              saved
+            </Badge>
+          )}
         </Group>
       </Stack>
 
