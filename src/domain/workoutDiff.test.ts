@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { bodiesEqual, cloneBody, diffPrescriptions, diffWorkout, summarize } from './workoutDiff';
+import {
+  bodiesEqual,
+  cloneBody,
+  diffPrescriptions,
+  diffWorkout,
+  hasUnpublishedChanges,
+  summarize,
+} from './workoutDiff';
 import type { ExerciseSlot, Prescription, WorkoutBody } from './workouts';
-import { DEFAULT_PRESCRIPTION } from './workouts';
+import { DEFAULT_PRESCRIPTION, createRestSlot, parseWorkoutBody, pruneGroupRest } from './workouts';
 
 function slot(
   slotId: string,
@@ -236,6 +243,69 @@ describe('summarize', () => {
   });
 });
 
+describe('publish round trip', () => {
+  /** A body with every field a snapshot has to survive. */
+  const RICH: WorkoutBody = {
+    name: 'ABS + BODYWEIGHT',
+    slots: [
+      slot('s1', 'Bench Jump', { prescription: { ...DEFAULT_PRESCRIPTION, loadHint: null } }),
+      slot('s2', 'Pushups', {
+        supersetGroup: 'g1',
+        notes: '',
+        prescription: { ...DEFAULT_PRESCRIPTION, restSeconds: 0, loadHint: 'bodyweight' },
+      }),
+      slot('s3', 'Crunches', {
+        supersetGroup: 'g1',
+        prescription: { ...DEFAULT_PRESCRIPTION, restSeconds: 0 },
+      }),
+      createRestSlot('r1', 90),
+    ],
+    groupRest: { g1: 45 },
+  };
+
+  /** What Firestore gives back: the stored snapshot, narrowed again. */
+  function storeAndRead(body: WorkoutBody): WorkoutBody {
+    return parseWorkoutBody(JSON.parse(JSON.stringify(cloneBody(body))) as Record<string, unknown>);
+  }
+
+  it('sees no change between a published snapshot and the body it came from', () => {
+    expect(diffWorkout(storeAndRead(RICH), storeAndRead(RICH)).hasChanges).toBe(false);
+  });
+
+  it('sees no change after the working copy is pruned on the next edit', () => {
+    // `commit` prunes round rest on every edit, so the stored body can differ
+    // from the snapshot in `groupRest` alone. That must not read as a change.
+    const edited = storeAndRead(pruneGroupRest(RICH));
+    expect(diffWorkout(storeAndRead(RICH), edited).hasChanges).toBe(false);
+  });
+
+  it('sees no change when a dissolved group leaves its round rest behind', () => {
+    const stale: WorkoutBody = { ...RICH, groupRest: { g1: 45, gone: 120 } };
+    expect(diffWorkout(storeAndRead(RICH), storeAndRead(stale)).hasChanges).toBe(false);
+  });
+});
+
+describe('hasUnpublishedChanges', () => {
+  it('is false while the version list has not loaded', () => {
+    // The bug this pins: an empty list meant "never published", so an
+    // untouched v1 workout offered to publish an identical v2.
+    expect(hasUnpublishedChanges(null, 1, PUSH)).toBe(false);
+  });
+
+  it('is true for a workout with nothing published yet', () => {
+    expect(hasUnpublishedChanges(null, 0, PUSH)).toBe(true);
+  });
+
+  it('is false once the snapshot loads and matches', () => {
+    expect(hasUnpublishedChanges(cloneBody(PUSH), 1, PUSH)).toBe(false);
+  });
+
+  it('is true once the snapshot loads and differs', () => {
+    const after = workout('PUSH', [...PUSH.slots, slot('s3', 'Dip')]);
+    expect(hasUnpublishedChanges(cloneBody(PUSH), 1, after)).toBe(true);
+  });
+});
+
 describe('bodiesEqual', () => {
   it('is true for a clone and false after any edit', () => {
     expect(bodiesEqual(PUSH, cloneBody(PUSH))).toBe(true);
@@ -259,5 +329,34 @@ describe('cloneBody', () => {
 
   it('keeps only the versioned fields, so a snapshot cannot leak into the document', () => {
     expect(Object.keys(cloneBody(PUSH)).sort()).toEqual(['groupRest', 'name', 'slots']);
+  });
+});
+
+describe('discarding edits', () => {
+  it('reverts the working copy to the last published version', () => {
+    const edited = workout('PUSH EXPERIMENT', [...PUSH.slots, slot('s3', 'Dumbbell Flyes')]);
+    expect(hasUnpublishedChanges(PUSH, 1, edited)).toBe(true);
+
+    const restored = cloneBody(PUSH);
+    expect(hasUnpublishedChanges(PUSH, 1, restored)).toBe(false);
+    expect(restored.name).toBe('PUSH');
+    expect(restored.slots).toHaveLength(2);
+  });
+
+  it('puts a circuit back together again', () => {
+    const published: WorkoutBody = {
+      name: 'ABS',
+      slots: [
+        slot('s1', 'Pushups', { supersetGroup: 'g1' }),
+        slot('s2', 'Crunches', { supersetGroup: 'g1' }),
+      ],
+      groupRest: { g1: 45 },
+    };
+    const brokenUp = pruneGroupRest(
+      workout('ABS', [slot('s1', 'Pushups'), slot('s2', 'Crunches')]),
+    );
+
+    expect(hasUnpublishedChanges(published, 1, brokenUp)).toBe(true);
+    expect(hasUnpublishedChanges(published, 1, cloneBody(published))).toBe(false);
   });
 });

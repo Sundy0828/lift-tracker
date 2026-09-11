@@ -17,6 +17,9 @@ import { cancelRestNotification, scheduleRestNotification } from './notification
  * timer back to the set before it — resumed from when that set actually
  * finished, not from now, so the clock stays honest.
  *
+ * A rest that runs out stays running: the bar counts the overrun up from
+ * zero, and only a skip, the next set, or the end of the session clears it.
+ *
  * **Nothing here ticks.** The countdown re-renders twice a second, and this
  * hook lives on the active-session screen, so ticking here would re-render
  * every set row twice a second and undo the memoization the set grid depends
@@ -27,14 +30,19 @@ import { cancelRestNotification, scheduleRestNotification } from './notification
 export type RestOwner = { entryKey: string; setIndex: number };
 
 export type Rest = {
-  /** Epoch milliseconds. */
+  /** Epoch milliseconds, when the set that earned this rest was finished. */
+  startedAt: number;
+  /** Epoch milliseconds. Past this the bar counts the overrun. */
   endsAt: number;
-  /** What was originally asked for, so the progress bar has a denominator. */
-  total: number;
   /** What is next, shown on screen and in the notification. */
   label: string;
   owner: RestOwner;
 };
+
+/** The rest asked for, in seconds. The progress bar's denominator. */
+export function restTotal(rest: Rest): number {
+  return Math.max(1, Math.round((rest.endsAt - rest.startedAt) / 1000));
+}
 
 export type RestTimer = {
   rest: Rest | null;
@@ -48,6 +56,8 @@ export type RestTimer = {
   resumeFrom: (from: string, seconds: number, label: string, owner: RestOwner) => void;
   /** True when the running rest is owed to this set. Stable across renders. */
   isOwnedBy: (owner: RestOwner) => boolean;
+  /** The running rest, readable from a handler. Stable across renders. */
+  peek: () => Rest | null;
   /** Adds (or, negative, removes) seconds from a running rest. */
   adjust: (seconds: number) => void;
   stop: () => void;
@@ -80,7 +90,7 @@ export function useRestTimer(): RestTimer {
       return;
     }
 
-    const next: Rest = { endsAt, total, label, owner };
+    const next: Rest = { startedAt: endsAt - total * 1000, endsAt, label, owner };
     setRest(next);
     current.current = next;
     void scheduleRestNotification(endsAt, label);
@@ -110,12 +120,17 @@ export function useRestTimer(): RestTimer {
     [],
   );
 
+  const peek = useCallback(() => current.current, []);
+
   const adjust = useCallback((seconds: number) => {
     setRest((running) => {
       if (running === null) return null;
-      const endsAt = Math.max(Date.now(), running.endsAt + seconds * 1000);
+      // Measured from now once the rest has run out, so +15s on an overrun
+      // gives fifteen more seconds rather than a deadline still in the past.
+      const from = Math.max(Date.now(), running.endsAt);
+      const endsAt = Math.max(Date.now(), from + seconds * 1000);
       void scheduleRestNotification(endsAt, running.label);
-      const next = { ...running, endsAt, total: Math.max(1, running.total + seconds) };
+      const next = { ...running, endsAt };
       current.current = next;
       return next;
     });
@@ -136,5 +151,5 @@ export function useRestTimer(): RestTimer {
     [],
   );
 
-  return { rest, start, resumeFrom, isOwnedBy, adjust, stop };
+  return { rest, start, resumeFrom, isOwnedBy, peek, adjust, stop };
 }

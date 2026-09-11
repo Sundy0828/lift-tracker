@@ -30,7 +30,7 @@ import {
   saveWorkoutNotes,
 } from '@/data/mutations/workouts';
 import type { Exercise } from '@/domain/exercises';
-import { diffWorkout } from '@/domain/workoutDiff';
+import { diffWorkout, hasUnpublishedChanges } from '@/domain/workoutDiff';
 import type { ExerciseSlot, WorkoutBody } from '@/domain/workouts';
 import {
   activeGroupIds,
@@ -109,8 +109,12 @@ export default function WorkoutEditorScreen() {
     slots: workout.slots,
     groupRest: workout.groupRest,
   };
+  // The version list arrives on its own listener, so it is still empty on the
+  // first render of an already-published workout. `currentVersion` is the
+  // authority on whether a snapshot exists.
   const published = versions[0] ?? null;
   const pendingDiff = diffWorkout(published, body);
+  const hasChanges = hasUnpublishedChanges(published, workout.currentVersion, body);
   const volume = workoutVolume(body, lookup);
   const exerciseCount = exerciseSlots(workout.slots).length;
   const hasCircuit = activeGroupIds(workout.slots).length > 0;
@@ -171,7 +175,7 @@ export default function WorkoutEditorScreen() {
    * is the way to abandon one that was never published.
    */
   const discard = (): void => {
-    if (uid === null || published === null || !pendingDiff.hasChanges) return;
+    if (uid === null || published === null || !hasChanges) return;
     void discardWorkoutChanges(uid, workout.id, published);
     notifications.show({
       message: `Reverted to v${String(published.versionNumber)}`,
@@ -191,7 +195,7 @@ export default function WorkoutEditorScreen() {
   };
 
   const publish = (): void => {
-    if (uid === null || !pendingDiff.hasChanges) return;
+    if (uid === null || !hasChanges) return;
     const { promise, result } = publishWorkoutVersion(uid, workout, body, published);
     void promise;
     notifications.show({
@@ -269,7 +273,7 @@ export default function WorkoutEditorScreen() {
         </Group>
       </Stack>
 
-      {pendingDiff.hasChanges ? (
+      {hasChanges ? (
         <Alert color="sky" variant="light" title="Unpublished changes">
           <Stack gap="xs">
             <Text size="sm">{pendingDiff.summary}</Text>

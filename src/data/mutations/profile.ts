@@ -1,5 +1,5 @@
 import { serverTimestamp, setDoc } from 'firebase/firestore';
-import type { Unit } from '@/domain/types';
+import type { Handedness, Unit } from '@/domain/types';
 import { DEFAULT_PROFILE } from '@/domain/types';
 import { isAccountDeleted } from '../deletedAccounts';
 import { paths } from '../paths';
@@ -44,6 +44,8 @@ export function resetProfile(uid: string): Promise<void> {
   return setDoc(paths.user(uid), {
     displayUnit: DEFAULT_PROFILE.displayUnit,
     defaultRestSeconds: DEFAULT_PROFILE.defaultRestSeconds,
+    autoStartRest: DEFAULT_PROFILE.autoStartRest,
+    handedness: DEFAULT_PROFILE.handedness,
     createdAt: serverTimestamp(),
   });
 }
@@ -54,4 +56,14 @@ export function setDisplayUnit(uid: string, unit: Unit): Promise<void> {
 
 export function setDefaultRestSeconds(uid: string, seconds: number): Promise<void> {
   return setDoc(paths.user(uid), { defaultRestSeconds: seconds }, { merge: true });
+}
+
+/** Turns the automatic rest timer on or off. */
+export function setAutoStartRest(uid: string, enabled: boolean): Promise<void> {
+  return setDoc(paths.user(uid), { autoStartRest: enabled }, { merge: true });
+}
+
+/** Sets the side the per-exercise controls sit on. */
+export function setHandedness(uid: string, handedness: Handedness): Promise<void> {
+  return setDoc(paths.user(uid), { handedness }, { merge: true });
 }

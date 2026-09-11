@@ -24,6 +24,27 @@ import {
   totalSets,
 } from '@/domain/workouts';
 
+/** A lidded box, for the archive action. The button carries the label. */
+function ArchiveIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3.75" width="18" height="4.5" rx="1.25" />
+      <path d="M4.75 8.25v9.5a2.5 2.5 0 0 0 2.5 2.5h9.5a2.5 2.5 0 0 0 2.5-2.5v-9.5" />
+      <path d="M10 12.25h4" />
+    </svg>
+  );
+}
+
 /**
  * The workout library: PUSH, PULL, ABS — each a reusable list you start on
  * whatever cadence you like.
@@ -149,7 +170,7 @@ export default function WorkoutsScreen() {
                     if (uid !== null) void archiveWorkout(uid, workout.id, true);
                   }}
                 >
-                  ▽
+                  <ArchiveIcon />
                 </ActionIcon>
               </Group>
             </Card>

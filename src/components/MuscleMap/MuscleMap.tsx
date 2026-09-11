@@ -1,5 +1,4 @@
 import { Table, Text } from '@mantine/core';
-import { memo } from 'react';
 import { muscleLabel } from '@/domain/muscles';
 import type { HeatStop, VolumeByMuscle } from '@/domain/volume';
 import {
@@ -10,8 +9,9 @@ import {
   totalSetEquivalents,
   volumeRows,
 } from '@/domain/volume';
-import type { BodyRegion, BodyView } from './bodyPolygons';
-import { DRAWN_MUSCLE_SET, VIEW_BOX, inertFor, regionsFor } from './bodyPolygons';
+import { BodyPair } from './BodyFigure';
+import type { BodyRegion } from './bodyPolygons';
+import { DRAWN_MUSCLE_SET } from './bodyPolygons';
 import classes from './MuscleMap.module.css';
 
 /**
@@ -33,35 +33,6 @@ const STOP_CLASSES: Record<HeatStop, string> = {
   3: classes.stop3,
   4: classes.stop4,
 };
-
-type BodyFigureProps = {
-  view: BodyView;
-  stopFor: (region: BodyRegion) => HeatStop;
-};
-
-const BodyFigure = memo(function BodyFigure({ view, stopFor }: BodyFigureProps) {
-  return (
-    <figure className={classes.figure}>
-      <svg className={classes.svg} viewBox={VIEW_BOX} aria-hidden="true" focusable="false">
-        {inertFor(view).map((points) => (
-          <polygon key={points} className={classes.inert} points={points} />
-        ))}
-        {regionsFor(view).map((region) => (
-          <g
-            key={region.id}
-            data-muscle={region.id}
-            className={`${classes.muscle} ${STOP_CLASSES[stopFor(region)]}`}
-          >
-            {region.polygons.map((points) => (
-              <polygon key={points} points={points} />
-            ))}
-          </g>
-        ))}
-      </svg>
-      <figcaption className={classes.caption}>{view}</figcaption>
-    </figure>
-  );
-});
 
 export type MuscleMapProps = {
   /** Fine-grained volume; rolled up internally for the diagram. */
@@ -98,12 +69,12 @@ export function MuscleMap({
     return heatStop(total, stops);
   };
 
+  const classForRegion = (region: BodyRegion): string =>
+    `${classes.muscle} ${STOP_CLASSES[stopFor(region)]}`;
+
   return (
     <div className={classes.wrap} data-testid={testId}>
-      <div className={classes.figures}>
-        <BodyFigure view="front" stopFor={stopFor} />
-        <BodyFigure view="back" stopFor={stopFor} />
-      </div>
+      <BodyPair classFor={classForRegion} />
 
       <div className={classes.legend}>
         <span>Less</span>

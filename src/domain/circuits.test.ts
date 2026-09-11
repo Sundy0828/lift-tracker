@@ -668,3 +668,111 @@ describe('rest rows', () => {
     expect(parsed.slots[0]?.kind).toBe('exercise');
   });
 });
+
+describe('a third exercise joining a circuit', () => {
+  it('joins the same circuit rather than starting a second one', () => {
+    // Drag Crunches onto Push-ups, then Pull-ups onto Crunches.
+    let slots = groupWithSlot(base(), 'b', 'a', 'g1');
+    slots = groupWithSlot(slots, 'c', 'b', 'unused');
+
+    expect(activeGroupIds(slots)).toEqual(['g1']);
+    expect(slots.filter((item) => item.supersetGroup === 'g1').map((item) => item.slotId)).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+  });
+
+  it('adds no pause of its own', () => {
+    // A round flows straight through until you place a rest yourself.
+    const body = asWorkout(groupWithSlot(base(), 'b', 'a', 'g1'));
+    expect(body.slots.some(isRestSlot)).toBe(false);
+    expect(body.groupRest).toEqual({});
+  });
+
+  it('holds two rests of different lengths in one circuit', () => {
+    let slots = groupWithSlot(base(), 'b', 'a', 'g1');
+    slots = groupWithSlot(slots, 'c', 'b', 'unused');
+    slots = insertSlotAfter(slots, 'a', createRestSlot('r1', 15));
+    slots = insertSlotAfter(slots, 'b', createRestSlot('r2', 90));
+
+    expect(restSlotSeconds(find(slots, 'r1') ?? createRestSlot('x', 0))).toBe(15);
+    expect(restSlotSeconds(find(slots, 'r2') ?? createRestSlot('x', 0))).toBe(90);
+    // Rests sit inside the circuit but are not exercises.
+    expect(groupRounds(slots.filter((item) => item.supersetGroup === 'g1'))).toBe(
+      DEFAULT_PRESCRIPTION.sets,
+    );
+    expect(exerciseSlots(slots)).toHaveLength(4);
+  });
+});
+
+describe('deleting a slot', () => {
+  /** What the editor does on a delete: drop the row, then reconcile. */
+  const remove = (slots: readonly ExerciseSlot[], slotId: string): ExerciseSlot[] =>
+    reconcileGroups(slots.filter((item) => item.slotId !== slotId));
+
+  const threeMemberCircuit = (): ExerciseSlot[] =>
+    linkToPrevious(linkToPrevious(base(), 'b', 'g1'), 'c', 'g1');
+
+  it('leaves the rest of the circuit grouped', () => {
+    const slots = remove(threeMemberCircuit(), 'c');
+    expect(find(slots, 'a')?.supersetGroup).toBe('g1');
+    expect(find(slots, 'b')?.supersetGroup).toBe('g1');
+  });
+
+  it('closes the circuit up when the middle member goes', () => {
+    const slots = remove(threeMemberCircuit(), 'b');
+    expect(slots.map((item) => item.slotId)).toEqual(['warm', 'a', 'c']);
+    expect(activeGroupIds(slots)).toEqual(['g1']);
+  });
+
+  it('dissolves a circuit left with one member', () => {
+    const slots = remove(linkToPrevious(base(), 'b', 'g1'), 'b');
+    expect(slots.every((item) => item.supersetGroup === null)).toBe(true);
+    expect(find(slots, 'a')?.prescription.restSeconds).toBeNull();
+  });
+
+  it('drops a rest row without breaking the circuit', () => {
+    const withRest = insertSlotAfter(linkToPrevious(base(), 'b', 'g1'), 'a', createRestSlot('r1'));
+    const slots = remove(withRest, 'r1');
+
+    expect(slots.some(isRestSlot)).toBe(false);
+    expect(activeGroupIds(slots)).toEqual(['g1']);
+  });
+
+  it('takes the round rest with a circuit that dissolves', () => {
+    const circuit = { ...asWorkout(linkToPrevious(base(), 'b', 'g1')), groupRest: { g1: 45 } };
+    const after = pruneGroupRest({ ...circuit, slots: remove(circuit.slots, 'b') });
+    expect(after.groupRest).toEqual({});
+  });
+});
+
+describe('adding after a circuit', () => {
+  /** Push-ups loose, then Crunches + Pull-ups as the circuit. */
+  const circuit = (): ExerciseSlot[] => groupWithSlot(base(), 'c', 'b', 'g1');
+
+  it('places a new exercise outside the block', () => {
+    const slots = insertSlotAfter(
+      circuit(),
+      'c',
+      slot({ slotId: 'new', exerciseId: 'squat', exerciseName: 'Squats' }),
+      false,
+    );
+
+    expect(find(slots, 'new')?.supersetGroup).toBeNull();
+    // The block lists only its own members.
+    expect(
+      supersetGroups(asWorkout(slots)).map((group) => group.map((item) => item.slotId)),
+    ).toEqual([['warm'], ['a'], ['b', 'c'], ['new']]);
+  });
+
+  it('places a rest after the block rather than inside it', () => {
+    const slots = insertSlotAfter(circuit(), 'c', createRestSlot('r1', 60), false);
+
+    expect(find(slots, 'r1')?.supersetGroup).toBeNull();
+    // Outside the block, so the round count is untouched.
+    expect(groupRounds(slots.filter((item) => item.supersetGroup === 'g1'))).toBe(
+      DEFAULT_PRESCRIPTION.sets,
+    );
+  });
+});

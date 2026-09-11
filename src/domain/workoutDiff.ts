@@ -240,6 +240,21 @@ export function bodiesEqual(a: WorkoutBody, b: WorkoutBody): boolean {
   return !diffWorkout(a, b).hasChanges;
 }
 
+/**
+ * True when `body` differs from the last published snapshot.
+ *
+ * False when `published` is null while `currentVersion` is above 0: the
+ * version list has not loaded, so no change is known yet.
+ */
+export function hasUnpublishedChanges(
+  published: WorkoutBody | null,
+  currentVersion: number,
+  body: WorkoutBody,
+): boolean {
+  if (published === null && currentVersion > 0) return false;
+  return diffWorkout(published, body).hasChanges;
+}
+
 /** Deep-copies a body so a snapshot cannot alias the editable working copy. */
 export function cloneBody(body: WorkoutBody): WorkoutBody {
   return {

@@ -4,3 +4,16 @@
   border-style: dashed;
   background: transparent;
 }
+
+/* The card's own controls. Right-handed mirrors them to the right edge in CSS
+   only, so reading order and tab order stay as they are. */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+}
+
+.controls[data-hand='right'] {
+  flex-direction: row-reverse;
+}

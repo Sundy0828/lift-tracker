@@ -1,5 +1,5 @@
 import { ActionIcon, Text, Tooltip } from '@mantine/core';
-import { memo } from 'react';
+import { memo, useCallback, useState } from 'react';
 import type { SetAssessment } from '@/domain/sessions';
 import type { Direction } from '@/domain/strength';
 import type { Unit } from '@/domain/types';
@@ -47,8 +47,6 @@ type Props = {
   assessment: SetAssessment;
   /** The rep range, named in the off-target note so colour is never alone. */
   repRangeLabel: string | null;
-  /** Which number a half-entered set is missing, named in its note. */
-  missing: 'weight' | 'reps' | null;
   /** Last time's numbers for this set position, already formatted. */
   previousLabel: string | null;
   /** The delta chip, or null when there is nothing comparable to compare to. */
@@ -96,6 +94,22 @@ function assessmentNote(
   return null;
 }
 
+/**
+ * The assessment as the row currently stands, with the missing-number verdict
+ * taken from what is typed rather than from what is committed. A rep range is
+ * still judged on commit: half of a two-digit number is not an under-shoot.
+ */
+function liveAssessment(
+  assessment: SetAssessment,
+  missing: 'weight' | 'reps' | null,
+  isWarmup: boolean,
+  skipped: boolean,
+): SetAssessment {
+  if (isWarmup || skipped) return assessment;
+  if (missing !== null) return 'incomplete';
+  return assessment === 'incomplete' ? 'unassessed' : assessment;
+}
+
 function SetRowBase({
   entryKey,
   setIndex,
@@ -111,7 +125,6 @@ function SetRowBase({
   displayUnit,
   assessment,
   repRangeLabel,
-  missing,
   previousLabel,
   deltaLabel,
   deltaDetail,
@@ -131,14 +144,32 @@ function SetRowBase({
    */
   const entryUnit = weight === null ? displayUnit : weightUnit;
   const showUnit = weight !== null && weightUnit !== displayUnit;
-  const note = assessmentNote(assessment, repRangeLabel, missing);
+
+  /**
+   * Whether each box holds anything right now, reported by the fields as they
+   * are typed. The numbers themselves still commit on blur. Each flag flips
+   * at most once per box, so the row renders once when a box is first filled
+   * and not once per digit (§3).
+   */
+  const [hasWeight, setHasWeight] = useState(weight !== null);
+  const [hasReps, setHasReps] = useState(reps !== null);
+  const onWeightFilled = useCallback((filled: boolean) => {
+    setHasWeight(filled);
+  }, []);
+  const onRepsFilled = useCallback((filled: boolean) => {
+    setHasReps(filled);
+  }, []);
+
+  const missing = hasWeight === hasReps ? null : hasWeight ? 'reps' : 'weight';
+  const live = liveAssessment(assessment, missing, isWarmup, skipped);
+  const note = assessmentNote(live, repRangeLabel, missing);
 
   return (
     <div
       className={classes.row}
       // Drives the row's edge marker. Only ever set for a set that has been
       // logged and judged, so an untouched row is never flagged.
-      data-assessment={assessment === 'unassessed' ? undefined : assessment}
+      data-assessment={live === 'unassessed' ? undefined : live}
       data-skipped={skipped ? '' : undefined}
     >
       <Tooltip
@@ -168,6 +199,7 @@ function SetRowBase({
           max={2000}
           placeholder={displayUnit}
           disabled={skipped}
+          onFilled={onWeightFilled}
           onCommit={(value) => {
             onWeight(entryKey, setIndex, value, entryUnit);
           }}
@@ -180,6 +212,7 @@ function SetRowBase({
           max={MAX_REPS}
           placeholder="reps"
           disabled={skipped}
+          onFilled={onRepsFilled}
           onCommit={(value) => {
             onReps(entryKey, setIndex, value);
           }}

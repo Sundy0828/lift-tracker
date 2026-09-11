@@ -351,6 +351,14 @@ export function formatShortDate(dateKey: string): string {
   return date === null ? dateKey : date.toLocaleDateString(undefined, SHORT_FORMAT);
 }
 
+const YEAR_FORMAT: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+
+/** `Aug 25, 2026`. Parsed as a local date, so the day never slips. */
+export function formatDateWithYear(dateKey: string): string {
+  const date = dateFromKey(dateKey);
+  return date === null ? dateKey : date.toLocaleDateString(undefined, YEAR_FORMAT);
+}
+
 /**
  * A week's headline: `This week`, `Last week`, or the range it covers.
  *

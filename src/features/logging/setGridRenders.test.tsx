@@ -16,11 +16,12 @@ import type { NumberField as NumberFieldComponent } from './NumberField';
  * rep count must not re-render sibling set rows.
  *
  * Two separate claims, and both are cheap to break by accident. Typing renders
- * nothing at all, because the inputs are uncontrolled — a controlled value
- * would put a render on every keystroke. Committing re-renders one row, because
- * `SetRow` is memoized on primitives and every handler is stable — one object
- * prop rebuilt per render, or one handler without a `useCallback`, and all
- * fifty rows re-render on every entry instead.
+ * the row once, when the box stops being empty and the missing-number note has
+ * to change; every later keystroke renders nothing, because the inputs stay
+ * uncontrolled. Committing re-renders one row, because `SetRow` is memoized on
+ * primitives and every handler is stable — one object prop rebuilt per render,
+ * or one handler without a `useCallback`, and all fifty rows re-render on
+ * every entry instead.
  *
  * Neither shows up as a failing assertion anywhere else. The symptom is a
  * screen that gets slower the longer the workout, on the device least able to
@@ -94,6 +95,7 @@ function Harness() {
     <EntryCard
       entry={entry}
       displayUnit="lb"
+      handedness="right"
       workoutStats={null}
       exerciseStats={null}
       workoutName="PUSH"
@@ -120,7 +122,7 @@ function since(baseline: Map<string, number>): Record<string, number> {
 }
 
 describe('the set grid on keystroke', () => {
-  it('renders nothing while a rep count is typed', () => {
+  it('renders its own row once as a rep count is typed, not once per keystroke', () => {
     fieldRenders.clear();
     render(
       <MantineProvider>
@@ -129,11 +131,17 @@ describe('the set grid on keystroke', () => {
     );
     const baseline = new Map(fieldRenders);
 
+    // The first digit fills an empty box, so the row's missing-number note
+    // changes and the row renders. Nothing belonging to set 2 or set 3 does.
     const reps = screen.getByRole('spinbutton', { name: 'Set 1 reps' });
     fireEvent.change(reps, { target: { value: '8' } });
-    fireEvent.change(reps, { target: { value: '9' } });
+    expect(since(baseline)).toEqual({ 'Set 1 weight': 1, 'Set 1 reps': 1 });
 
-    expect(since(baseline)).toEqual({});
+    // Every digit after it changes nothing the row shows.
+    const typed = new Map(fieldRenders);
+    fireEvent.change(reps, { target: { value: '9' } });
+    fireEvent.change(reps, { target: { value: '10' } });
+    expect(since(typed)).toEqual({});
   });
 
   it('re-renders only the committed row, not its siblings', () => {
@@ -143,10 +151,12 @@ describe('the set grid on keystroke', () => {
         <Harness />
       </MantineProvider>,
     );
-    const baseline = new Map(fieldRenders);
-
     const reps = screen.getByRole('spinbutton', { name: 'Set 1 reps' });
     fireEvent.change(reps, { target: { value: '9' } });
+
+    // Measured over the commit alone: filling an empty box has already
+    // rendered the row once, and that is the test above.
+    const baseline = new Map(fieldRenders);
     fireEvent.blur(reps);
 
     // Set 1's own fields, and nothing belonging to set 2 or set 3.
@@ -162,9 +172,9 @@ describe('the set grid on keystroke', () => {
     );
 
     for (const ordinal of [1, 2, 3]) {
-      const baseline = new Map(fieldRenders);
       const weight = screen.getByRole('spinbutton', { name: `Set ${String(ordinal)} weight` });
       fireEvent.change(weight, { target: { value: '185' } });
+      const baseline = new Map(fieldRenders);
       fireEvent.blur(weight);
 
       expect(since(baseline)).toEqual({

@@ -7,6 +7,7 @@ import type { ExerciseStats, WorkoutStats } from '@/domain/overlay';
 import { buildStatsUpdate } from '@/domain/overlay';
 import type { LoggedSet, Session, SessionEntry } from '@/domain/sessions';
 import { emptySet, newSession } from '@/domain/sessions';
+import type { Handedness } from '@/domain/types';
 import type { ExerciseSlot } from '@/domain/workouts';
 import { DEFAULT_PRESCRIPTION } from '@/domain/workouts';
 import { EntryCard } from './EntryCard';
@@ -92,6 +93,7 @@ function setup(
   workoutStats: WorkoutStats | null,
   exerciseStats: ExerciseStats | null,
   workoutName = 'PUSH',
+  options: { handedness?: Handedness; onShowExercise?: (exerciseId: string) => void } = {},
 ) {
   const props = handlers();
   const rendered = render(
@@ -99,9 +101,11 @@ function setup(
       <EntryCard
         entry={entry}
         displayUnit="lb"
+        handedness={options.handedness ?? 'right'}
         workoutStats={workoutStats}
         exerciseStats={exerciseStats}
         workoutName={workoutName}
+        onShowExercise={options.onShowExercise}
         {...props}
       />
     </MantineProvider>,
@@ -386,11 +390,79 @@ describe('a set missing a number', () => {
     expect(container.querySelector('[data-assessment="under"]')).toBeNull();
   });
 
+  /**
+   * The note used to wait for the field to lose focus, so the warning about a
+   * set that will not be saved arrived after the user had moved on.
+   */
+  it('flags the gap as the numbers are typed, not when the field is left', () => {
+    setup(todaysEntry(null), null, null);
+    expect(screen.queryByTestId('set-note')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Set 1 reps' }), {
+      target: { value: '8' },
+    });
+    expect(screen.getByTestId('set-note')).toHaveTextContent('no weight — will not be saved');
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Set 1 weight' }), {
+      target: { value: '190' },
+    });
+    expect(screen.queryByTestId('set-note')).not.toBeInTheDocument();
+  });
+
   it('says nothing about a half-entered warmup, which never counted anyway', () => {
     const warmup: LoggedSet = { ...set(0, 95, 10, 6), reps: null, isWarmup: true };
     setup(todaysEntry(warmup), null, null);
 
     expect(screen.queryByTestId('set-note')).not.toBeInTheDocument();
+  });
+});
+
+describe('the card controls', () => {
+  const show = (): void => undefined;
+
+  /** Mirrored in CSS only, so a screen reader and the tab key are unaffected. */
+  it('reverses the row for a right hand and leaves the DOM order alone', () => {
+    const { container } = setup(todaysEntry(), null, null, 'PUSH', {
+      handedness: 'right',
+      onShowExercise: show,
+    });
+
+    const row = container.querySelector('[data-hand]');
+    expect(row).toHaveAttribute('data-hand', 'right');
+    expect(row?.firstElementChild).toHaveAccessibleName('How to do Bench Press');
+  });
+
+  it('leaves the row in reading order for a left hand', () => {
+    const { container } = setup(todaysEntry(), null, null, 'PUSH', {
+      handedness: 'left',
+      onShowExercise: show,
+    });
+
+    const row = container.querySelector('[data-hand]');
+    expect(row).toHaveAttribute('data-hand', 'left');
+    expect(row?.firstElementChild).toHaveAccessibleName('How to do Bench Press');
+  });
+});
+
+describe("last time's effort", () => {
+  /**
+   * RIR has always been stored on every logged set, so the overlay carries it
+   * for sessions completed long before it was shown.
+   */
+  it('shows the RIR last time was logged at', () => {
+    const push = history('push', 'PUSH', [set(0, 185, 8, 2)]);
+    setup(todaysEntry(), push.workoutStats, null);
+
+    expect(screen.getByText('185 lb × 8 @ 2 RIR')).toBeInTheDocument();
+  });
+
+  it('says nothing at all when the set was logged without one', () => {
+    const push = history('push', 'PUSH', [{ ...set(0, 185, 8, 2), rir: null }]);
+    setup(todaysEntry(), push.workoutStats, null);
+
+    expect(screen.getByText('185 lb × 8')).toBeInTheDocument();
+    expect(screen.queryByText(/185 lb × 8 @/u)).not.toBeInTheDocument();
+    expect(screen.queryByText(/0 RIR/u)).not.toBeInTheDocument();
   });
 });
 

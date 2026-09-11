@@ -1,0 +1,54 @@
+/* The whole screen on a phone, the app column centred on a desktop. */
+.panel {
+  --panel-width: 720px;
+
+  flex: 0 0 100%;
+  max-width: var(--panel-width);
+  /* One height for every panel, so a dropdown never moves the panel under it. */
+  height: 100dvh;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 0;
+}
+
+@media (min-width: $mantine-breakpoint-sm) {
+  .panel {
+    --panel-width: 840px;
+    height: 92dvh;
+    max-height: 92dvh;
+    border-radius: var(--mantine-radius-lg);
+  }
+}
+
+.body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* The body holds the height and the child scrolls instead. */
+.bodyFill {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  flex: 0 0 auto;
+}
+
+/* A long exercise name must not push the controls off the row. */
+.title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.controls {
+  flex: 0 0 auto;
+}

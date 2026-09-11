@@ -1,9 +1,22 @@
-import { Alert, Badge, Button, Card, Group, Skeleton, Stack, Text, Title } from '@mantine/core';
+import {
+  Accordion,
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Group,
+  Skeleton,
+  Stack,
+  Text,
+  Title,
+} from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
+import { MuscleMap } from '@/components/MuscleMap';
 import { useOnline } from '@/app/useOnline';
 import { useAuth } from '@/data/hooks/useAuth';
+import { useMuscleLookup } from '@/data/hooks/useMuscleLookup';
 import { useProfile } from '@/data/hooks/useProfile';
 import { useSession } from '@/data/hooks/useSession';
 import { useWorkoutVersion } from '@/data/hooks/useWorkout';
@@ -21,6 +34,7 @@ import { workedSets } from '@/domain/sessions';
 import { adjustedE1rm, bestSet, formatE1rm, formatSet } from '@/domain/strength';
 import type { Unit } from '@/domain/types';
 import { formatWeight } from '@/domain/units';
+import { SESSION_STOPS, sessionVolume } from '@/domain/volume';
 import type { ExerciseSlot } from '@/domain/workouts';
 import { formatPrescription, formatRestSeconds } from '@/domain/workouts';
 
@@ -286,6 +300,7 @@ export default function SessionDetailScreen() {
   const { sessionId } = useParams();
   const { session, isPending, notFound } = useSession(sessionId ?? null);
   const { profile } = useProfile();
+  const { lookup } = useMuscleLookup();
   const { version, isPending: versionPending } = useWorkoutVersion(
     session?.workoutId ?? null,
     session?.workoutVersion ?? null,
@@ -314,6 +329,8 @@ export default function SessionDetailScreen() {
   const title =
     version?.name ?? (session.workoutName === '' ? 'Ad-hoc session' : session.workoutName);
   const rows = buildRows(version?.slots ?? null, session.entries);
+  // Sets that were done, not sets that were prescribed.
+  const volume = sessionVolume(session.entries, lookup);
 
   return (
     <Stack>
@@ -396,6 +413,22 @@ export default function SessionDetailScreen() {
           <EntryRow key={row.key} row={row} displayUnit={displayUnit} />
         ))}
       </Stack>
+
+      {volume.size === 0 ? null : (
+        <Accordion variant="separated" defaultValue="muscles">
+          <Accordion.Item value="muscles">
+            <Accordion.Control>Muscle map</Accordion.Control>
+            <Accordion.Panel>
+              <MuscleMap
+                volume={volume}
+                stops={SESSION_STOPS}
+                scopeLabel="this session"
+                testId="session-muscle-map"
+              />
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
+      )}
 
       {session.status === 'active' ? null : <DeleteCluster session={session} />}
     </Stack>

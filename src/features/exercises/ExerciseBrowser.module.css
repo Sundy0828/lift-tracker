@@ -1,59 +1,34 @@
-/* Modal content as a column: static header, scrolling body, static actions. */
-.pane {
-  display: flex;
-  flex-direction: column;
-}
-
-.paneHeader {
-  flex: 0 0 auto;
-}
-
-.paneBody {
+/* One column, filling the page or the panel that holds it. */
+.browser {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  gap: var(--mantine-spacing-sm);
 }
 
-/* Button row at the bottom of the pane, clear of the home indicator. */
-.actions {
-  flex: 0 0 auto;
-  padding: var(--mantine-spacing-md);
-  padding-bottom: calc(var(--mantine-spacing-md) + env(safe-area-inset-bottom));
-  border-top: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
-  background-color: var(--mantine-color-body);
-}
-
-/* Passes the pane height down to the results list. */
-.searchStack {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.body {
+/* Rail beside the results, taking the free height. */
+.browse {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   gap: var(--mantine-spacing-xs);
-  /* The rail stretches to the height of the row. */
   align-items: stretch;
 }
 
+/* Stands in for the rail and the list while the catalog loads. */
+.placeholder {
+  flex: 1 1 auto;
+  min-height: 240px;
+}
+
 /*
- * One bordered block of joined sections, like the RIR field on a set row —
- * not a stack of separate buttons.
- *
- * Wide enough for "Shoulders", narrow enough to leave the rows readable on a
- * 412px phone.
+ * One bordered block of joined sections, not a stack of separate buttons.
+ * Wide enough for "Shoulders" on a 412px phone.
  */
 .rail {
   flex: 0 0 92px;
-  /* Hugs its sections instead of stretching, so the block does not trail an
-     empty bordered box below the last region. It still cannot outgrow the
-     results beside it. */
+  /* Hugs its sections, and never outgrows the results beside it. */
   align-self: flex-start;
   max-height: 100%;
   display: flex;
@@ -80,13 +55,21 @@
   line-height: 1;
   color: var(--mantine-color-dimmed);
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .railStep + .railStep {
   border-top: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
 }
 
-.railStep:hover,
+/* A touch screen reports no hover, and keeps the state after the finger lifts. */
+@media (hover: hover) {
+  .railStep:hover {
+    background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+    color: var(--mantine-color-text);
+  }
+}
+
 .railStep:focus-visible {
   background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
   color: var(--mantine-color-text);
@@ -100,8 +83,7 @@
 
 .results {
   flex: 1 1 auto;
-  /* Without this a long exercise name stretches the flex item and pushes the
-     rail off screen. */
+  /* Without this a long exercise name pushes the rail off screen. */
   min-width: 0;
   display: flex;
   flex-direction: column;

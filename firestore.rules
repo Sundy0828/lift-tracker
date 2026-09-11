@@ -42,8 +42,11 @@ service cloud.firestore {
                     && request.auth.uid == request.resource.data.ownerUid
                     && request.resource.data.revoked == false;
 
+      // A live share is frozen. Only the owner, and only the revoked flag:
+      // every other field stays as it was created.
       allow update: if isOwner()
-                    && request.resource.data.ownerUid == resource.data.ownerUid;
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revoked'])
+                    && request.resource.data.revoked is bool;
 
       allow delete: if isOwner();
     }

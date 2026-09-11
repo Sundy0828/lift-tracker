@@ -1,0 +1,40 @@
+/* Front and back side by side. */
+.pair {
+  display: flex;
+  justify-content: center;
+  gap: var(--mantine-spacing-md);
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+}
+
+.svg {
+  width: 100%;
+  max-width: var(--body-figure-width, 152px);
+  height: auto;
+}
+
+.caption {
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Head and knees. Part of the silhouette, never shaded. */
+.inert {
+  fill: light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-4));
+  stroke: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
+  stroke-width: 0.4;
+}
+
+/* Set on the <g>, so one region is one shade however many polygons draw it. */
+.shape {
+  stroke: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
+  stroke-width: 0.4;
+}

@@ -411,6 +411,7 @@ function setsFor(plan: ExercisePlan, week: number, startedAt: Date): LoggedSet[]
       isWarmup: false,
       skipped: false,
       completedAt: completedAt.toISOString(),
+      restTakenSeconds: plan.rest,
     };
   });
 }

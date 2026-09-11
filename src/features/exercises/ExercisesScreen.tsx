@@ -1,14 +1,3 @@
-import {
-  Alert,
-  Button,
-  Group,
-  MultiSelect,
-  Skeleton,
-  Stack,
-  Text,
-  TextInput,
-  Title,
-} from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useAuth } from '@/data/hooks/useAuth';
@@ -19,18 +8,14 @@ import {
   saveCustomExercise,
 } from '@/data/mutations/exercises';
 import type { CustomExercise, Equipment, Exercise } from '@/domain/exercises';
-import { EQUIPMENT, isEquipment } from '@/domain/exercises';
-import type { MuscleGroup } from '@/domain/muscles';
-import { MUSCLE_OPTIONS_BY_REGION, isMuscleGroup } from '@/domain/muscles';
 import { search } from '@/domain/search';
+import { useRecentSearches } from '@/features/workouts/useRecentSearches';
 import type { CustomExerciseDraft } from './CustomExerciseForm';
 import { CustomExerciseForm } from './CustomExerciseForm';
+import { musclesInRegion } from './bodyRegions';
+import { ExerciseBrowser } from './ExerciseBrowser';
 import { ExerciseDetailDrawer } from './ExerciseDetailDrawer';
-import { ExerciseList } from './ExerciseList';
-
-const MUSCLE_OPTIONS = MUSCLE_OPTIONS_BY_REGION;
-
-const EQUIPMENT_OPTIONS = EQUIPMENT.map((item) => ({ value: item, label: item }));
+import classes from './ExercisesScreen.module.css';
 
 /** Only custom exercises can be edited, so the form needs the full record. */
 function asCustomExercise(exercise: Exercise): CustomExercise {
@@ -45,25 +30,32 @@ function asCustomExercise(exercise: Exercise): CustomExercise {
   };
 }
 
+/**
+ * The exercise library: the same browser as the workout picker, plus
+ * creating, editing and deleting a custom exercise.
+ */
 export default function ExercisesScreen() {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const { resolver, index, isPending, error } = useExerciseLibrary();
 
   const [query, setQuery] = useState('');
-  const [muscles, setMuscles] = useState<MuscleGroup[]>([]);
+  const [region, setRegion] = useState<string | null>(null);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [selected, setSelected] = useState<Exercise | null>(null);
   const [editing, setEditing] = useState<CustomExercise | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const { recent, remember } = useRecentSearches();
 
   // Typing stays responsive while the (cheap but not free) filter runs against
   // the previous query — §3 calls for exactly this.
   const deferredQuery = useDeferredValue(query);
   const stale = deferredQuery !== query;
 
+  const muscles = useMemo(() => musclesInRegion(region), [region]);
+
   const results = useMemo(
-    () => search(index, deferredQuery, { muscles, equipment }),
+    () => search(index, deferredQuery, { muscles, musclesPrimaryOnly: true, equipment }),
     [index, deferredQuery, muscles, equipment],
   );
 
@@ -75,6 +67,11 @@ export default function ExercisesScreen() {
         .map((item) => item.name),
     [resolver],
   );
+
+  const preview = (exercise: Exercise): void => {
+    remember(query);
+    setSelected(exercise);
+  };
 
   const saveDraft = (draft: CustomExerciseDraft): void => {
     if (uid === null) return;
@@ -98,69 +95,27 @@ export default function ExercisesScreen() {
   };
 
   return (
-    <Stack>
-      <Group justify="space-between" align="center">
-        <Title order={2}>Exercises</Title>
-        <Button
-          size="compact-md"
-          onClick={() => {
-            setEditing(null);
-            setFormOpen(true);
-          }}
-        >
-          New
-        </Button>
-      </Group>
-
-      {error === null ? null : (
-        <Alert color="red" variant="light" role="alert">
-          {error}
-        </Alert>
-      )}
-
-      <TextInput
-        placeholder="Search 876 exercises"
-        value={query}
-        aria-label="Search exercises"
-        onChange={(event) => {
-          setQuery(event.currentTarget.value);
+    <div className={classes.screen}>
+      <ExerciseBrowser
+        title="Exercises"
+        onNew={() => {
+          setEditing(null);
+          setFormOpen(true);
         }}
+        query={query}
+        onQueryChange={setQuery}
+        searchLabel="Search exercises"
+        recent={recent}
+        region={region}
+        onRegionChange={setRegion}
+        equipment={equipment}
+        onEquipmentChange={setEquipment}
+        exercises={results}
+        onSelect={preview}
+        stale={stale}
+        pending={isPending}
+        error={error}
       />
-
-      <Group grow align="flex-start">
-        <MultiSelect
-          label="Muscle"
-          placeholder={muscles.length === 0 ? 'Any' : undefined}
-          searchable
-          clearable
-          data={MUSCLE_OPTIONS}
-          value={muscles}
-          onChange={(values) => {
-            setMuscles(values.filter(isMuscleGroup));
-          }}
-        />
-        <MultiSelect
-          label="Equipment"
-          placeholder={equipment.length === 0 ? 'Any' : undefined}
-          clearable
-          data={EQUIPMENT_OPTIONS}
-          value={equipment}
-          onChange={(values) => {
-            setEquipment(values.filter(isEquipment));
-          }}
-        />
-      </Group>
-
-      {isPending ? (
-        <Skeleton height={320} radius="md" />
-      ) : (
-        <>
-          <Text size="xs" c={stale ? 'dimmed' : 'bright'} data-testid="result-count">
-            {results.length === 1 ? '1 exercise' : `${String(results.length)} exercises`}
-          </Text>
-          <ExerciseList exercises={results} onSelect={setSelected} withChevron />
-        </>
-      )}
 
       <ExerciseDetailDrawer
         exercise={selected}
@@ -186,6 +141,6 @@ export default function ExercisesScreen() {
           onSave={saveDraft}
         />
       ) : null}
-    </Stack>
+    </div>
   );
 }

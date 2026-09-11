@@ -15,3 +15,9 @@
   /* Tabular figures so the countdown does not shift the row every second. */
   font-variant-numeric: tabular-nums;
 }
+
+/* An overrun is late, not another countdown, so it does not share the
+   countdown's colour. */
+.bar[data-over] .clock {
+  color: light-dark(var(--mantine-color-orange-8), var(--mantine-color-orange-4));
+}

@@ -277,13 +277,13 @@ test.describe('workouts', () => {
     const drawer = page.getByRole('dialog');
     // No rest of its own yet, so it names the profile default -- in seconds,
     // matching the presets and the field.
-    await expect(drawer.getByText('your default, 120s')).toBeVisible();
+    await expect(drawer.getByText('your default, 90s')).toBeVisible();
 
     await drawer.getByRole('button', { name: '180s' }).click();
     await expect(drawer.getByRole('button', { name: 'Use my default' })).toBeVisible();
 
     await drawer.getByRole('button', { name: 'Use my default' }).click();
-    await expect(drawer.getByText('your default, 120s')).toBeVisible();
+    await expect(drawer.getByText('your default, 90s')).toBeVisible();
   });
 
   test('exercise slots can be reordered with the move buttons', async ({ page }) => {

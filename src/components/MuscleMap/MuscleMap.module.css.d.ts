@@ -1,10 +1,5 @@
 declare const classes: {
   readonly wrap: string;
-  readonly figures: string;
-  readonly figure: string;
-  readonly svg: string;
-  readonly caption: string;
-  readonly inert: string;
   readonly muscle: string;
   readonly stop0: string;
   readonly stop1: string;

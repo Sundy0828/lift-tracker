@@ -211,8 +211,8 @@ Unobtrusive ads, with a paid ad-free tier.
 
 ## 11. Sharing hardening
 
-Not features — two known soft spots in the sharing code as it stands today. Neither leaks data, and
-neither matters at one user. Both matter the day the app has strangers on it.
+Not features — soft spots in the sharing code. Neither leaks data, and neither matters at one user.
+Both matter the day the app has strangers on it. The second one is now closed.
 
 ### 11.1 A per-account cap on published shares
 
@@ -220,27 +220,31 @@ neither matters at one user. Both matter the day the app has strangers on it.
 account can mint unlimited public documents. That is an abuse and a billing surface, not a
 correctness bug.
 
-- **Touches:** `firestore.rules`, `src/data/mutations/sharing.ts`, and the rules tests in `rules/`.
-- **The hard part:** security rules cannot count documents. Enforcing a cap needs a counter the
-  rules can read — a `shareCount` field on `users/{uid}` that the create rule checks and the
-  mutation increments in the same batch — and that counter has to be rules-protected against the
-  client just setting it back to zero. The honest cheap version is a soft cap in the client plus a
-  hard cap enforced by a Cloud Function or by the counter pattern above.
-- **Cheap first version:** the owner's share inventory query already exists (`allow list` is scoped
-  to `ownerUid`), so the client can refuse to publish past N and offer to revoke an old one. It
-  stops accidents, not attackers — which is the whole problem at this stage.
-- **Do this when** the app has users who are not you, or before any public launch.
+- **Rules alone cannot do this.** They cannot count documents, so a cap needs a counter they can
+  read. The obvious place — a `shareCount` on `users/{uid}` — is owned by the account it limits,
+  and the owner's own write rule lets them set it back to zero. Locking that one field down does
+  not help either: a cap that decrements on revoke has to trust a second write in the same batch,
+  and rules see one document at a time.
+- **Two options that do work:**
+  - **A Cloud Function.** Shares get created server-side (or a trigger counts them and disables
+    the account's create rule via a custom claim). This is the only version a hostile client
+    cannot beat, and it means a functions deployment and a cold-start on Share.
+  - **A client-side soft cap.** The owner's inventory query already exists (`allow list` is scoped
+    to `ownerUid`), so the client can refuse to publish past N and offer to revoke an old one. It
+    stops accidents, not attackers.
+- **Do this when** the app has users who are not you, or before any public launch. Take the soft
+  cap first; it is an afternoon and it covers the real case.
 
-### 11.2 A live share is mutable, but the client treats it as frozen
+### 11.2 A live share is frozen — done
 
-`firestore.rules` lets an owner rewrite a live share's body after recipients hold the link, while
-`src/data/hooks/useSharedWorkout.ts` documents a share as an immutable snapshot and reads it with a
-one-shot `getDoc`. So a second reader can silently see different content than the first.
+`update` on `sharedWorkouts/{shareId}` now accepts one affected key, `revoked`, and only from the
+owner. Everything else is fixed at create, so the snapshot a recipient reads through
+`src/data/hooks/useSharedWorkout.ts` cannot move under them.
 
-- **Two ways out, pick one:** forbid `update` to anything but the `revoked` flag, which makes the
-  code's claim true; or drop the immutability claim and let a share track the workout, which changes
-  what a share link means.
-- **Cheap:** the first. It is a few lines in the rules plus a rules test.
+- `setShareRevoked` writes the flag on its own; it no longer stamps `updatedAt`, which the tightened
+  rule would have refused and nothing read.
+- Covered by the rules tests in `rules/firestore.test.ts`: revoking passes, a body rewrite fails,
+  and `ownerUid` cannot move.
 
 ---
 
@@ -248,12 +252,11 @@ one-shot `getDoc`. So a second reader can silently see different content than th
 
 | Idea                          | Effort | Risk                     |
 | ----------------------------- | ------ | ------------------------ |
-| Freeze a live share's body    | S      | none                     |
 | Real domain                   | S      | Auth domain list         |
 | Rest-timer notification       | S      | none                     |
 | Theme presets                 | S      | contrast at some shades  |
 | CSV/JSON export               | S      | none                     |
-| Per-account share cap         | M      | rules cannot count       |
+| Per-account share cap         | M      | no rules-only version    |
 | Weekly schedule (references)  | M      | re-nesting workouts      |
 | Global library (seeded, read) | M      | none until submissions   |
 | Analytics                     | M      | perf budget, consent     |

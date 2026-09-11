@@ -10,7 +10,9 @@ import {
   entryKey,
   exerciseEntries,
   isDateKey,
+  isFullyEntered,
   isSessionFinished,
+  looksTransposed,
   localDateKey,
   newSession,
   nextOccurrenceInSession,
@@ -380,6 +382,84 @@ describe('assessSet', () => {
 
   it('says nothing about a fully entered ad-hoc row, which has no range to miss', () => {
     expect(assessSet(logged(3), null)).toBe('unassessed');
+  });
+});
+
+describe('isFullyEntered', () => {
+  const prescription = { ...DEFAULT_PRESCRIPTION, repRange: { min: 8, max: 12 } };
+
+  function logged(overrides: Partial<LoggedSet> = {}): LoggedSet {
+    return { ...emptySet(0), weight: { value: 135, unit: 'lb' }, reps: 10, rir: 2, ...overrides };
+  }
+
+  it('accepts a prescribed set with load, reps and RIR', () => {
+    expect(isFullyEntered(logged(), prescription)).toBe(true);
+  });
+
+  it('still waits on the RIR a prescribed row asks for', () => {
+    expect(isFullyEntered(logged({ rir: null }), prescription)).toBe(false);
+  });
+
+  it('asks an ad-hoc row for load and reps only', () => {
+    expect(isFullyEntered(logged({ rir: null }), null)).toBe(true);
+  });
+
+  it('rejects a half-entered set', () => {
+    expect(isFullyEntered(logged({ weight: null }), prescription)).toBe(false);
+    expect(isFullyEntered(logged({ reps: null }), prescription)).toBe(false);
+  });
+
+  it('rejects a warmup and a skipped set', () => {
+    expect(isFullyEntered(logged({ isWarmup: true }), prescription)).toBe(false);
+    expect(isFullyEntered(logged({ skipped: true }), prescription)).toBe(false);
+  });
+
+  /** Bodyweight is a real load, entered on purpose. */
+  it('accepts a load of zero', () => {
+    expect(isFullyEntered(logged({ weight: { value: 0, unit: 'lb' } }), prescription)).toBe(true);
+  });
+});
+
+describe('looksTransposed', () => {
+  const prescription = { ...DEFAULT_PRESCRIPTION, repRange: { min: 8, max: 12 } };
+
+  function logged(value: number, reps: number, unit: 'lb' | 'kg' = 'lb'): LoggedSet {
+    return { ...emptySet(0), weight: { value, unit }, reps };
+  }
+
+  /** The reported case: 3x8-12, logged as 13 lb for 50 reps. */
+  it('queries 13 lb for 50 reps', () => {
+    expect(looksTransposed(logged(13, 50), prescription)).toBe(true);
+    expect(looksTransposed(logged(13, 50))).toBe(true);
+  });
+
+  it('queries reps far past the prescribed range even under the absolute threshold', () => {
+    expect(looksTransposed(logged(10, 20), { ...prescription, repRange: { min: 4, max: 5 } })).toBe(
+      true,
+    );
+    expect(looksTransposed(logged(10, 20))).toBe(false);
+  });
+
+  it('says nothing about a long set at a real load', () => {
+    expect(looksTransposed(logged(135, 50), prescription)).toBe(false);
+  });
+
+  it('says nothing about a light set at plausible reps', () => {
+    expect(looksTransposed(logged(10, 12), prescription)).toBe(false);
+  });
+
+  it('says nothing about bodyweight', () => {
+    expect(looksTransposed(logged(0, 50), prescription)).toBe(false);
+  });
+
+  it('says nothing until both numbers are there', () => {
+    expect(looksTransposed({ ...logged(13, 50), reps: null }, prescription)).toBe(false);
+    expect(looksTransposed({ ...logged(13, 50), weight: null }, prescription)).toBe(false);
+  });
+
+  it('uses the floor for the unit the set was logged in', () => {
+    expect(looksTransposed(logged(15, 50, 'kg'))).toBe(false);
+    expect(looksTransposed(logged(15, 50, 'lb'))).toBe(true);
   });
 });
 

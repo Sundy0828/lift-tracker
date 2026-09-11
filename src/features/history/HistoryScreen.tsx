@@ -20,6 +20,7 @@ import { useAllExerciseStats } from '@/data/hooks/useRecords';
 import { useSessionHistory } from '@/data/hooks/useSessionHistory';
 import type { WeekGroup } from '@/domain/history';
 import {
+  formatDateWithYear,
   formatDayLabel,
   formatElapsed,
   formatSetCount,
@@ -249,13 +250,7 @@ function Records() {
                 </Text>
                 <Text size="xs" c="dimmed">
                   {set === null ? '—' : formatSet(set, profile.displayUnit)}
-                  {entry.bestE1rmAt === null
-                    ? ''
-                    : ` · ${new Date(entry.bestE1rmAt).toLocaleDateString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}`}
+                  {entry.bestE1rmAt === null ? '' : ` · ${formatDateWithYear(entry.bestE1rmAt)}`}
                 </Text>
               </Stack>
               <Badge variant="light" color="orange" style={{ flexShrink: 0 }}>

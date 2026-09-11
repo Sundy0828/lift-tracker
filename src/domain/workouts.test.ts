@@ -9,6 +9,7 @@ import {
   REPS_SOFT_MAX,
   RIR_MIN_GAP,
   RIR_SOFT_MAX,
+  createRestSlot,
   createSlot,
   formatPrescription,
   formatRange,
@@ -493,5 +494,55 @@ describe('formatEstimate', () => {
     expect(formatEstimate(60 * 60)).toBe('1 h');
     expect(formatEstimate(80 * 60)).toBe('1 h 20');
     expect(formatEstimate(125 * 60)).toBe('2 h 05');
+  });
+});
+
+describe('a circuit in the estimate', () => {
+  const SET = estimateSetSeconds(DEFAULT_PRESCRIPTION);
+
+  /** Two members of one circuit, each at the default 3 sets. */
+  function circuit(groupRest: Record<string, number | null> = {}): WorkoutBody {
+    const member = (slotId: string, exerciseId: string): ExerciseSlot =>
+      slot({
+        slotId,
+        exerciseId,
+        supersetGroup: 'g1',
+        prescription: { ...DEFAULT_PRESCRIPTION, restSeconds: 0 },
+      });
+    return { name: 'W', groupRest, slots: [member('a', 'bench'), member('b', 'row')] };
+  }
+
+  it('counts every member once per round, and the round rest once per round', () => {
+    // 3 rounds of two members; the last round rest is dropped.
+    expect(estimateWorkoutSeconds(circuit({ g1: 60 }), 120)).toBe(3 * 2 * SET + 2 * 60);
+  });
+
+  it('falls back to the profile default when the circuit has no round rest', () => {
+    expect(estimateWorkoutSeconds(circuit(), 90)).toBe(3 * 2 * SET + 2 * 90);
+  });
+
+  it('adds a rest row inside the circuit to every round', () => {
+    const plain = circuit({ g1: 60 });
+    const withRest: WorkoutBody = {
+      ...plain,
+      slots: [
+        plain.slots[0]!,
+        { ...createRestSlot('r1', 15), supersetGroup: 'g1' },
+        plain.slots[1]!,
+      ],
+    };
+    expect(estimateWorkoutSeconds(withRest, 120)).toBe(estimateWorkoutSeconds(plain, 120) + 3 * 15);
+  });
+
+  it('counts a rest row between exercises in full', () => {
+    const one = slot({
+      slotId: 'a',
+      prescription: { ...DEFAULT_PRESCRIPTION, sets: 1, restSeconds: 30 },
+    });
+    // Alone, the set's own rest is the last thing in the workout and is dropped.
+    expect(estimateWorkoutSeconds(workout('W', [one]), 120)).toBe(SET);
+    expect(estimateWorkoutSeconds(workout('W', [one, createRestSlot('r1', 45)]), 120)).toBe(
+      SET + 30 + 45,
+    );
   });
 });

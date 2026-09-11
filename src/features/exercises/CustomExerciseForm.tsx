@@ -1,9 +1,10 @@
-import { Alert, Button, Group, Modal, MultiSelect, Select, Stack, TextInput } from '@mantine/core';
+import { Alert, Button, Group, MultiSelect, Select, Stack, TextInput } from '@mantine/core';
 import { useState } from 'react';
 import type { CustomExercise, Equipment } from '@/domain/exercises';
 import { EQUIPMENT, isEquipment } from '@/domain/exercises';
 import type { MuscleGroup } from '@/domain/muscles';
 import { MUSCLE_OPTIONS_BY_REGION, isMuscleGroup } from '@/domain/muscles';
+import { Panel, PanelHeader } from './Panel';
 
 /**
  * Grouped by display region so the list is scannable on a phone. Finer
@@ -28,7 +29,7 @@ type Props = {
   existingNames: readonly string[];
   onClose: () => void;
   onSave: (draft: CustomExerciseDraft) => void;
-  /** Set when this opens over another modal, such as the exercise picker. */
+  /** Set when this opens over another panel, such as the exercise picker. */
   zIndex?: number | undefined;
 };
 
@@ -50,7 +51,7 @@ export function CustomExerciseForm({
   const [equipment, setEquipment] = useState<Equipment | null>(editing?.equipment ?? null);
   const [submitted, setSubmitted] = useState(false);
 
-  // A dropdown renders in its own portal on a layer below an elevated modal,
+  // A dropdown renders in its own portal on a layer below an elevated panel,
   // so without this its options paint underneath the form that opened them
   // and cannot be tapped.
   const dropdown = zIndex === undefined ? {} : { comboboxProps: { zIndex: zIndex + 1 } };
@@ -77,18 +78,13 @@ export function CustomExerciseForm({
     });
   };
 
+  const title = editing === undefined ? 'New exercise' : 'Edit exercise';
+
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={editing === undefined ? 'New exercise' : 'Edit exercise'}
-      fullScreen
-      transitionProps={{ duration: 120 }}
-      // Spread rather than passed: Modal's own default has to survive when
-      // this opens on its own screen.
-      {...(zIndex === undefined ? {} : { zIndex })}
-    >
+    <Panel opened={opened} onClose={onClose} label={title} zIndex={zIndex}>
       <Stack>
+        <PanelHeader title={title} onClose={onClose} />
+
         <TextInput
           label="Name"
           placeholder="Cable Y-Raise"
@@ -152,6 +148,6 @@ export function CustomExerciseForm({
           <Button onClick={submit}>{editing === undefined ? 'Add exercise' : 'Save'}</Button>
         </Group>
       </Stack>
-    </Modal>
+    </Panel>
   );
 }

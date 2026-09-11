@@ -23,6 +23,14 @@ type Props = {
 };
 
 const TICK_MS = 20_000;
+const DAY_SECONDS = 86_400;
+
+/** Elapsed time of a day or more, as days and whole hours. */
+function formatDays(seconds: number): string {
+  const days = Math.floor(seconds / DAY_SECONDS);
+  const hours = Math.floor((seconds % DAY_SECONDS) / 3600);
+  return hours === 0 ? `${String(days)} d` : `${String(days)} d ${String(hours)} h`;
+}
 
 export function SessionClock({ session }: Props) {
   const isRunning = session.completedAt === null;
@@ -52,9 +60,11 @@ export function SessionClock({ session }: Props) {
   const seconds = sessionSeconds(session, new Date(now));
   if (seconds === null) return null;
 
+  const elapsed = seconds >= DAY_SECONDS ? formatDays(seconds) : formatEstimate(seconds);
+
   return (
     <Text component="span" size="xs" c="dimmed" data-testid="session-clock">
-      {isRunning ? formatEstimate(seconds) : `${formatEstimate(seconds)} total`}
+      {isRunning ? elapsed : `${elapsed} total`}
     </Text>
   );
 }

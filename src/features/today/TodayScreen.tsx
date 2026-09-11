@@ -8,6 +8,7 @@ import { useProfile } from '@/data/hooks/useProfile';
 import { useActiveSession } from '@/data/hooks/useSession';
 import { useWorkouts } from '@/data/hooks/useWorkouts';
 import { abandonSession, newSessionId, startSession } from '@/data/mutations/sessions';
+import type { Session } from '@/domain/sessions';
 import { localDateKey, sessionProgress } from '@/domain/sessions';
 import {
   estimateWorkoutSeconds,
@@ -15,6 +16,86 @@ import {
   formatEstimate,
   totalSets,
 } from '@/domain/workouts';
+import { SessionClock } from '@/features/logging/SessionClock';
+
+type ResumeItemProps = {
+  session: Session;
+  /** True for the newest session, which is shown first and in colour. */
+  newest: boolean;
+  /** True when the discard button is armed and waiting for the second tap. */
+  armed: boolean;
+  onArm: (armed: boolean) => void;
+  onDiscard: () => void;
+};
+
+/** One unfinished session, with its own resume and its own discard. */
+function ResumeItem({ session, newest, armed, onArm, onDiscard }: ResumeItemProps) {
+  const progress = sessionProgress(session.entries);
+  const startedToday = session.performedOn === localDateKey();
+
+  return (
+    <Alert
+      color={newest ? 'sky' : 'gray'}
+      variant="light"
+      title={newest ? 'Session in progress' : 'Unfinished session'}
+      data-testid="resume-item"
+    >
+      <Stack gap="xs" align="flex-start">
+        <Text size="sm">
+          {session.workoutName} · {progress.completed} of {progress.total} sets
+        </Text>
+        <Group gap={6}>
+          <SessionClock session={session} />
+          {startedToday ? null : (
+            <Text size="xs" c="dimmed">
+              · started {session.performedOn}
+            </Text>
+          )}
+        </Group>
+        {startedToday ? null : (
+          <Text size="xs" c="dimmed">
+            Started on another day. Resume it if you are still going, or discard it — its numbers
+            are not counted in any history until it is finished.
+          </Text>
+        )}
+        <Group gap="xs" wrap="wrap">
+          <Button component={Link} to={`/session/${session.id}`} size="compact-sm">
+            Resume
+          </Button>
+          {/* Two taps, like the one on the session screen: this throws away
+              logged sets and there is no undo. */}
+          {armed ? (
+            <>
+              <Button size="compact-sm" color="red" onClick={onDiscard}>
+                Discard for good
+              </Button>
+              <Button
+                size="compact-sm"
+                variant="subtle"
+                onClick={() => {
+                  onArm(false);
+                }}
+              >
+                Keep it
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="compact-sm"
+              variant="subtle"
+              color="red"
+              onClick={() => {
+                onArm(true);
+              }}
+            >
+              Discard
+            </Button>
+          )}
+        </Group>
+      </Stack>
+    </Alert>
+  );
+}
 
 /**
  * The start screen: resume what is running, or start something.
@@ -29,23 +110,21 @@ export default function TodayScreen() {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const { workouts, isPending } = useWorkouts();
-  const { session: active, isPending: activePending, strandedCount } = useActiveSession();
+  const { sessions: unfinished, isPending: activePending } = useActiveSession();
   const { profile } = useProfile();
 
-  const [armedToDiscard, setArmedToDiscard] = useState(false);
+  const [armedId, setArmedId] = useState<string | null>(null);
 
   /**
-   * Clearing a session that was never finished.
+   * Clears one session that was never finished, leaving the others alone.
    *
-   * Not awaited, like every other write (§2.8): `abandonSession` writes to the
-   * local cache, the active-session listener drops the session on the next
-   * snapshot, and this alert disappears — offline included. A session with no
-   * logged set is deleted rather than kept, so it never reaches history.
+   * Not awaited, like every other write (§2.8). A session with no logged set
+   * is deleted rather than kept, so it never reaches history.
    */
-  const discard = (): void => {
-    if (uid === null || active === null) return;
-    setArmedToDiscard(false);
-    void abandonSession(uid, active);
+  const discard = (session: Session): void => {
+    if (uid === null) return;
+    setArmedId(null);
+    void abandonSession(uid, session);
     notifications.show({ message: 'Session discarded', color: 'gray' });
   };
 
@@ -72,68 +151,29 @@ export default function TodayScreen() {
 
       {activePending ? (
         <Skeleton height={92} radius="md" />
-      ) : active === null ? null : (
-        <Alert color="sky" variant="light" title="Session in progress">
-          <Stack gap="xs" align="flex-start">
-            <Text size="sm">
-              {active.workoutName} · {sessionProgress(active.entries).completed} of{' '}
-              {sessionProgress(active.entries).total} sets
-              {active.performedOn === localDateKey() ? '' : ` · ${active.performedOn}`}
+      ) : unfinished.length === 0 ? null : (
+        <Stack gap="xs">
+          {unfinished.length === 1 ? null : (
+            <Text size="xs" c="dimmed">
+              {String(unfinished.length)} sessions were never finished. Resume or discard any one of
+              them on its own.
             </Text>
-            {/*
-              A session from a day that is not today is almost always a crash or
-              a closed tab rather than a workout still under way, so the reason
-              to discard is named rather than left to be worked out.
-            */}
-            {active.performedOn === localDateKey() ? null : (
-              <Text size="xs" c="dimmed">
-                Started on another day. Resume it if you are still going, or discard it — its
-                numbers are not counted in any history until it is finished.
-              </Text>
-            )}
-            {strandedCount === 0 ? null : (
-              <Text size="xs" c="dimmed">
-                {strandedCount === 1
-                  ? 'One older session was also never finished. Clearing this one will offer it next.'
-                  : `${String(strandedCount)} older sessions were also never finished. Clearing this one will offer them next.`}
-              </Text>
-            )}
-            <Group gap="xs" wrap="wrap">
-              <Button component={Link} to={`/session/${active.id}`} size="compact-sm">
-                Resume
-              </Button>
-              {/* Two taps, like the one on the session screen: this throws
-                  away logged sets and there is no undo. */}
-              {armedToDiscard ? (
-                <>
-                  <Button size="compact-sm" color="red" onClick={discard}>
-                    Discard for good
-                  </Button>
-                  <Button
-                    size="compact-sm"
-                    variant="subtle"
-                    onClick={() => {
-                      setArmedToDiscard(false);
-                    }}
-                  >
-                    Keep it
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  size="compact-sm"
-                  variant="subtle"
-                  color="red"
-                  onClick={() => {
-                    setArmedToDiscard(true);
-                  }}
-                >
-                  Discard
-                </Button>
-              )}
-            </Group>
-          </Stack>
-        </Alert>
+          )}
+          {unfinished.map((session, index) => (
+            <ResumeItem
+              key={session.id}
+              session={session}
+              newest={index === 0}
+              armed={armedId === session.id}
+              onArm={(armed) => {
+                setArmedId(armed ? session.id : null);
+              }}
+              onDiscard={() => {
+                discard(session);
+              }}
+            />
+          ))}
+        </Stack>
       )}
 
       {isPending ? (

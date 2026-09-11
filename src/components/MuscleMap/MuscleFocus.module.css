@@ -1,0 +1,19 @@
+.wrap {
+  /* Narrower than the heat map: this sits in a detail panel. */
+  --body-figure-width: 120px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+}
+
+.key {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.key > span {
+  flex: none;
+  align-self: center;
+}

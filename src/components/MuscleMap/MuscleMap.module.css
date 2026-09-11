@@ -4,47 +4,9 @@
   gap: var(--mantine-spacing-sm);
 }
 
-.figures {
-  display: flex;
-  justify-content: center;
-  gap: var(--mantine-spacing-md);
-}
-
-.figure {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  margin: 0;
-}
-
-.svg {
-  width: 100%;
-  /* The anatomical artwork carries more detail than the old block figure,
-     so it earns a little more width. */
-  max-width: 152px;
-  height: auto;
-}
-
-.caption {
-  font-size: var(--mantine-font-size-xs);
-  color: var(--mantine-color-dimmed);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.inert {
-  fill: light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-4));
-  stroke: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
-  stroke-width: 0.4;
-}
-
-/* Set on the <g>; fill and stroke inherit to the polygons inside it, so one
-   region is one shade however many polygons it takes to draw. */
+/* One shade per region, inherited by the polygons that draw it. */
 .muscle {
   fill: var(--stop-color);
-  stroke: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
-  stroke-width: 0.4;
 }
 
 /* Five stops, 0 = untrained. Both schemes keep stop 0 clearly "empty" and

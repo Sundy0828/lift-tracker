@@ -1,0 +1,8 @@
+/* One screenful: the list ends at the bottom bar, and the page never scrolls.
+   The shell gives 16px above and a 72px bar plus 16px below. */
+.screen {
+  height: calc(100dvh - 104px - env(safe-area-inset-bottom));
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+}

@@ -234,6 +234,51 @@ describe('sharedWorkouts — writing', () => {
     await assertFails(updateDoc(doc(bob, 'sharedWorkouts/s1'), { name: 'HACKED' }));
   });
 
+  it('freezes a live share: the owner may flip revoked and nothing else', async () => {
+    await seed('sharedWorkouts/s1', shareDoc(ALICE));
+    const alice = env.authenticatedContext(ALICE).firestore();
+
+    // The body a recipient already holds cannot move under them.
+    await assertFails(updateDoc(doc(alice, 'sharedWorkouts/s1'), { name: 'PULL' }));
+    await assertFails(
+      updateDoc(doc(alice, 'sharedWorkouts/s1'), { slots: [{ slotId: 'x', exerciseId: 'y' }] }),
+    );
+    await assertFails(updateDoc(doc(alice, 'sharedWorkouts/s1'), { versionNumber: 2 }));
+    await assertFails(updateDoc(doc(alice, 'sharedWorkouts/s1'), { sourceWorkoutId: 'w2' }));
+    // Nor by adding a field that was never created.
+    await assertFails(updateDoc(doc(alice, 'sharedWorkouts/s1'), { note: 'hi' }));
+    // Nor by a whole-document rewrite, which is the same write by another name.
+    await assertFails(
+      setDoc(doc(alice, 'sharedWorkouts/s1'), { ...shareDoc(ALICE), name: 'PULL' }),
+    );
+  });
+
+  it('refuses a body change smuggled in alongside a revoke', async () => {
+    await seed('sharedWorkouts/s1', shareDoc(ALICE));
+    const alice = env.authenticatedContext(ALICE).firestore();
+
+    await assertFails(updateDoc(doc(alice, 'sharedWorkouts/s1'), { revoked: true, name: 'PULL' }));
+    await assertFails(updateDoc(doc(alice, 'sharedWorkouts/s1'), { revoked: true, ownerUid: BOB }));
+  });
+
+  it('accepts the merging revoke write the app makes, both ways', async () => {
+    await seed('sharedWorkouts/s1', shareDoc(ALICE));
+    const alice = env.authenticatedContext(ALICE).firestore();
+
+    await assertSucceeds(
+      setDoc(doc(alice, 'sharedWorkouts/s1'), { revoked: true }, { merge: true }),
+    );
+    await assertSucceeds(
+      setDoc(doc(alice, 'sharedWorkouts/s1'), { revoked: false }, { merge: true }),
+    );
+  });
+
+  it('refuses a revoked flag that is not a boolean', async () => {
+    await seed('sharedWorkouts/s1', shareDoc(ALICE));
+    const alice = env.authenticatedContext(ALICE).firestore();
+    await assertFails(updateDoc(doc(alice, 'sharedWorkouts/s1'), { revoked: 'yes' }));
+  });
+
   it('lets only the owner delete', async () => {
     await seed('sharedWorkouts/s1', shareDoc(ALICE));
     await assertFails(

@@ -57,6 +57,8 @@ export type LoggedSet = {
    * while offline.
    */
   completedAt: string | null;
+  /** Seconds of rest actually taken after this set, or null if unmeasured. */
+  restTakenSeconds: number | null;
 };
 
 /**
@@ -180,6 +182,7 @@ export function emptySet(setIndex: number, isWarmup = false): LoggedSet {
     isWarmup,
     skipped: false,
     completedAt: null,
+    restTakenSeconds: null,
   };
 }
 
@@ -265,7 +268,11 @@ export type SetPatch = {
   isWarmup?: boolean;
   skipped?: boolean;
   completedAt?: string | null;
+  restTakenSeconds?: number | null;
 };
+
+/** Upper bound on a recorded rest, so a forgotten timer stays out of range. */
+const MAX_REST_TAKEN_SECONDS = 7200;
 
 /** Clamps entered numbers, so a fat-fingered 999 cannot poison the stats. */
 function normalizeSet(set: LoggedSet): LoggedSet {
@@ -278,6 +285,10 @@ function normalizeSet(set: LoggedSet): LoggedSet {
     weight,
     reps: set.reps === null ? null : clamp(Math.round(set.reps), 0, MAX_REPS),
     rir: set.rir === null ? null : clamp(Math.round(set.rir), 0, MAX_RIR),
+    restTakenSeconds:
+      set.restTakenSeconds === null || !Number.isFinite(set.restTakenSeconds)
+        ? null
+        : clamp(Math.round(set.restTakenSeconds), 0, MAX_REST_TAKEN_SECONDS),
   };
 }
 
@@ -295,13 +306,7 @@ export function updateSet(
   }));
 }
 
-/**
- * Marks a set done, or undoes that.
- *
- * Completing a set is what starts the rest timer, so it is one explicit toggle
- * rather than something inferred from the inputs having been filled in — the
- * timer must not start while you are still typing the weight.
- */
+/** Marks a set done, or undoes that. Clears `skipped` either way. */
 export function toggleSetComplete(
   entries: readonly SessionEntry[],
   key: string,
@@ -479,6 +484,42 @@ export function assessSet(set: LoggedSet, prescription: Prescription | null): Se
   if (set.reps < min) return 'under';
   if (set.reps > max) return 'over';
   return 'on-target';
+}
+
+/**
+ * True when a working set holds every number its row asks for.
+ *
+ * A prescribed row asks for RIR as well as load and reps. A warmup and a
+ * skipped set never qualify.
+ */
+export function isFullyEntered(set: LoggedSet, prescription: Prescription | null): boolean {
+  if (set.isWarmup || set.skipped) return false;
+  if (set.weight === null || set.reps === null) return false;
+  return prescription === null || set.rir !== null;
+}
+
+/** Reps above this read as a load typed into the reps box. */
+export const IMPLAUSIBLE_REPS = 30;
+
+/** A load below this, per unit, reads as a rep count typed into the load box. */
+export const IMPLAUSIBLE_WEIGHT: Record<Unit, number> = { lb: 25, kg: 12 };
+
+/** Reps this many times the prescribed maximum also read as a load. */
+export const IMPLAUSIBLE_REP_FACTOR = 3;
+
+/**
+ * True when a set's load and reps look swapped.
+ *
+ * Both halves have to be wrong at once: a load too small to be one *and* more
+ * reps than the absolute threshold or than the prescription can explain. A
+ * load of zero is bodyweight, which is entered on purpose.
+ */
+export function looksTransposed(set: LoggedSet, prescription: Prescription | null = null): boolean {
+  const { weight, reps } = set;
+  if (weight === null || reps === null || weight.value <= 0) return false;
+  if (weight.value >= IMPLAUSIBLE_WEIGHT[weight.unit] || weight.value >= reps) return false;
+  if (reps > IMPLAUSIBLE_REPS) return true;
+  return prescription !== null && reps > prescription.repRange.max * IMPLAUSIBLE_REP_FACTOR;
 }
 
 /** The number a half-entered set is missing, for the on-screen note. */
@@ -759,6 +800,7 @@ export function parseLoggedSet(value: unknown, index: number): LoggedSet {
   const record = value as Record<string, unknown>;
   const reps: unknown = record['reps'];
   const rir: unknown = record['rir'];
+  const restTaken: unknown = record['restTakenSeconds'];
 
   return normalizeSet({
     // Position wins over the stored index: the array order is what the user
@@ -770,6 +812,7 @@ export function parseLoggedSet(value: unknown, index: number): LoggedSet {
     isWarmup: record['isWarmup'] === true,
     skipped: record['skipped'] === true,
     completedAt: asIsoOrNull(record['completedAt']),
+    restTakenSeconds: typeof restTaken === 'number' ? restTaken : null,
   });
 }
 

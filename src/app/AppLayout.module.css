@@ -15,13 +15,16 @@
 }
 
 /* A thin strip, not an alert: it must never push the set grid down the page
-   in the middle of a session. */
+   in the middle of a session. Fixed and out of flow, so it overlays the top of
+   the column instead of moving it. Taps pass through to the screen below. */
 .offline {
-  position: sticky;
+  position: fixed;
+  inset-inline: 0;
   top: 0;
-  z-index: 190;
-  padding: 4px var(--mantine-spacing-md);
+  z-index: 195;
+  padding: calc(4px + env(safe-area-inset-top)) var(--mantine-spacing-md) 4px;
   text-align: center;
+  pointer-events: none;
   color: light-dark(var(--mantine-color-orange-9), var(--mantine-color-orange-1));
   background: light-dark(var(--mantine-color-orange-1), var(--mantine-color-orange-9));
   border-bottom: 1px solid light-dark(var(--mantine-color-orange-3), var(--mantine-color-orange-8));
@@ -85,19 +88,30 @@
   outline-offset: -3px;
 }
 
+/* A fixed box per icon, so every tab sits on the same baseline. */
 .glyph {
-  font-size: 20px;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.glyph svg {
+  width: 22px;
+  height: 22px;
 }
 
 /* The syncing counterpart of `.offline`: same geometry, quieter colour. A
    queue flushing is routine, so it must not look like a problem. */
 .syncing {
-  position: sticky;
+  position: fixed;
+  inset-inline: 0;
   top: 0;
-  z-index: 190;
-  padding: 4px var(--mantine-spacing-md);
+  z-index: 195;
+  padding: calc(4px + env(safe-area-inset-top)) var(--mantine-spacing-md) 4px;
   text-align: center;
+  pointer-events: none;
   color: light-dark(var(--mantine-color-sky-9), var(--mantine-color-sky-1));
   background: light-dark(var(--mantine-color-sky-1), var(--mantine-color-sky-9));
   border-bottom: 1px solid light-dark(var(--mantine-color-sky-3), var(--mantine-color-sky-8));

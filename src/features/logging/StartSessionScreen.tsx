@@ -6,7 +6,7 @@ import { useAuth } from '@/data/hooks/useAuth';
 import { useWorkout } from '@/data/hooks/useWorkout';
 import { newSessionId, startSession } from '@/data/mutations/sessions';
 import { publishWorkoutVersion } from '@/data/mutations/workouts';
-import { diffWorkout } from '@/domain/workoutDiff';
+import { hasUnpublishedChanges } from '@/domain/workoutDiff';
 import type { WorkoutBody } from '@/domain/workouts';
 import { isDateKey } from '@/domain/sessions';
 
@@ -47,10 +47,12 @@ export default function StartSessionScreen() {
       groupRest: workout.groupRest,
     };
     const published = versions[0] ?? null;
-    const pending = diffWorkout(published, body);
 
     let version = workout.currentVersion;
-    if (pending.hasChanges) {
+    // Guarded rather than `diffWorkout` directly: until the version listener
+    // answers, `published` is null for a workout that has snapshots, and a
+    // raw diff reads that as a brand-new workout and publishes a duplicate.
+    if (hasUnpublishedChanges(published, workout.currentVersion, body)) {
       const { promise, result } = publishWorkoutVersion(uid, workout, body, published);
       void promise;
       version = result.versionNumber;

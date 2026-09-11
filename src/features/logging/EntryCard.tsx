@@ -4,9 +4,9 @@ import type { ExerciseStats, Overlay, WorkoutStats } from '@/domain/overlay';
 import type { DeltaChip } from '@/domain/strength';
 import { isComparable, previousSetAt, resolveOverlay, workedPosition } from '@/domain/overlay';
 import type { LoggedSet, SessionEntry } from '@/domain/sessions';
-import { assessSet, entryKey as keyOf, isRestEntry, missingField } from '@/domain/sessions';
+import { assessSet, entryKey as keyOf, isRestEntry } from '@/domain/sessions';
 import { describeComparison, formatSet } from '@/domain/strength';
-import type { Unit } from '@/domain/types';
+import type { Handedness, Unit } from '@/domain/types';
 import { formatPrescription, formatRange, formatRestSeconds } from '@/domain/workouts';
 import { OverlayLine } from './OverlayLine';
 import { SetRow } from './SetRow';
@@ -32,6 +32,8 @@ export type SetHandlers = {
 type Props = SetHandlers & {
   entry: SessionEntry;
   displayUnit: Unit;
+  /** Which side the card's own controls sit on. */
+  handedness: Handedness;
   workoutStats: WorkoutStats | null;
   exerciseStats: ExerciseStats | null;
   /** The workout being performed, so tier 1 can be labelled with its name. */
@@ -39,6 +41,8 @@ type Props = SetHandlers & {
   onNotes: (entryKey: string, notes: string) => void;
   /** Only offered for ad-hoc rows: a prescribed row belongs to the workout. */
   onRemoveEntry: ((entryKey: string) => void) | null;
+  /** Opens the exercise's instructions over the session. */
+  onShowExercise?: ((exerciseId: string) => void) | undefined;
 };
 
 /** Warmups are lettered so the working sets keep 1, 2, 3 whatever precedes them. */
@@ -91,11 +95,13 @@ function rowOverlay(
 export function EntryCard({
   entry,
   displayUnit,
+  handedness,
   workoutStats,
   exerciseStats,
   workoutName,
   onNotes,
   onRemoveEntry,
+  onShowExercise,
   ...handlers
 }: Props) {
   const key = keyOf(entry);
@@ -175,7 +181,6 @@ export function EntryCard({
                 displayUnit={displayUnit}
                 assessment={assessSet(set, entry.prescription)}
                 repRangeLabel={repRangeLabel}
-                missing={missingField(set)}
                 previousLabel={previousLabel}
                 deltaLabel={delta?.label ?? null}
                 deltaDetail={delta?.detail ?? null}
@@ -186,7 +191,24 @@ export function EntryCard({
           })}
         </div>
 
-        <Group gap="xs">
+        {/* Reversed for a right hand, so "How to" lands under the thumb and
+            Remove lands furthest from it. The DOM order never changes. */}
+        <div className={classes.controls} data-hand={handedness}>
+          {onShowExercise === undefined ? null : (
+            /* Opened over the session rather than navigated to: leaving the
+               screen mid-set is what made the timer impossible to trust. */
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              color="gray"
+              aria-label={`How to do ${entry.exerciseName}`}
+              onClick={() => {
+                onShowExercise(entry.exerciseId);
+              }}
+            >
+              How to
+            </Button>
+          )}
           <Button
             size="compact-xs"
             variant="subtle"
@@ -209,7 +231,7 @@ export function EntryCard({
               Remove
             </Button>
           )}
-        </Group>
+        </div>
 
         {notes === null ? null : (
           <Textarea

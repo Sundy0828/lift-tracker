@@ -70,18 +70,38 @@ test.describe('exercise catalog', () => {
     await expect(page.getByText('No exercises match.', { exact: false })).toBeVisible();
   });
 
-  test('the muscle filter narrows results', async ({ page }) => {
+  test('the body-part rail narrows results', async ({ page }) => {
     await signIn(page);
     await openExercises(page);
 
-    await page.getByRole('combobox', { name: 'Muscle' }).click();
-    await page.getByRole('option', { name: 'Quads' }).click();
-    await page.keyboard.press('Escape');
+    const rail = page.getByRole('group', { name: 'Filter by body part' });
+    await rail.getByRole('button', { name: 'Legs' }).click();
+    await expect(rail.getByRole('button', { name: 'Legs' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
 
     const count = await page.getByTestId('result-count').textContent();
     const total = Number(/(\d+)/.exec(count ?? '')?.[1] ?? '0');
     expect(total).toBeGreaterThan(0);
     expect(total).toBeLessThan(400);
+
+    // Tapping the active region clears it, as it does in the picker.
+    await rail.getByRole('button', { name: 'Legs' }).click();
+    await expect(page.getByTestId('result-count')).toContainText(/8\d\d exercises/);
+  });
+
+  test('the search box clears from its own button', async ({ page }) => {
+    await signIn(page);
+    await openExercises(page);
+
+    const box = page.getByRole('textbox', { name: 'Search exercises' });
+    await box.fill('bench press');
+    await expect(page.getByTestId('result-count')).not.toContainText(/8\d\d exercises/);
+
+    await page.getByRole('button', { name: 'Clear search' }).click();
+    await expect(box).toHaveValue('');
+    await expect(page.getByTestId('result-count')).toContainText(/8\d\d exercises/);
   });
 
   test('tapping a catalog exercise loads its instructions on demand', async ({ page }) => {
@@ -148,16 +168,19 @@ test.describe('exercise catalog', () => {
     await signIn(page);
     await openExercises(page);
 
-    await page.getByRole('combobox', { name: 'Muscle' }).click();
-    await page.getByRole('option', { name: 'Rear delts' }).click();
-    await page.keyboard.press('Escape');
+    // The rail filters by region, so the refinement shows on the row itself:
+    // a face pull is tagged rear delts, not the generic shoulders bucket.
+    await page
+      .getByRole('group', { name: 'Filter by body part' })
+      .getByRole('button', {
+        name: 'Shoulders',
+      })
+      .click();
+    await page.getByRole('textbox', { name: 'Search exercises' }).fill('face pull');
 
-    const count = await page.getByTestId('result-count').textContent();
-    const total = Number(/(\d+)/.exec(count ?? '')?.[1] ?? '0');
-    // Refined catalog entries, without having to redefine them by hand.
-    expect(total).toBeGreaterThanOrEqual(10);
-    expect(total).toBeLessThan(60);
-    await expect(page.getByTestId('exercise-list').getByText('Face Pull')).toBeVisible();
+    const row = page.getByTestId('exercise-list').getByRole('button').first();
+    await expect(row).toContainText('Face Pull');
+    await expect(row).toContainText('Rear delts');
   });
 
   test('a custom exercise rejects a blank name and a duplicate name', async ({ page }) => {

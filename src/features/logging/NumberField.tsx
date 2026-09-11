@@ -34,6 +34,8 @@ type Props = {
   disabled?: boolean;
   /** Called on blur and on every stepper press, never per keystroke. */
   onCommit: (value: number | null) => void;
+  /** Reports whether the box holds anything, as it is typed. */
+  onFilled?: (filled: boolean) => void;
 };
 
 function format(value: number | null): string {
@@ -61,6 +63,7 @@ export function NumberField({
   placeholder,
   disabled = false,
   onCommit,
+  onFilled,
 }: Props) {
   const input = useRef<HTMLInputElement>(null);
 
@@ -78,11 +81,13 @@ export function NumberField({
 
     const next = format(value);
     if (node.value !== next) node.value = next;
-  }, [value]);
+    onFilled?.(next !== '');
+  }, [value, onFilled]);
 
   const commit = (next: number | null): void => {
     const bounded = next === null ? null : clamp(next, min, max);
     if (input.current !== null) input.current.value = format(bounded);
+    onFilled?.(bounded !== null);
     if (bounded !== value) onCommit(bounded);
   };
 
@@ -123,6 +128,12 @@ export function NumberField({
         defaultValue={format(value)}
         placeholder={placeholder ?? ''}
         disabled={disabled}
+        onChange={(event) => {
+          // The value itself still commits on blur. Only whether the box is
+          // empty goes out per keystroke, so the row can flag a half-entered
+          // set while it is being entered.
+          onFilled?.(event.currentTarget.value.trim() !== '');
+        }}
         onBlur={(event) => {
           commit(parse(event.currentTarget.value));
         }}

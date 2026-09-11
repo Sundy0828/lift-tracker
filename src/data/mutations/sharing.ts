@@ -42,7 +42,6 @@ export function publishShare(shareId: string, payload: SharePayload): Promise<vo
     // server timestamp reads back as null from the local cache, and the owner
     // is shown this the instant they press Share.
     createdAt: Timestamp.now(),
-    updatedAt: serverTimestamp(),
   });
 }
 
@@ -54,11 +53,8 @@ export function publishShare(shareId: string, payload: SharePayload): Promise<vo
  * "not found". Keeping it also means the owner can see what they have shared.
  */
 export function setShareRevoked(shareId: string, revoked: boolean): Promise<void> {
-  return setDoc(
-    paths.sharedWorkout(shareId),
-    { revoked, updatedAt: serverTimestamp() },
-    { merge: true },
-  );
+  // Only `revoked`: the rules freeze every other field of a live share.
+  return setDoc(paths.sharedWorkout(shareId), { revoked }, { merge: true });
 }
 
 function writeCustomExercises(

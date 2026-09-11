@@ -93,7 +93,7 @@ test.describe('exercise picker', () => {
     await createWorkout(page, 'INVENT');
     await openPicker(page);
 
-    await page.getByRole('button', { name: 'New exercise' }).click();
+    await page.getByRole('button', { name: 'New', exact: true }).click();
     await page.getByRole('textbox', { name: 'Name', exact: true }).fill(CUSTOM);
     await page.getByRole('combobox', { name: 'Primary muscles' }).click();
     await page.getByRole('option', { name: 'Rear delts' }).click();

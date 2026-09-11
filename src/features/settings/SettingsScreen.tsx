@@ -11,6 +11,7 @@ import {
   SegmentedControl,
   Skeleton,
   Stack,
+  Switch,
   Text,
   TextInput,
   Title,
@@ -26,7 +27,13 @@ import {
   deleteAllData,
   reauthMethod,
 } from '@/data/mutations/account';
-import { setDefaultRestSeconds, setDisplayUnit } from '@/data/mutations/profile';
+import {
+  setAutoStartRest,
+  setDefaultRestSeconds,
+  setDisplayUnit,
+  setHandedness,
+} from '@/data/mutations/profile';
+import { isHandedness } from '@/domain/types';
 import { formatRestSeconds } from '@/domain/workouts';
 import { formatWeight, isUnit, stepFor } from '@/domain/units';
 import { PasswordRequirements } from '@/features/auth/PasswordRequirements';
@@ -171,6 +178,11 @@ export default function SettingsScreen() {
     void setDisplayUnit(uid, value);
   };
 
+  const changeHandedness = (value: string): void => {
+    if (uid === null || !isHandedness(value)) return;
+    void setHandedness(uid, value);
+  };
+
   return (
     <Stack>
       <Title order={2}>Settings</Title>
@@ -259,7 +271,40 @@ export default function SettingsScreen() {
                   }
                 }}
               />
+              <Switch
+                label="Start the rest timer on its own"
+                description="Starts once a set holds its weight, reps and effort, or when you tick it. Off: the rest bar offers a Start rest button instead."
+                checked={profile.autoStartRest}
+                onChange={(event) => {
+                  if (uid !== null) void setAutoStartRest(uid, event.currentTarget.checked);
+                }}
+              />
             </>
+          )}
+        </Stack>
+      </Card>
+
+      <Card withBorder>
+        <Stack gap="sm">
+          <Text fw={600}>Handedness</Text>
+
+          <Text size="sm" c="dimmed">
+            Puts the How to and Note buttons on the side your thumb reaches while you log a set.
+          </Text>
+
+          {isPending ? (
+            <Skeleton height={42} radius="md" />
+          ) : (
+            <SegmentedControl
+              fullWidth
+              value={profile.handedness}
+              onChange={changeHandedness}
+              data={[
+                { value: 'right', label: 'Right handed' },
+                { value: 'left', label: 'Left handed' },
+              ]}
+              aria-label="Handedness"
+            />
           )}
         </Stack>
       </Card>

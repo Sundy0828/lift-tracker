@@ -18,21 +18,23 @@ export default defineConfig({
   },
   /**
    * Two projects over the same tests. `mobile-chrome` is the suite and skips
-   * anything tagged `@known-broken`; `known-broken` runs only those.
+   * the excluded tags; `excluded` runs only those.
    *
-   * The tagged tests describe behaviour the app should have, so they stay in
-   * the file. Run them with `npm run e2e:known-broken`.
+   * `@known-broken` fails on master. `@flaky-drag` depends on a synthetic
+   * pointer drag that misses its dwell timer about once in a hundred runs.
+   * Both describe behaviour the app should have, so they stay in the file.
+   * Run them with `npm run e2e:excluded`.
    */
   projects: [
     {
       name: 'mobile-chrome',
       use: { ...devices['Pixel 7'] },
-      grepInvert: /@known-broken/u,
+      grepInvert: /@known-broken|@flaky-drag/u,
     },
     {
-      name: 'known-broken',
+      name: 'excluded',
       use: { ...devices['Pixel 7'] },
-      grep: /@known-broken/u,
+      grep: /@known-broken|@flaky-drag/u,
     },
   ],
   // The offline test in phase 5 needs a real service worker, so e2e always runs

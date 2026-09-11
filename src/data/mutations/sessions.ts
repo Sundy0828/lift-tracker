@@ -3,6 +3,7 @@ import {
   Timestamp,
   deleteDoc,
   getDocsFromServer,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -21,8 +22,8 @@ import { db } from '../firestore';
 import { paths } from '../paths';
 
 /**
- * Session writes. None but `deleteSession` are awaited by the UI: Firestore applies them to the
- * local cache immediately and flushes on reconnect (§2.8). The whole point is
+ * Session writes. None but `completeSession` and `deleteSession` are awaited by the UI: Firestore
+ * applies them to the local cache immediately and flushes on reconnect (§2.8). The whole point is
  * that a workout logged in airplane mode behaves exactly like one logged on
  * wifi, including the rest timer and the overlay.
  *
@@ -131,6 +132,84 @@ export function savePerformedOn(
 
 export type CompleteSessionResult = { prs: readonly PersonalRecord[]; completedAt: string };
 
+/** How long to wait for the local cache, which answers in milliseconds. */
+const CACHE_ACK_MS = 2000;
+
+/** How long to wait for the server once the write is already safe locally. */
+const SERVER_ACK_MS = 1500;
+
+/** Resolves with the promise, or on its own once `ms` have passed. */
+async function within(promise: Promise<void>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expiry = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+
+  try {
+    await Promise.race([promise, expiry]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Resolves once the local cache reports the session completed.
+ *
+ * Firestore writes a mutation to IndexedDB before it raises the local view of
+ * it, so this event is the point past which a reload cannot lose the write.
+ * A listener error resolves too: it means no answer is coming.
+ *
+ * The first event can arrive while `onSnapshot` is still returning, when
+ * another listener already holds a view of the same document, so the
+ * unsubscribe is taken after the fact rather than from inside the callback.
+ */
+function cachedCompletion(uid: string, sessionId: string): Promise<void> {
+  let stop: (() => void) | null = null;
+
+  const seen = new Promise<void>((resolve) => {
+    stop = onSnapshot(
+      paths.session(uid, sessionId),
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (snapshot.get('status') === 'completed') resolve();
+      },
+      () => {
+        resolve();
+      },
+    );
+  });
+
+  return seen.finally(() => {
+    stop?.();
+  });
+}
+
+/**
+ * Waits until the completion is durable, then briefly for the server.
+ *
+ * The local cache is the durability guarantee, online or off: Firestore has
+ * the mutation on disk by the time it reports it, so a reload cannot lose it.
+ * The server is then given a short moment on top, so a refused write is
+ * reported rather than swallowed. Throws only when the server answers within
+ * that moment and refuses; after it, the write is queued and will retry.
+ *
+ * `navigator.onLine` is deliberately not consulted. It reports the link, not
+ * whether Firestore can reach anything, and it is wrong often enough that
+ * finishing a workout must not depend on it.
+ */
+async function settleCompletion(
+  uid: string,
+  sessionId: string,
+  committed: Promise<void>,
+): Promise<void> {
+  // A rejection that arrives after the grace is a queued write Firestore will
+  // retry, not something to fail the finish over.
+  void committed.catch(() => undefined);
+
+  await within(cachedCompletion(uid, sessionId), CACHE_ACK_MS);
+  await within(committed, SERVER_ACK_MS);
+}
+
 /**
  * Completes a session: the status, the denormalised overlay indexes, and the
  * PR records, in **one batch**.
@@ -144,12 +223,16 @@ export type CompleteSessionResult = { prs: readonly PersonalRecord[]; completedA
  * active-session screen is already subscribed to these documents for the
  * tier-2 fallback, so the values are in the local cache before the button is
  * pressed, and completion needs no round trip.
+ *
+ * Awaited, unlike the writes above: the caller leaves the screen straight
+ * after, and a reload before the batch reached disk left the session active
+ * for ever. Throws when the server refuses the write while online.
  */
-export function completeSession(
+export async function completeSession(
   uid: string,
   session: Session,
   previousStats: (exerciseId: string) => ExerciseStats | null,
-): { promise: Promise<void>; result: CompleteSessionResult } {
+): Promise<CompleteSessionResult> {
   const completedAt = new Date().toISOString();
   const update = buildStatsUpdate(session, previousStats);
 
@@ -183,7 +266,8 @@ export function completeSession(
     batch.set(paths.exerciseStat(uid, exerciseId), { ...stats, updatedAt: serverTimestamp() });
   }
 
-  return { promise: batch.commit(), result: { prs: update.prs, completedAt } };
+  await settleCompletion(uid, session.id, batch.commit());
+  return { prs: update.prs, completedAt };
 }
 
 /**

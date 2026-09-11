@@ -135,7 +135,7 @@ function ShareRow({ share }: { share: SharedWorkout }) {
     <Card withBorder padding="xs">
       <Stack gap={6}>
         <Group gap="xs" wrap="nowrap">
-          <Badge size="xs" variant="light" color="sky">
+          <Badge size="xs" variant="light" color="sky" style={{ flexShrink: 0 }}>
             v{String(share.versionNumber)}
           </Badge>
           <Text size="xs" c="dimmed" truncate style={{ minWidth: 0 }}>

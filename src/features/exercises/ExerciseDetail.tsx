@@ -1,9 +1,9 @@
 import { Badge, Group, List, Loader, Stack, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
 import { loadExerciseDetails } from '@/catalog';
+import { MuscleFocus } from '@/components/MuscleMap/MuscleFocus';
 import type { Exercise, ExerciseDetails } from '@/domain/exercises';
 import { catalogImageUrls, equipmentLabel } from '@/domain/exercises';
-import { muscleLabel } from '@/domain/muscles';
 import classes from './ExerciseDetail.module.css';
 
 /**
@@ -128,25 +128,11 @@ export function ExerciseDetail({ exercise }: { exercise: Exercise }) {
         </Badge>
       </Group>
 
-      <Stack gap={2}>
-        <Text size="sm" fw={600}>
-          Primary
-        </Text>
-        <Text size="sm" c="dimmed">
-          {exercise.primaryMuscles.map(muscleLabel).join(', ') || '—'}
-        </Text>
-      </Stack>
-
-      {exercise.secondaryMuscles.length === 0 ? null : (
-        <Stack gap={2}>
-          <Text size="sm" fw={600}>
-            Secondary
-          </Text>
-          <Text size="sm" c="dimmed">
-            {exercise.secondaryMuscles.map(muscleLabel).join(', ')}
-          </Text>
-        </Stack>
-      )}
+      <MuscleFocus
+        primary={exercise.primaryMuscles}
+        secondary={exercise.secondaryMuscles}
+        testId="muscle-focus"
+      />
 
       {isCustom ? null : loading ? (
         <Group gap="xs">

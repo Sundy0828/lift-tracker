@@ -78,9 +78,16 @@
   color: var(--mantine-color-dimmed);
 }
 
-.ordinal:hover,
 .ordinal:focus-visible {
   background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+}
+
+/* Hover is only real with a pointer. On a touch screen it sticks after the
+   finger lifts, which left the control looking pressed. */
+@media (hover: hover) {
+  .ordinal:hover {
+    background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+  }
 }
 
 .ordinal[aria-pressed='true'] {
@@ -129,10 +136,16 @@
   touch-action: manipulation;
 }
 
-.step:hover,
 .step:focus-visible {
   background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
   color: var(--mantine-color-text);
+}
+
+@media (hover: hover) {
+  .step:hover {
+    background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+    color: var(--mantine-color-text);
+  }
 }
 
 .step:disabled {
@@ -215,10 +228,16 @@
   text-underline-offset: 2px;
 }
 
-.effortStep:hover:not(:disabled),
 .effortStep:focus-visible {
   background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
   color: var(--mantine-color-text);
+}
+
+@media (hover: hover) {
+  .effortStep:hover:not(:disabled) {
+    background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+    color: var(--mantine-color-text);
+  }
 }
 
 .effortStep[aria-pressed='true'] {
@@ -271,8 +290,14 @@
   margin-left: auto;
 }
 
-.linkButton:hover,
 .linkButton:focus-visible {
   color: var(--mantine-color-text);
   text-decoration-color: currentColor;
+}
+
+@media (hover: hover) {
+  .linkButton:hover {
+    color: var(--mantine-color-text);
+    text-decoration-color: currentColor;
+  }
 }

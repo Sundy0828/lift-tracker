@@ -1,5 +1,5 @@
 import { Timestamp, type DocumentData } from 'firebase/firestore';
-import { DEFAULT_PROFILE, type UserProfile } from '@/domain/types';
+import { DEFAULT_PROFILE, isHandedness, type UserProfile } from '@/domain/types';
 import { isUnit } from '@/domain/units';
 
 /**
@@ -11,6 +11,8 @@ export function parseProfile(data: DocumentData | undefined): UserProfile {
 
   const displayUnit: unknown = data['displayUnit'];
   const defaultRestSeconds: unknown = data['defaultRestSeconds'];
+  const autoStartRest: unknown = data['autoStartRest'];
+  const handedness: unknown = data['handedness'];
   const createdAt: unknown = data['createdAt'];
 
   return {
@@ -19,6 +21,9 @@ export function parseProfile(data: DocumentData | undefined): UserProfile {
       typeof defaultRestSeconds === 'number' && Number.isFinite(defaultRestSeconds)
         ? defaultRestSeconds
         : DEFAULT_PROFILE.defaultRestSeconds,
+    autoStartRest:
+      typeof autoStartRest === 'boolean' ? autoStartRest : DEFAULT_PROFILE.autoStartRest,
+    handedness: isHandedness(handedness) ? handedness : DEFAULT_PROFILE.handedness,
     createdAt: createdAt instanceof Timestamp ? createdAt.toDate().toISOString() : null,
   };
 }
