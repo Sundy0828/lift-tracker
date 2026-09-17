@@ -12,7 +12,7 @@ import type { Equipment, Exercise } from '@/domain/exercises';
 import { EQUIPMENT, isEquipment } from '@/domain/exercises';
 import { MUSCLE_GROUPS_BY_REGION } from '@/domain/muscles';
 import { ExerciseList } from './ExerciseList';
-import { PanelHeader } from './Panel';
+import { PANEL_DROPDOWN_Z_INDEX, PanelHeader } from './Panel';
 import classes from './ExerciseBrowser.module.css';
 
 const EQUIPMENT_OPTIONS = EQUIPMENT.map((item) => ({ value: item, label: item }));
@@ -22,6 +22,8 @@ type Props = {
   title: string;
   /** Adds a close button to the heading row. */
   onClose?: (() => void) | undefined;
+  /** Adds a back arrow to the heading row, for the screen rather than the panel. */
+  backTo?: string | undefined;
   /** Opens the custom exercise form. */
   onNew: () => void;
   query: string;
@@ -56,6 +58,7 @@ type Props = {
 export function ExerciseBrowser({
   title,
   onClose,
+  backTo,
   onNew,
   query,
   onQueryChange,
@@ -74,7 +77,7 @@ export function ExerciseBrowser({
 }: Props) {
   return (
     <div className={classes.browser}>
-      <PanelHeader title={title} onClose={onClose}>
+      <PanelHeader title={title} onClose={onClose} backTo={backTo}>
         <Button size="compact-sm" onClick={onNew}>
           New
         </Button>
@@ -136,6 +139,7 @@ export function ExerciseBrowser({
           {exercises.length === 1 ? '1 exercise' : `${String(exercises.length)} exercises`}
         </Text>
         <MultiSelect
+          comboboxProps={{ zIndex: PANEL_DROPDOWN_Z_INDEX }}
           aria-label="Equipment"
           placeholder={equipment.length === 0 ? 'Any equipment' : undefined}
           size="xs"

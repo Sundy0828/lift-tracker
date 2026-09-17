@@ -1,8 +1,9 @@
 import { MantineProvider } from '@mantine/core';
-import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AuthProvider } from '@/data/hooks/useAuth';
 import { hideSplash } from './splash';
-import { theme } from './theme';
+import { buildTheme } from './theme';
+import { useThemePreset } from './themePreset';
 
 /**
  * Off the entry bundle. The container and its transition library cost ~14 kB
@@ -61,6 +62,11 @@ function DeferredNotifications() {
 
 export function Providers({ children }: { children: ReactNode }) {
   useEffect(hideSplash, []);
+
+  // Read from local storage rather than the profile: the accent has to be
+  // right on the first paint, and the profile arrives over Firestore (§3).
+  const [preset] = useThemePreset();
+  const theme = useMemo(() => buildTheme(preset), [preset]);
 
   return (
     <MantineProvider theme={theme} defaultColorScheme="dark">

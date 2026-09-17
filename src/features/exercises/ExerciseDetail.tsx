@@ -15,55 +15,53 @@ import classes from './ExerciseDetail.module.css';
  * fastest way to tell near-identical names apart.
  */
 
+/**
+ * The start and end frames, or nothing at all.
+ *
+ * **An exercise with no pictures renders no picture area.** A custom lift
+ * never has any and most of the panel below is still worth reading, so a row
+ * of empty boxes — or a line apologising for them — is a third of the screen
+ * spent saying nothing.
+ *
+ * Images that fail collapse the same way. That is the offline case, and it
+ * gets one quiet line rather than two placeholders.
+ */
 function Frames({ exercise }: { exercise: Exercise }) {
   const [failed, setFailed] = useState<Set<number>>(new Set());
   const urls = catalogImageUrls(exercise);
 
-  if (urls.length === 0) {
+  if (urls.length === 0) return null;
+
+  if (urls.every((_, position) => failed.has(position))) {
     return (
-      <Text size="sm" c="dimmed">
-        {exercise.isCustom ? 'Custom exercises have no pictures.' : 'No pictures available.'}
+      <Text size="xs" c="dimmed">
+        Pictures need a connection — they are cached once you have seen them.
       </Text>
     );
   }
 
-  const allFailed = urls.every((_, position) => failed.has(position));
-
   return (
-    <Stack gap={4}>
-      <div className={classes.frames}>
-        {urls.map((url, position) => (
+    <div className={classes.frames}>
+      {urls.map((url, position) =>
+        failed.has(position) ? null : (
           <figure key={url} className={classes.frame}>
-            {failed.has(position) ? (
-              // The frame keeps its place rather than disappearing: losing the
-              // picture should not also lose the Start/Finish structure.
-              <div className={classes.missing} aria-hidden="true">
-                ◍
-              </div>
-            ) : (
-              <img
-                className={classes.image}
-                src={url}
-                alt={`${exercise.name}, position ${String(position + 1)}`}
-                loading="lazy"
-                decoding="async"
-                onError={() => {
-                  setFailed((current) => new Set(current).add(position));
-                }}
-              />
-            )}
+            <img
+              className={classes.image}
+              src={url}
+              alt={`${exercise.name}, position ${String(position + 1)}`}
+              loading="lazy"
+              decoding="async"
+              onError={() => {
+                setFailed((current) => new Set(current).add(position));
+              }}
+            />
             <figcaption className={classes.frameCaption}>
               {position === 0 ? 'Start' : 'Finish'}
             </figcaption>
           </figure>
-        ))}
-      </div>
-      {allFailed ? (
-        <Text size="xs" c="dimmed">
-          Pictures need a connection — they are cached once you have seen them.
-        </Text>
-      ) : null}
-    </Stack>
+        ),
+      )}
+    </div>
   );
 }
 

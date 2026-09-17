@@ -45,7 +45,13 @@ export function resetProfile(uid: string): Promise<void> {
     displayUnit: DEFAULT_PROFILE.displayUnit,
     defaultRestSeconds: DEFAULT_PROFILE.defaultRestSeconds,
     autoStartRest: DEFAULT_PROFILE.autoStartRest,
+    restChime: DEFAULT_PROFILE.restChime,
+    scheduleFilter: DEFAULT_PROFILE.scheduleFilter,
     handedness: DEFAULT_PROFILE.handedness,
+    friendCode: DEFAULT_PROFILE.friendCode,
+    displayName: DEFAULT_PROFILE.displayName,
+    dayIndexVersion: DEFAULT_PROFILE.dayIndexVersion,
+    tourVersion: DEFAULT_PROFILE.tourVersion,
     createdAt: serverTimestamp(),
   });
 }
@@ -61,6 +67,36 @@ export function setDefaultRestSeconds(uid: string, seconds: number): Promise<voi
 /** Turns the automatic rest timer on or off. */
 export function setAutoStartRest(uid: string, enabled: boolean): Promise<void> {
   return setDoc(paths.user(uid), { autoStartRest: enabled }, { merge: true });
+}
+
+/** Turns the end-of-rest tone on or off. The vibration is always on. */
+export function setRestChime(uid: string, enabled: boolean): Promise<void> {
+  return setDoc(paths.user(uid), { restChime: enabled }, { merge: true });
+}
+
+/** Narrows Today to the workouts this weekday is scheduled for. */
+export function setScheduleFilter(uid: string, enabled: boolean): Promise<void> {
+  return setDoc(paths.user(uid), { scheduleFilter: enabled }, { merge: true });
+}
+
+/**
+ * Records that the day index has been built to this version.
+ *
+ * Written after the index itself, so an interrupted rebuild is retried rather
+ * than remembered as finished (see `mutations/dayIndex`).
+ */
+export function setDayIndexVersion(uid: string, version: number): Promise<void> {
+  return setDoc(paths.user(uid), { dayIndexVersion: version }, { merge: true });
+}
+
+/**
+ * Records which walkthrough this account has seen.
+ *
+ * On the profile rather than the device, so the tour follows the account: the
+ * second phone should not start it over. Set back to 0 to show it again.
+ */
+export function setTourVersion(uid: string, version: number): Promise<void> {
+  return setDoc(paths.user(uid), { tourVersion: version }, { merge: true });
 }
 
 /** Sets the side the per-exercise controls sit on. */

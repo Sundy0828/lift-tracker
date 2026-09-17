@@ -1,9 +1,11 @@
 import { Button, Group, Progress, Text } from '@mantine/core';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { formatDuration } from '@/domain/workouts';
+import { buzz, chime } from './alert';
 import { notificationState } from './notifications';
 import type { Rest } from './useRestTimer';
 import { restTotal } from './useRestTimer';
+import { useRestCountdown } from './useRestCountdown';
 import classes from './RestTimerBar.module.css';
 
 /**
@@ -23,54 +25,59 @@ import classes from './RestTimerBar.module.css';
 
 type Props = {
   rest: Rest | null;
+  /** Plays a tone alongside the vibration when a rest runs out. */
+  withChime: boolean;
   onAdjust: (seconds: number) => void;
   onStop: () => void;
   /** Offers a manual start while no rest runs. Null hides the idle bar. */
   onStart?: (() => void) | null;
 };
 
-export function RestTimerBar({ rest, onAdjust, onStop, onStart = null }: Props) {
-  const [now, setNow] = useState(() => Date.now());
-  const buzzed = useRef<number | null>(null);
+/** Seconds between repeats of the end-of-rest alert. */
+const REPEAT_SECONDS = 20;
 
-  useEffect(() => {
-    if (rest === null) return;
+/** How many times the alert repeats before it gives up. */
+const REPEAT_LIMIT = 3;
 
-    // Every 500 ms rather than 1000: a whole-second readout driven off a
-    // 1000 ms interval visibly skips numbers as the two drift apart.
-    const interval = setInterval(() => {
-      setNow(Date.now());
-    }, 500);
+export function RestTimerBar({ rest, withChime, onAdjust, onStop, onStart = null }: Props) {
+  const { left, isOver } = useRestCountdown(rest);
 
-    // Resynced when the screen comes back, so the number is right on the frame
-    // the user actually sees rather than up to half a second later.
-    const resync = (): void => {
-      setNow(Date.now());
-    };
-    document.addEventListener('visibilitychange', resync);
-
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', resync);
-    };
-  }, [rest]);
-
-  const left = rest === null ? 0 : Math.ceil((rest.endsAt - now) / 1000);
-  const isOver = rest !== null && left <= 0;
+  /** The deadline last alerted for, so a re-render cannot alert twice. */
+  const alerted = useRef<number | null>(null);
+  /** How many alerts this deadline has already raised. */
+  const count = useRef(0);
 
   /**
-   * A short buzz when the countdown ends with the app in front. The
-   * notification covers the screen-off case; this covers the far more common
-   * one of the phone sitting on the bench next to you.
+   * The alert, repeated while the rest stays over.
    *
-   * Keyed on the deadline, so extending a rest re-arms it and a re-render
-   * cannot buzz twice for the same one.
+   * The notification covers a dark screen; this covers the far more common
+   * case of the phone face-up on a bench, where the notification is suppressed
+   * for being in the foreground. One buzz there is easy to miss with music on,
+   * so it repeats — and then stops, because a timer that nags forever gets
+   * turned off.
+   *
+   * Keyed on the deadline, so extending a rest re-arms it from scratch.
    */
   useEffect(() => {
-    if (rest === null || !isOver || buzzed.current === rest.endsAt) return;
-    buzzed.current = rest.endsAt;
-    if ('vibrate' in navigator) navigator.vibrate([120, 80, 120]);
-  }, [rest, isOver]);
+    if (rest === null || !isOver) return;
+
+    if (alerted.current !== rest.endsAt) {
+      alerted.current = rest.endsAt;
+      count.current = 0;
+    }
+    if (count.current >= REPEAT_LIMIT) return;
+
+    // The first alert is due the moment the rest runs out; each repeat is due
+    // a fixed gap after it. Driven off the elapsed overrun rather than a
+    // timer, so a backgrounded tab does not stack up a burst of them on
+    // return.
+    const over = -left;
+    if (over < count.current * REPEAT_SECONDS) return;
+
+    count.current += 1;
+    buzz();
+    if (withChime) chime();
+  }, [rest, isOver, left, withChime]);
 
   if (rest === null) {
     if (onStart === null) return null;
@@ -142,5 +149,30 @@ export function RestTimerBar({ rest, onAdjust, onStop, onStart = null }: Props) 
         </Group>
       </Group>
     </div>
+  );
+}
+
+/**
+ * The same countdown, small enough to sit in a panel header.
+ *
+ * The instructions panel covers the pinned bar, and a rest you cannot see is
+ * a rest you stop trusting — so the clock follows you into the panel rather
+ * than the bar being drawn over the thing you opened.
+ */
+export function RestPill({ rest }: { rest: Rest | null }) {
+  const { left, isOver } = useRestCountdown(rest);
+  if (rest === null) return null;
+
+  return (
+    <Text
+      size="sm"
+      fw={650}
+      className={classes.pill}
+      data-over={isOver ? '' : undefined}
+      data-testid="rest-pill"
+      aria-label="Rest remaining"
+    >
+      {isOver ? `+${formatDuration(-left)}` : formatDuration(left)}
+    </Text>
   );
 }

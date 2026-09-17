@@ -14,6 +14,8 @@ type Props = {
   onDelete?: ((exercise: Exercise) => void) | undefined;
   /** Extra buttons in the pinned footer, such as a confirm action. */
   actions?: ReactNode | undefined;
+  /** Sits beside the title. Used by the session screen for the rest clock. */
+  headerExtra?: ReactNode | undefined;
   /** Set when this opens over another panel. */
   zIndex?: number | undefined;
 };
@@ -25,6 +27,7 @@ export function ExerciseDetailDrawer({
   onEdit,
   onDelete,
   actions,
+  headerExtra,
   zIndex,
 }: Props) {
   const editable = exercise?.isCustom === true;
@@ -41,7 +44,9 @@ export function ExerciseDetailDrawer({
     >
       {exercise === null ? null : (
         <Stack gap="sm">
-          <PanelHeader title={exercise.name} onClose={onClose} />
+          <PanelHeader title={exercise.name} onClose={onClose}>
+            {headerExtra}
+          </PanelHeader>
 
           <ExerciseDetail exercise={exercise} />
 

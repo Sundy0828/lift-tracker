@@ -135,6 +135,7 @@ describe('resolveOverlay', () => {
       resolveOverlay({ exerciseId: 'fly', occurrenceIndex: 0 }, chestStats.workoutStats, null),
     ).toEqual({
       kind: 'new',
+      doneElsewhere: false,
     });
   });
 
@@ -149,7 +150,7 @@ describe('resolveOverlay', () => {
         resolveOverlay({ exerciseId: 'bench', occurrenceIndex: 0 }, null, benchAnywhere),
       ),
     ).toBe(false);
-    expect(isComparable({ kind: 'new' })).toBe(false);
+    expect(isComparable({ kind: 'new', doneElsewhere: false })).toBe(false);
   });
 
   it('falls through to tier 2 when tier 1 has the workout but not the exercise', () => {
@@ -180,7 +181,28 @@ describe('resolveOverlay', () => {
     };
     expect(resolveOverlay({ exerciseId: 'bench', occurrenceIndex: 0 }, warmupsOnly, null)).toEqual({
       kind: 'new',
+      doneElsewhere: false,
     });
+  });
+
+  it('refuses tier 2 under the same-workout scope, and says the lift is known', () => {
+    const overlay = resolveOverlay(
+      { exerciseId: 'bench', occurrenceIndex: 0 },
+      null,
+      benchAnywhere,
+      'same-workout',
+    );
+    expect(overlay).toEqual({ kind: 'new', doneElsewhere: true });
+  });
+
+  it('still overlays tier 1 under the same-workout scope', () => {
+    const overlay = resolveOverlay(
+      { exerciseId: 'bench', occurrenceIndex: 0 },
+      chestStats.workoutStats,
+      benchAnywhere,
+      'same-workout',
+    );
+    expect(overlay.kind).toBe('same-workout');
   });
 
   /** An `ExerciseSlot` has to satisfy the target shape without adaptation. */
@@ -456,7 +478,7 @@ describe('a workout changed between weeks', () => {
 
     expect(benchOverlay.kind).toBe('same-workout');
     expect(benchOverlay.kind === 'same-workout' && benchOverlay.data.sets[0]?.reps).toBe(8);
-    expect(inclineOverlay).toEqual({ kind: 'new' });
+    expect(inclineOverlay).toEqual({ kind: 'new', doneElsewhere: false });
   });
 
   it('computes the delta against this workout own numbers', () => {
@@ -592,6 +614,7 @@ describe('parsing stored stats', () => {
     expect(stats.bestSet).toBeNull();
     expect(resolveOverlay({ exerciseId: 'bench', occurrenceIndex: 0 }, null, stats)).toEqual({
       kind: 'new',
+      doneElsewhere: false,
     });
   });
 });

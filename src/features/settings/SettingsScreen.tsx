@@ -15,7 +15,6 @@ import {
   Text,
   TextInput,
   Title,
-  useMantineColorScheme,
 } from '@mantine/core';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -32,12 +31,17 @@ import {
   setDefaultRestSeconds,
   setDisplayUnit,
   setHandedness,
+  setRestChime,
 } from '@/data/mutations/profile';
+import { Tour } from '@/features/onboarding/Tour';
+import { ShareLinksCard } from '@/features/sharing/ShareLinksCard';
 import { isHandedness } from '@/domain/types';
 import { formatRestSeconds } from '@/domain/workouts';
 import { formatWeight, isUnit, stepFor } from '@/domain/units';
 import { PasswordRequirements } from '@/features/auth/PasswordRequirements';
 import { isAcceptable, problem as passwordProblem, SUMMARY } from '@/features/auth/password';
+import { AppearanceCard } from './AppearanceCard';
+import { ExportCard } from './ExportCard';
 import { SignInMethods } from './SignInMethods';
 import { SyncCard } from './SyncCard';
 
@@ -65,7 +69,6 @@ const REST_PRESETS = [60, 90, 120, 180, 240];
 export default function SettingsScreen() {
   const { user, signOutUser } = useAuth();
   const { profile, isPending, hasPendingWrites } = useProfile();
-  const { colorScheme, setColorScheme } = useMantineColorScheme();
   const navigate = useNavigate();
 
   const uid = user?.uid ?? null;
@@ -76,6 +79,7 @@ export default function SettingsScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [showTour, setShowTour] = useState(false);
 
   // Only an account delete touches the login, so only it has to re-prove the
   // sign-in. Wiping data needs no reauthentication — Firestore has no recency
@@ -279,6 +283,14 @@ export default function SettingsScreen() {
                   if (uid !== null) void setAutoStartRest(uid, event.currentTarget.checked);
                 }}
               />
+              <Switch
+                label="Sound when a rest ends"
+                description="A short tone as well as the buzz, for a phone face-up on a bench. The notification covers a dark screen either way."
+                checked={profile.restChime}
+                onChange={(event) => {
+                  if (uid !== null) void setRestChime(uid, event.currentTarget.checked);
+                }}
+              />
             </>
           )}
         </Stack>
@@ -311,6 +323,24 @@ export default function SettingsScreen() {
 
       <Card withBorder>
         <Stack gap="sm">
+          <Text fw={600}>How this works</Text>
+          <Text size="sm" c="dimmed">
+            The walkthrough from your first run, including the few things on a set row that have no
+            button.
+          </Text>
+          <Button
+            variant="default"
+            onClick={() => {
+              setShowTour(true);
+            }}
+          >
+            Show the walkthrough
+          </Button>
+        </Stack>
+      </Card>
+
+      <Card withBorder>
+        <Stack gap="sm">
           <Text fw={600}>Exercises</Text>
           <Text size="sm" c="dimmed">
             Browse the catalog and manage your custom exercises.
@@ -318,27 +348,41 @@ export default function SettingsScreen() {
           <Button component={Link} to="/exercises" variant="default">
             Exercise library
           </Button>
+          <Button component={Link} to="/library" variant="default">
+            Workout library
+          </Button>
+        </Stack>
+      </Card>
+
+      <AppearanceCard />
+
+      <Card withBorder>
+        <Stack gap="sm">
+          <Text fw={600}>Your week</Text>
+          <Text size="sm" c="dimmed">
+            Put workouts on weekdays and Today offers those first. Nothing counts a day you skip.
+          </Text>
+          <Button component={Link} to="/schedule" variant="default">
+            Weekly plan
+          </Button>
         </Stack>
       </Card>
 
       <Card withBorder>
         <Stack gap="sm">
-          <Text fw={600}>Appearance</Text>
-          <SegmentedControl
-            fullWidth
-            value={colorScheme}
-            onChange={(value) => {
-              setColorScheme(asColorScheme(value));
-            }}
-            data={[
-              { value: 'auto', label: 'System' },
-              { value: 'light', label: 'Light' },
-              { value: 'dark', label: 'Dark' },
-            ]}
-            aria-label="Color scheme"
-          />
+          <Text fw={600}>Friends</Text>
+          <Text size="sm" c="dimmed">
+            Your code and QR, who has asked to connect, and who you can send a workout to.
+          </Text>
+          <Button component={Link} to="/friends" variant="default">
+            Friends
+          </Button>
         </Stack>
       </Card>
+
+      <ShareLinksCard />
+
+      <ExportCard />
 
       <SyncCard />
 
@@ -442,6 +486,13 @@ export default function SettingsScreen() {
           </Group>
         </Stack>
       </Card>
+
+      <Tour
+        opened={showTour}
+        onClose={() => {
+          setShowTour(false);
+        }}
+      />
 
       <Modal
         opened={changingPassword}
@@ -587,10 +638,6 @@ export default function SettingsScreen() {
       </Modal>
     </Stack>
   );
-}
-
-function asColorScheme(value: string): 'auto' | 'light' | 'dark' {
-  return value === 'light' || value === 'dark' ? value : 'auto';
 }
 
 /** Why a password change failed, in terms of what to do about it. */

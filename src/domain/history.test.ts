@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDays,
+  averageRestSeconds,
   exercisePerformances,
   filterByWorkout,
   formatElapsed,
@@ -8,7 +9,9 @@ import {
   formatVolumeLoad,
   formatWeekLabel,
   groupByWeek,
+  measuredRests,
   recordMilestones,
+  sessionRests,
   sessionDurationSeconds,
   sessionTotals,
   volumeLoadKg,
@@ -179,7 +182,13 @@ describe('sessionTotals', () => {
     const totals = sessionTotals(
       session('s1', '2025-08-27', [entry('bench', [emptySet(0), emptySet(1)])]),
     );
-    expect(totals).toEqual({ sets: 0, exercises: 0, volumeLoadKg: 0 });
+    expect(totals).toEqual({
+      sets: 0,
+      exercises: 0,
+      volumeLoadKg: 0,
+      restSeconds: 0,
+      averageRestSeconds: null,
+    });
   });
 });
 
@@ -203,6 +212,7 @@ describe('groupByWeek', () => {
   it('totals the week', () => {
     const weeks = groupByWeek(sessions);
     expect(weeks[1]?.totals).toEqual({
+      restSeconds: 0,
       sessions: 2,
       sets: 2,
       exercises: 2,
@@ -403,5 +413,53 @@ describe('formatting', () => {
   it('singularises one set', () => {
     expect(formatSetCount(1)).toBe('1 set');
     expect(formatSetCount(12)).toBe('12 sets');
+  });
+});
+
+describe('rest actually taken', () => {
+  function rested(rests: (number | null)[]): LoggedSet[] {
+    return rests.map((rest, index) => set(index, 185, 8, null, { restTakenSeconds: rest }));
+  }
+
+  it('counts only the rests the timer measured', () => {
+    expect(measuredRests(rested([90, null, 120]))).toEqual([90, 120]);
+  });
+
+  it('ignores a zero, which is a circuit flowing on rather than a rest', () => {
+    expect(measuredRests(rested([0, 90]))).toEqual([90]);
+  });
+
+  it('averages the measured ones, so an unmeasured set does not drag it down', () => {
+    expect(averageRestSeconds(rested([90, null, 150]))).toBe(120);
+  });
+
+  it('says nothing when the timer was never used', () => {
+    expect(averageRestSeconds(rested([null, null]))).toBeNull();
+    expect(averageRestSeconds([])).toBeNull();
+  });
+
+  it('rounds to a whole second', () => {
+    expect(averageRestSeconds(rested([90, 91]))).toBe(91);
+  });
+
+  it('gathers every rest across a session, warmups included', () => {
+    const logged = session('s1', '2026-08-26', [
+      entry('bench', rested([90, 120])),
+      entry('press', rested([60, null])),
+    ]);
+    expect(sessionRests(logged)).toEqual([90, 120, 60]);
+  });
+
+  it('is carried on the session totals, with the average alongside', () => {
+    const logged = session('s1', '2026-08-26', [entry('bench', rested([90, 150]))]);
+    const totals = sessionTotals(logged);
+
+    expect(totals.restSeconds).toBe(240);
+    expect(totals.averageRestSeconds).toBe(120);
+  });
+
+  it('reports no rest at all for a session logged with the timer off', () => {
+    const logged = session('s1', '2026-08-26', [entry('bench', rested([null, null]))]);
+    expect(sessionTotals(logged)).toMatchObject({ restSeconds: 0, averageRestSeconds: null });
   });
 });

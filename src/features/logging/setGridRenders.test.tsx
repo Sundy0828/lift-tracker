@@ -99,6 +99,7 @@ function Harness() {
       workoutStats={null}
       exerciseStats={null}
       workoutName="PUSH"
+      overlayScope="same-workout"
       onWeight={onWeight}
       onReps={onReps}
       onRir={noop}

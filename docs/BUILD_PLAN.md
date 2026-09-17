@@ -243,6 +243,22 @@ users/{uid}
     bestSet: LoggedSet             # the actual set that produced the PR
     totalSessions: number
 
+  # --- DENORMALIZED CALENDAR INDEX ---
+
+  calendar/{YYYY}                  # one small document per year
+    year: string
+    sessions: {                    # one row per finished session, keyed by id
+      [sessionId]: { d, s, t, v }  # performedOn, sets, seconds, tonnage (kg)
+    }
+
+  # --- THE WEEK, AND WHO YOU CAN SEND A WORKOUT TO ---
+
+  schedule/weekly                  # references only; never workout content
+    entries: { dayOfWeek: 0-6; workoutId: string }[]
+
+  friends/{friendUid}              # one-sided; grants nothing about them
+    displayName, code, addedAt
+
 sharedWorkouts/{shareId}           # top-level, public read
   ownerUid, ownerDisplayName
   workout: SharedWorkoutPayload    # self-contained snapshot + inlined custom exercises
@@ -324,6 +340,31 @@ type LastPerformance = {
 
 Naming note: the word **workout** is the template — the thing you build and reuse — and
 **session** is one performance of it. That split is used consistently throughout.
+
+#### Why the calendar has its own index
+
+A session document carries every set you logged, so a year of five-day weeks is
+several megabytes. Drawing a calendar from those means paying that on every open, and
+the cost grows with every session you ever do — which is the one shape of cost worth
+designing out early.
+
+`calendar/{YYYY}` is the answer: four numbers and a date per session, so all-time is a
+handful of small documents rather than a thousand large ones. Three properties make it
+safe to rely on:
+
+- **One row per session, keyed by session id** — not per-day counters. A counter has to
+  be incremented on completion and decremented on delete, and a write that lands twice
+  or not at all leaves a number nobody can check. A row keyed by what it describes is
+  idempotent.
+- **Written in the same batch as the session.** Completion, abandonment, re-dating and
+  deletion each move the row atomically with the session, so an index row cannot
+  outlive its session and a completion cannot land without one.
+- **It is a cache, never the record.** `DAY_INDEX_VERSION` on the profile forces a
+  rebuild from the sessions when the row shape changes, and a rebuild also clears rows
+  for sessions that are gone.
+
+Export is deliberately *not* on the index: a full dump is every set of every session,
+so there is nothing to summarise.
 
 ### 2.5 Workout versioning — the core of the history requirement
 

@@ -2,6 +2,7 @@ import type { LoggedSet, Session, SessionEntry } from './sessions';
 import {
   dateFromKey,
   exerciseEntries,
+  isDateKey,
   localDateKey,
   performedSets,
   sessionSeconds,
@@ -99,12 +100,50 @@ export function sessionDurationSeconds(session: Session): number | null {
   return session.completedAt === null ? null : sessionSeconds(session);
 }
 
+/**
+ * Rest actually taken, as recorded on the set that earned it.
+ *
+ * `restTakenSeconds` is written when a rest ends — by the next set, by a skip,
+ * or by dismissing an overrun — so the last set of an exercise usually has
+ * none, and a session logged with the timer off has none at all. Only the
+ * measured ones are averaged; counting an unmeasured rest as zero would drag
+ * every average towards it.
+ */
+export function measuredRests(sets: readonly LoggedSet[]): number[] {
+  const rests: number[] = [];
+  for (const set of sets) {
+    const rest = set.restTakenSeconds;
+    if (rest !== null && rest > 0) rests.push(rest);
+  }
+  return rests;
+}
+
+export function totalRestSeconds(sets: readonly LoggedSet[]): number {
+  return measuredRests(sets).reduce((sum, rest) => sum + rest, 0);
+}
+
+/** The typical rest between these sets, or null when none was measured. */
+export function averageRestSeconds(sets: readonly LoggedSet[]): number | null {
+  const rests = measuredRests(sets);
+  if (rests.length === 0) return null;
+  return Math.round(rests.reduce((sum, rest) => sum + rest, 0) / rests.length);
+}
+
+/** Every measured rest across a whole session. */
+export function sessionRests(session: Session): number[] {
+  return exerciseEntries(session.entries).flatMap((entry) => measuredRests(entry.sets));
+}
+
 export type SessionTotals = {
   /** Sets that were actually done — the looser count (see `workedSets`). */
   sets: number;
   /** Distinct exercise rows with at least one set done. */
   exercises: number;
   volumeLoadKg: number;
+  /** Rest measured by the timer. Zero when it was never used. */
+  restSeconds: number;
+  /** The typical gap between sets, or null when none was measured. */
+  averageRestSeconds: number | null;
 };
 
 export function sessionTotals(session: Session): SessionTotals {
@@ -119,10 +158,32 @@ export function sessionTotals(session: Session): SessionTotals {
     exercises += 1;
     load += volumeLoadKg(entry.sets);
   }
-  return { sets, exercises, volumeLoadKg: load };
+
+  const rests = sessionRests(session);
+  return {
+    sets,
+    exercises,
+    volumeLoadKg: load,
+    restSeconds: rests.reduce((sum, rest) => sum + rest, 0),
+    averageRestSeconds:
+      rests.length === 0
+        ? null
+        : Math.round(rests.reduce((sum, rest) => sum + rest, 0) / rests.length),
+  };
 }
 
-export type WeekTotals = SessionTotals & { sessions: number };
+/**
+ * A group's totals. Not `SessionTotals & { sessions }`: an average rest is the
+ * one figure that cannot be summed, so a week carries the total and leaves the
+ * average to the session it belongs to.
+ */
+export type WeekTotals = {
+  sessions: number;
+  sets: number;
+  exercises: number;
+  volumeLoadKg: number;
+  restSeconds: number;
+};
 
 export type WeekGroup = {
   /** Monday's date key — the group's identity and its sort order. */
@@ -140,41 +201,73 @@ export type WeekGroup = {
  * A session whose `performedOn` will not parse is dropped rather than bucketed
  * under a bogus Monday: a corrupt date key must not invent a week.
  */
-export function groupByWeek(sessions: readonly Session[]): WeekGroup[] {
+function bucketBy(
+  sessions: readonly Session[],
+  keyOf: (performedOn: string) => string | null,
+): [string, Session[]][] {
   const buckets = new Map<string, Session[]>();
 
   for (const session of sessions) {
-    const weekStart = weekStartOf(session.performedOn);
-    if (weekStart === null) continue;
-    const bucket = buckets.get(weekStart);
-    if (bucket === undefined) buckets.set(weekStart, [session]);
+    const key = keyOf(session.performedOn);
+    if (key === null) continue;
+    const bucket = buckets.get(key);
+    if (bucket === undefined) buckets.set(key, [session]);
     else bucket.push(session);
   }
 
   return [...buckets.entries()]
     .sort(([a], [b]) => b.localeCompare(a))
-    .map(([weekStart, bucket]) => {
+    .map(([key, bucket]): [string, Session[]] => {
       bucket.sort(
         (a, b) =>
           b.performedOn.localeCompare(a.performedOn) ||
           (b.startedAt ?? '').localeCompare(a.startedAt ?? ''),
       );
-
-      const totals = bucket.reduce<WeekTotals>(
-        (sum, session) => {
-          const one = sessionTotals(session);
-          return {
-            sessions: sum.sessions + 1,
-            sets: sum.sets + one.sets,
-            exercises: sum.exercises + one.exercises,
-            volumeLoadKg: sum.volumeLoadKg + one.volumeLoadKg,
-          };
-        },
-        { sessions: 0, sets: 0, exercises: 0, volumeLoadKg: 0 },
-      );
-
-      return { weekStart, weekEnd: weekEndOf(weekStart) ?? weekStart, sessions: bucket, totals };
+      return [key, bucket];
     });
+}
+
+function addUp(sessions: readonly Session[]): WeekTotals {
+  return sessions.reduce<WeekTotals>(
+    (sum, session) => {
+      const one = sessionTotals(session);
+      return {
+        sessions: sum.sessions + 1,
+        sets: sum.sets + one.sets,
+        exercises: sum.exercises + one.exercises,
+        volumeLoadKg: sum.volumeLoadKg + one.volumeLoadKg,
+        restSeconds: sum.restSeconds + one.restSeconds,
+      };
+    },
+    { sessions: 0, sets: 0, exercises: 0, volumeLoadKg: 0, restSeconds: 0 },
+  );
+}
+
+export function groupByWeek(sessions: readonly Session[]): WeekGroup[] {
+  return bucketBy(sessions, weekStartOf).map(([weekStart, bucket]) => ({
+    weekStart,
+    weekEnd: weekEndOf(weekStart) ?? weekStart,
+    sessions: bucket,
+    totals: addUp(bucket),
+  }));
+}
+
+export type MonthGroup = {
+  /** `YYYY-MM` — the group's identity and its sort order. */
+  monthKey: string;
+  /** Newest first, matching the order the timeline renders. */
+  sessions: Session[];
+  totals: WeekTotals;
+};
+
+/**
+ * The same buckets a month at a time, for looking back further than a few
+ * weeks. A year of training is fifty-two week headings and twelve month ones.
+ */
+export function groupByMonth(sessions: readonly Session[]): MonthGroup[] {
+  return bucketBy(sessions, (performedOn) =>
+    isDateKey(performedOn) ? performedOn.slice(0, 7) : null,
+  ).map(([monthKey, bucket]) => ({ monthKey, sessions: bucket, totals: addUp(bucket) }));
 }
 
 // --- One exercise, over time ---------------------------------------------

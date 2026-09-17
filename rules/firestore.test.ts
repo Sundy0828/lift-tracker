@@ -60,9 +60,14 @@ afterEach(async () => {
 });
 
 /** A share document as the app writes it. */
-function shareDoc(ownerUid: string, revoked = false): Record<string, unknown> {
+function shareDoc(
+  ownerUid: string,
+  revoked = false,
+  toUid: string | null = null,
+): Record<string, unknown> {
   return {
     ownerUid,
+    toUid,
     sourceWorkoutId: 'w1',
     versionNumber: 1,
     name: 'PUSH',
@@ -70,6 +75,34 @@ function shareDoc(ownerUid: string, revoked = false): Record<string, unknown> {
     groupRest: {},
     customExercises: [],
     revoked,
+  };
+}
+
+/** A friend-code row as the app writes it. */
+function codeDoc(uid: string, displayName = 'Alice'): Record<string, unknown> {
+  return { uid, displayName };
+}
+
+/** The pair's one document id: the two uids sorted and joined. */
+function pairId(a: string, b: string): string {
+  return [a, b].sort((left, right) => left.localeCompare(right)).join('_');
+}
+
+/** A friend request as the app writes it. */
+function edgeDoc(
+  fromUid: string,
+  toUid: string,
+  over: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    uids: [fromUid, toUid].sort((left, right) => left.localeCompare(right)),
+    fromUid,
+    toUid,
+    fromName: 'Alice',
+    toName: '',
+    status: 'pending',
+    respondedAt: null,
+    ...over,
   };
 }
 
@@ -287,6 +320,302 @@ describe('sharedWorkouts — writing', () => {
     await assertSucceeds(
       deleteDoc(doc(env.authenticatedContext(ALICE).firestore(), 'sharedWorkouts/s1')),
     );
+  });
+});
+
+describe('sharedWorkouts — addressed to a friend', () => {
+  it('lets the recipient list what was sent to them', async () => {
+    await seed('sharedWorkouts/s1', shareDoc(ALICE, false, BOB));
+    const bob = env.authenticatedContext(BOB).firestore();
+
+    await assertSucceeds(
+      getDocs(query(collection(bob, 'sharedWorkouts'), where('toUid', '==', BOB))),
+    );
+  });
+
+  it('does not let a third party list somebody else inbox', async () => {
+    await seed('sharedWorkouts/s1', shareDoc(ALICE, false, BOB));
+    const carol = env.authenticatedContext('carol').firestore();
+
+    await assertFails(
+      getDocs(query(collection(carol, 'sharedWorkouts'), where('toUid', '==', BOB))),
+    );
+  });
+
+  it('still refuses an unconstrained listing', async () => {
+    await seed('sharedWorkouts/s1', shareDoc(ALICE, false, BOB));
+    await assertFails(
+      getDocs(collection(env.authenticatedContext(BOB).firestore(), 'sharedWorkouts')),
+    );
+  });
+
+  it('lets an owner list shares written before recipients existed', async () => {
+    // No `toUid` field at all, the way an older client wrote it.
+    await seed('sharedWorkouts/s1', {
+      ownerUid: ALICE,
+      sourceWorkoutId: 'w1',
+      versionNumber: 1,
+      name: 'PUSH',
+      slots: [],
+      groupRest: {},
+      customExercises: [],
+      revoked: false,
+    });
+    const alice = env.authenticatedContext(ALICE).firestore();
+
+    await assertSucceeds(
+      getDocs(query(collection(alice, 'sharedWorkouts'), where('ownerUid', '==', ALICE))),
+    );
+  });
+
+  it('accepts a create that names a recipient, and one that names nobody', async () => {
+    const alice = env.authenticatedContext(ALICE).firestore();
+    await assertSucceeds(setDoc(doc(alice, 'sharedWorkouts/s1'), shareDoc(ALICE, false, BOB)));
+    await assertSucceeds(setDoc(doc(alice, 'sharedWorkouts/s2'), shareDoc(ALICE)));
+  });
+
+  it('refuses a recipient that is not a uid', async () => {
+    const alice = env.authenticatedContext(ALICE).firestore();
+    await assertFails(setDoc(doc(alice, 'sharedWorkouts/s1'), { ...shareDoc(ALICE), toUid: 42 }));
+  });
+
+  it('freezes the recipient, so a share cannot be redirected', async () => {
+    await seed('sharedWorkouts/s1', shareDoc(ALICE, false, BOB));
+    const alice = env.authenticatedContext(ALICE).firestore();
+    await assertFails(updateDoc(doc(alice, 'sharedWorkouts/s1'), { toUid: 'carol' }));
+  });
+
+  it('gives a recipient no write of any kind', async () => {
+    await seed('sharedWorkouts/s1', shareDoc(ALICE, false, BOB));
+    const bob = env.authenticatedContext(BOB).firestore();
+
+    await assertFails(updateDoc(doc(bob, 'sharedWorkouts/s1'), { revoked: true }));
+    await assertFails(deleteDoc(doc(bob, 'sharedWorkouts/s1')));
+  });
+});
+
+describe('friendCodes', () => {
+  it('resolves one code at a time for any signed-in account', async () => {
+    await seed('friendCodes/ABCDEFGH', codeDoc(ALICE));
+    await assertSucceeds(
+      getDoc(doc(env.authenticatedContext(BOB).firestore(), 'friendCodes/ABCDEFGH')),
+    );
+  });
+
+  it('is never a directory of accounts', async () => {
+    await seed('friendCodes/ABCDEFGH', codeDoc(ALICE));
+
+    await assertFails(
+      getDocs(collection(env.authenticatedContext(BOB).firestore(), 'friendCodes')),
+    );
+    await assertFails(
+      getDocs(
+        query(
+          collection(env.authenticatedContext(BOB).firestore(), 'friendCodes'),
+          where('uid', '==', ALICE),
+        ),
+      ),
+    );
+  });
+
+  it('refuses a signed-out lookup', async () => {
+    await seed('friendCodes/ABCDEFGH', codeDoc(ALICE));
+    await assertFails(
+      getDoc(doc(env.unauthenticatedContext().firestore(), 'friendCodes/ABCDEFGH')),
+    );
+  });
+
+  it('lets an account claim a free code for itself', async () => {
+    const alice = env.authenticatedContext(ALICE).firestore();
+    await assertSucceeds(setDoc(doc(alice, 'friendCodes/ABCDEFGH'), codeDoc(ALICE)));
+  });
+
+  it('refuses a code claimed under somebody else uid', async () => {
+    const bob = env.authenticatedContext(BOB).firestore();
+    await assertFails(setDoc(doc(bob, 'friendCodes/ABCDEFGH'), codeDoc(ALICE)));
+  });
+
+  it('refuses to hand a code that is already held to someone else', async () => {
+    await seed('friendCodes/ABCDEFGH', codeDoc(ALICE));
+    const bob = env.authenticatedContext(BOB).firestore();
+
+    // A create on a document that exists is an update, and the uid cannot move.
+    await assertFails(setDoc(doc(bob, 'friendCodes/ABCDEFGH'), codeDoc(BOB)));
+    await assertFails(updateDoc(doc(bob, 'friendCodes/ABCDEFGH'), { uid: BOB }));
+  });
+
+  it('lets the holder rename, and nothing else', async () => {
+    await seed('friendCodes/ABCDEFGH', codeDoc(ALICE));
+    const alice = env.authenticatedContext(ALICE).firestore();
+
+    await assertSucceeds(updateDoc(doc(alice, 'friendCodes/ABCDEFGH'), { displayName: 'Al' }));
+    await assertFails(updateDoc(doc(alice, 'friendCodes/ABCDEFGH'), { uid: BOB }));
+    await assertFails(updateDoc(doc(alice, 'friendCodes/ABCDEFGH'), { note: 'hi' }));
+  });
+
+  it('caps the name, so a public row cannot be flooded', async () => {
+    const alice = env.authenticatedContext(ALICE).firestore();
+    await assertFails(setDoc(doc(alice, 'friendCodes/ABCDEFGH'), codeDoc(ALICE, 'a'.repeat(41))));
+  });
+
+  it('lets only the holder withdraw it', async () => {
+    await seed('friendCodes/ABCDEFGH', codeDoc(ALICE));
+
+    await assertFails(
+      deleteDoc(doc(env.authenticatedContext(BOB).firestore(), 'friendCodes/ABCDEFGH')),
+    );
+    await assertSucceeds(
+      deleteDoc(doc(env.authenticatedContext(ALICE).firestore(), 'friendCodes/ABCDEFGH')),
+    );
+  });
+});
+
+describe('friendEdges', () => {
+  const ID = pairId(ALICE, BOB);
+
+  it('lets either side read the pair document, and nobody else', async () => {
+    await seed(`friendEdges/${ID}`, edgeDoc(ALICE, BOB));
+
+    await assertSucceeds(
+      getDoc(doc(env.authenticatedContext(ALICE).firestore(), `friendEdges/${ID}`)),
+    );
+    await assertSucceeds(
+      getDoc(doc(env.authenticatedContext(BOB).firestore(), `friendEdges/${ID}`)),
+    );
+    await assertFails(
+      getDoc(doc(env.authenticatedContext('carol').firestore(), `friendEdges/${ID}`)),
+    );
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), `friendEdges/${ID}`)));
+  });
+
+  it('lets you list your own connections, and refuses an unconstrained listing', async () => {
+    await seed(`friendEdges/${ID}`, edgeDoc(ALICE, BOB));
+    const alice = env.authenticatedContext(ALICE).firestore();
+
+    await assertSucceeds(
+      getDocs(query(collection(alice, 'friendEdges'), where('uids', 'array-contains', ALICE))),
+    );
+    await assertFails(getDocs(collection(alice, 'friendEdges')));
+    // Nor somebody else's.
+    await assertFails(
+      getDocs(query(collection(alice, 'friendEdges'), where('uids', 'array-contains', 'carol'))),
+    );
+  });
+
+  it('lets an account send a request from itself', async () => {
+    const alice = env.authenticatedContext(ALICE).firestore();
+    await assertSucceeds(setDoc(doc(alice, `friendEdges/${ID}`), edgeDoc(ALICE, BOB)));
+  });
+
+  it('refuses a request forged as coming from somebody else', async () => {
+    // The impersonation attack: a request that appears in Bob's list from a
+    // name he has never heard of.
+    const carol = env.authenticatedContext('carol').firestore();
+    await assertFails(setDoc(doc(carol, `friendEdges/${ID}`), edgeDoc(ALICE, BOB)));
+  });
+
+  it('refuses a request that names a pair it is not between', async () => {
+    const alice = env.authenticatedContext(ALICE).firestore();
+    // Slipping a third uid into `uids` would make the document readable by an
+    // account the connection has nothing to do with.
+    await assertFails(
+      setDoc(doc(alice, `friendEdges/${ID}`), {
+        ...edgeDoc(ALICE, BOB),
+        uids: [ALICE, BOB, 'carol'],
+      }),
+    );
+    await assertFails(
+      setDoc(doc(alice, `friendEdges/${ID}`), { ...edgeDoc(ALICE, BOB), uids: [ALICE, 'carol'] }),
+    );
+  });
+
+  it('refuses a request that is born accepted, or addressed to yourself', async () => {
+    const alice = env.authenticatedContext(ALICE).firestore();
+    await assertFails(
+      setDoc(doc(alice, `friendEdges/${ID}`), edgeDoc(ALICE, BOB, { status: 'accepted' })),
+    );
+    await assertFails(
+      setDoc(doc(alice, `friendEdges/${pairId(ALICE, ALICE)}`), edgeDoc(ALICE, ALICE)),
+    );
+  });
+
+  it('caps the sender name, so a public row cannot be flooded', async () => {
+    const alice = env.authenticatedContext(ALICE).firestore();
+    await assertFails(
+      setDoc(doc(alice, `friendEdges/${ID}`), edgeDoc(ALICE, BOB, { fromName: 'a'.repeat(41) })),
+    );
+  });
+
+  it('lets only the account that was asked accept', async () => {
+    await seed(`friendEdges/${ID}`, edgeDoc(ALICE, BOB));
+
+    // The sender cannot accept their own request.
+    await assertFails(
+      updateDoc(doc(env.authenticatedContext(ALICE).firestore(), `friendEdges/${ID}`), {
+        status: 'accepted',
+        toName: 'Bob',
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(env.authenticatedContext(BOB).firestore(), `friendEdges/${ID}`), {
+        status: 'accepted',
+        toName: 'Bob',
+      }),
+    );
+  });
+
+  it('freezes the pair and the direction when accepting', async () => {
+    await seed(`friendEdges/${ID}`, edgeDoc(ALICE, BOB));
+    const bob = env.authenticatedContext(BOB).firestore();
+
+    await assertFails(updateDoc(doc(bob, `friendEdges/${ID}`), { fromUid: BOB }));
+    await assertFails(updateDoc(doc(bob, `friendEdges/${ID}`), { toUid: 'carol' }));
+    await assertFails(updateDoc(doc(bob, `friendEdges/${ID}`), { uids: [BOB, 'carol'] }));
+    await assertFails(updateDoc(doc(bob, `friendEdges/${ID}`), { fromName: 'Not Alice' }));
+    // Nor smuggled in alongside a legitimate accept.
+    await assertFails(
+      updateDoc(doc(bob, `friendEdges/${ID}`), { status: 'accepted', fromName: 'Not Alice' }),
+    );
+  });
+
+  it('cannot be un-accepted, or accepted twice', async () => {
+    await seed(`friendEdges/${ID}`, edgeDoc(ALICE, BOB, { status: 'accepted', toName: 'Bob' }));
+    const bob = env.authenticatedContext(BOB).firestore();
+
+    await assertFails(updateDoc(doc(bob, `friendEdges/${ID}`), { status: 'pending' }));
+    await assertFails(updateDoc(doc(bob, `friendEdges/${ID}`), { status: 'accepted' }));
+  });
+
+  it('lets either side leave, and nobody else', async () => {
+    await seed(`friendEdges/${ID}`, edgeDoc(ALICE, BOB, { status: 'accepted' }));
+
+    await assertFails(
+      deleteDoc(doc(env.authenticatedContext('carol').firestore(), `friendEdges/${ID}`)),
+    );
+    await assertSucceeds(
+      deleteDoc(doc(env.authenticatedContext(BOB).firestore(), `friendEdges/${ID}`)),
+    );
+  });
+});
+
+describe('library', () => {
+  it('is readable by anyone, signed in or not', async () => {
+    await seed('library/ppl-push', { name: 'Push day', slots: [] });
+
+    await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'library/ppl-push')));
+    await assertSucceeds(getDocs(collection(env.unauthenticatedContext().firestore(), 'library')));
+    await assertSucceeds(
+      getDocs(collection(env.authenticatedContext(ALICE).firestore(), 'library')),
+    );
+  });
+
+  it('refuses every client write, because there is no submission path', async () => {
+    await seed('library/ppl-push', { name: 'Push day', slots: [] });
+    const alice = env.authenticatedContext(ALICE).firestore();
+
+    await assertFails(setDoc(doc(alice, 'library/mine'), { name: 'Mine', slots: [] }));
+    await assertFails(updateDoc(doc(alice, 'library/ppl-push'), { name: 'HACKED' }));
+    await assertFails(deleteDoc(doc(alice, 'library/ppl-push')));
   });
 });
 

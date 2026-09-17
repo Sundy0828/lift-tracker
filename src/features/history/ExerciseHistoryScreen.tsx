@@ -1,6 +1,7 @@
-import { Alert, Badge, Card, Group, Select, Skeleton, Stack, Text, Title } from '@mantine/core';
+import { Alert, Badge, Card, Group, Select, Skeleton, Stack, Text, Tooltip } from '@mantine/core';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { BackTitle } from '@/app/BackTitle';
 import { TrendLine } from '@/components/TrendLine';
 import { useExerciseLibrary } from '@/data/hooks/useExerciseLibrary';
 import { useExerciseSessions } from '@/data/hooks/useExerciseSessions';
@@ -15,7 +16,7 @@ import {
   workoutFilterOptions,
 } from '@/domain/history';
 import type { TrendSample } from '@/domain/trend';
-import { formatE1rm, formatSet } from '@/domain/strength';
+import { describeE1rm, formatE1rm, formatSet } from '@/domain/strength';
 import type { Unit } from '@/domain/types';
 
 /**
@@ -73,10 +74,18 @@ function PerformanceCard({
                 PR
               </Badge>
             ) : null}
-            {performance.e1rmKg === null ? null : (
-              <Text size="xs" c="dimmed" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {formatE1rm(performance.e1rmKg, displayUnit)}
-              </Text>
+            {performance.e1rmKg === null || performance.best === null ? null : (
+              <Tooltip
+                label={describeE1rm(performance.best, displayUnit) ?? ''}
+                withArrow
+                multiline
+                w={260}
+                openDelay={200}
+              >
+                <Text size="xs" c="dimmed" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  e1RM {formatE1rm(performance.e1rmKg, displayUnit)}
+                </Text>
+              </Tooltip>
             )}
           </Group>
         </Group>
@@ -152,9 +161,15 @@ export default function ExerciseHistoryScreen() {
   return (
     <Stack>
       <Stack gap={2}>
-        <Title order={2}>{name}</Title>
+        {/* An explicit way back, because this screen is reached from the
+            Records tab and from a session, and neither is obvious once you
+            are here. */}
+        <BackTitle to="/history?tab=records" title={name} />
         <Text size="sm" c="dimmed">
-          Estimated 1RM, adjusted for reps in reserve.
+          {/* Said in full here rather than only in a tooltip: this is the one
+              screen whose every number is an estimate. */}
+          Estimated 1RM — what one rep would have been, worked back from the set you did, with reps
+          in reserve counted as reps you had left. Nobody lifted these numbers.
         </Text>
       </Stack>
 
@@ -220,9 +235,17 @@ export default function ExerciseHistoryScreen() {
                           : ` · ${milestone.performance.workoutName}`}
                       </Text>
                     </Stack>
-                    <Badge variant="light" color="orange" style={{ flexShrink: 0 }}>
-                      {formatE1rm(milestone.e1rmKg, displayUnit)}
-                    </Badge>
+                    <Tooltip
+                      label={describeE1rm(milestone.set, displayUnit) ?? ''}
+                      withArrow
+                      multiline
+                      w={260}
+                      openDelay={200}
+                    >
+                      <Badge variant="light" color="orange" style={{ flexShrink: 0 }}>
+                        e1RM {formatE1rm(milestone.e1rmKg, displayUnit)}
+                      </Badge>
+                    </Tooltip>
                   </Group>
                 </Card>
               ))}

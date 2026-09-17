@@ -37,6 +37,8 @@ export type SharedCustomExercise = {
 export type SharedWorkout = {
   shareId: string;
   ownerUid: string;
+  /** The friend it was sent to, or null for a plain link (IDEAS §4.1). */
+  toUid: string | null;
   /** The sender's workout id. Bookkeeping for the sender; never imported. */
   sourceWorkoutId: string;
   /** Which version was published. Shown so a recipient knows what they have. */
@@ -50,6 +52,8 @@ export type SharedWorkout = {
 /** The fields written to `sharedWorkouts/{shareId}`, minus server timestamps. */
 export type SharePayload = {
   ownerUid: string;
+  /** Null for a link anyone can open. A uid also lets that account list it. */
+  toUid: string | null;
   sourceWorkoutId: string;
   versionNumber: number;
   name: string;
@@ -84,6 +88,8 @@ export function buildSharePayload(input: {
   versionNumber: number;
   body: WorkoutBody;
   resolve: (id: string) => Exercise | null;
+  /** Addresses the share to a friend. It stays a working link either way. */
+  toUid?: string | null;
 }): SharePayload {
   const { ownerUid, sourceWorkoutId, versionNumber, body, resolve } = input;
 
@@ -101,6 +107,7 @@ export function buildSharePayload(input: {
 
   return {
     ownerUid,
+    toUid: input.toUid ?? null,
     sourceWorkoutId,
     versionNumber,
     name: body.name,
@@ -131,9 +138,12 @@ export function parseSharedWorkout(
   const versionNumber: unknown = data['versionNumber'];
   const createdAt: unknown = data['createdAt'];
 
+  const toUid = asString(data['toUid']);
+
   return {
     shareId,
     ownerUid,
+    toUid: toUid === '' ? null : toUid,
     sourceWorkoutId: asString(data['sourceWorkoutId']),
     versionNumber:
       typeof versionNumber === 'number' && Number.isFinite(versionNumber)
@@ -174,6 +184,50 @@ function parseSharedCustomExercises(value: unknown): SharedCustomExercise[] {
   }
 
   return parsed;
+}
+
+/**
+ * How many live shares one account may hold.
+ *
+ * `firestore.rules` cannot count documents, so there is no rules-only version
+ * of this (IDEAS §11.1): a counter on `users/{uid}` is owned by the account it
+ * limits, and its owner can write it back to zero. A Cloud Function is the
+ * only version a hostile client cannot beat.
+ *
+ * So this is a **soft cap**, enforced where the owner's own inventory query
+ * already runs. It stops the accident — a share minted on every press until
+ * there are two hundred of them — and it does not pretend to stop an attacker.
+ */
+export const MAX_LIVE_SHARES = 20;
+
+/** Shares that are still open. A revoked one costs nothing and is not counted. */
+export function liveShares(shares: readonly SharedWorkout[]): SharedWorkout[] {
+  return shares.filter((share) => !share.revoked);
+}
+
+export function isAtShareCap(shares: readonly SharedWorkout[]): boolean {
+  return liveShares(shares).length >= MAX_LIVE_SHARES;
+}
+
+/**
+ * Live shares oldest first — the order to offer turning them off in.
+ *
+ * Oldest rather than newest, because the one you are least likely to still
+ * need is the one you handed out longest ago. It is only an ordering: nothing
+ * revokes a share on its own.
+ */
+export function liveSharesByAge(shares: readonly SharedWorkout[]): SharedWorkout[] {
+  return liveShares(shares).sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+}
+
+/** The share to offer turning off first: the oldest one still live. */
+export function oldestLiveShare(shares: readonly SharedWorkout[]): SharedWorkout | null {
+  return liveSharesByAge(shares)[0] ?? null;
+}
+
+/** Room left before the soft cap. Never negative. */
+export function sharesRemaining(shares: readonly SharedWorkout[]): number {
+  return Math.max(0, MAX_LIVE_SHARES - liveShares(shares).length);
 }
 
 export type ImportPlan = {

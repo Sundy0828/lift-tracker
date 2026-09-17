@@ -53,6 +53,8 @@ const routes: RouteObject[] = [
       { index: true, ...screen(() => import('@/features/today/TodayScreen')) },
       { path: 'exercises', ...screen(() => import('@/features/exercises/ExercisesScreen')) },
       { path: 'workouts', ...screen(() => import('@/features/workouts/WorkoutsScreen')) },
+      { path: 'schedule', ...screen(() => import('@/features/schedule/ScheduleScreen')) },
+      { path: 'library', ...screen(() => import('@/features/library/LibraryScreen')) },
       {
         path: 'workouts/:workoutId',
         ...screen(() => import('@/features/workouts/WorkoutEditorScreen')),
@@ -81,6 +83,13 @@ const routes: RouteObject[] = [
         ...screen(() => import('@/features/history/ExerciseHistoryScreen')),
       },
       { path: 'settings', ...screen(() => import('@/features/settings/SettingsScreen')) },
+      { path: 'friends', ...screen(() => import('@/features/settings/FriendsScreen')) },
+      {
+        // Where a scanned friend QR lands. Behind auth like everything else: a
+        // connection needs an account at both ends.
+        path: 'friend/:code',
+        ...screen(() => import('@/features/settings/FriendLinkScreen')),
+      },
       {
         // A real 404. This used to render Today, which quietly turned a
         // mistyped or stale link into "your session is missing".

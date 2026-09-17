@@ -1,4 +1,4 @@
-import { limit, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { limit, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
 import type { Session } from '@/domain/sessions';
 import { toSession } from '../converters/session';
@@ -74,4 +74,48 @@ export function useSessionHistory(pageSize: number = HISTORY_PAGE_SIZE): Session
   }
 
   return { ...snapshot, isPending: false, loadMore };
+}
+
+export type DaySessionsState = {
+  sessions: readonly Session[];
+  isPending: boolean;
+};
+
+const DAY_PENDING: DaySessionsState = { sessions: [], isPending: true };
+
+/**
+ * The sessions performed on one day.
+ *
+ * One equality filter on `performedOn`, which runs on Firestore's automatic
+ * single-field index. Used by the calendar when a square is opened: the grid
+ * itself runs off the day index and touches no session document, but a list of
+ * what you actually did needs their names.
+ */
+export function useSessionsOn(dateKey: string | null): DaySessionsState {
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+  const key = uid === null || dateKey === null ? null : `${uid}/${dateKey}`;
+
+  const [snapshot, setSnapshot] = useState<{ key: string; sessions: Session[] } | null>(null);
+
+  useEffect(() => {
+    if (uid === null || dateKey === null || key === null) return;
+
+    return onSnapshot(
+      query(paths.sessions(uid), where('performedOn', '==', dateKey)),
+      (next) => {
+        const sessions = next.docs
+          .map((document) => toSession(document.id, document.data()))
+          .filter((session) => session.status !== 'active');
+        sessions.sort((a, b) => (a.startedAt ?? '').localeCompare(b.startedAt ?? ''));
+        setSnapshot({ key, sessions });
+      },
+      () => {
+        setSnapshot({ key, sessions: [] });
+      },
+    );
+  }, [uid, dateKey, key]);
+
+  if (key === null || snapshot?.key !== key) return DAY_PENDING;
+  return { sessions: snapshot.sessions, isPending: false };
 }

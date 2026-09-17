@@ -15,7 +15,10 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '@/data/hooks/useAuth';
 import { useProfile } from '@/data/hooks/useProfile';
+import { useSchedule } from '@/data/hooks/useSchedule';
+import { useInbox } from '@/data/hooks/useSharedWorkout';
 import { useWorkouts } from '@/data/hooks/useWorkouts';
+import { unschedule } from '@/data/mutations/schedule';
 import { archiveWorkout, createWorkout, newId } from '@/data/mutations/workouts';
 import {
   estimateWorkoutSeconds,
@@ -59,6 +62,8 @@ export default function WorkoutsScreen() {
   const uid = user?.uid ?? null;
   const { workouts, isPending } = useWorkouts();
   const { profile } = useProfile();
+  const { shares: inbox } = useInbox();
+  const { schedule } = useSchedule();
   const navigate = useNavigate();
 
   const [creating, setCreating] = useState(false);
@@ -66,6 +71,20 @@ export default function WorkoutsScreen() {
 
   const active = workouts.filter((workout) => workout.archivedAt === null);
   const archived = workouts.filter((workout) => workout.archivedAt !== null);
+
+  /**
+   * Archiving also takes the workout off the week.
+   *
+   * Today filters unknown ids anyway, so this is not what keeps a phantom row
+   * off the screen — it is what stops the schedule editor showing a day that
+   * is secretly empty. Restoring does not put it back: where it belongs in the
+   * week is a decision, not a side effect.
+   */
+  const archive = (workoutId: string): void => {
+    if (uid === null) return;
+    void archiveWorkout(uid, workoutId, true);
+    void unschedule(uid, schedule, workoutId);
+  };
 
   const create = (): void => {
     const trimmed = name.trim();
@@ -167,7 +186,7 @@ export default function WorkoutsScreen() {
                   color="gray"
                   aria-label={`Archive ${workout.name}`}
                   onClick={() => {
-                    if (uid !== null) void archiveWorkout(uid, workout.id, true);
+                    archive(workout.id);
                   }}
                 >
                   <ArchiveIcon />
@@ -177,6 +196,60 @@ export default function WorkoutsScreen() {
           );
         })
       )}
+
+      {/*
+        Workouts a friend addressed to this account (IDEAS §4.1). Nothing has
+        been written here — the row is a link to the same public share screen a
+        pasted URL opens, and importing is still a decision made there.
+      */}
+      {inbox.length === 0 ? null : (
+        <Stack gap="xs">
+          <Text size="sm" fw={600}>
+            Sent to you
+          </Text>
+          {inbox.map((share) => (
+            <Card
+              key={share.shareId}
+              withBorder
+              padding="sm"
+              component={Link}
+              to={`/share/${share.shareId}`}
+              data-testid="inbox-row"
+              style={{ textDecoration: 'none', color: 'inherit' }}
+            >
+              <Group justify="space-between" wrap="nowrap">
+                <Text fw={600} truncate>
+                  {share.body.name === '' ? 'Untitled workout' : share.body.name}
+                </Text>
+                <Badge variant="light" color="sky" size="sm" style={{ flexShrink: 0 }}>
+                  v{String(share.versionNumber)}
+                </Badge>
+              </Group>
+            </Card>
+          ))}
+        </Stack>
+      )}
+
+      <Card withBorder padding="sm">
+        <Group justify="space-between" wrap="nowrap" gap="sm">
+          <Stack gap={2} style={{ minWidth: 0 }}>
+            <Text size="sm" fw={600}>
+              Somewhere to start
+            </Text>
+            <Text size="xs" c="dimmed">
+              Ready-made workouts to copy, and a weekly plan to put them on.
+            </Text>
+          </Stack>
+          <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
+            <Button component={Link} to="/library" size="compact-sm" variant="default">
+              Library
+            </Button>
+            <Button component={Link} to="/schedule" size="compact-sm" variant="default">
+              Plan
+            </Button>
+          </Group>
+        </Group>
+      </Card>
 
       {archived.length > 0 ? (
         <Stack gap="xs">

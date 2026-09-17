@@ -149,6 +149,29 @@ test.describe('history delete', () => {
     await page.goto('/history');
     await expect(page.getByTestId('history-session')).toHaveCount(2);
     await page.getByRole('tab', { name: 'Records' }).click();
+    // The open tab is in the URL, so Back out of a lift's history returns here.
+    await expect(page).toHaveURL(/[?&]tab=records/u);
+
+    // Into one lift's history and back out again. Both ways home work: the
+    // browser's own Back, because the tab is in the URL, and the link on the
+    // page for anyone who got there from somewhere else.
+    await page.getByTestId('record-row').first().click();
+    // `getByLabel`, not a role: the arrow is a button when there is history to
+    // pop and a link when the screen was opened cold.
+    await expect(page.getByLabel('Back')).toBeVisible();
+
+    await page.goBack();
+    await expect(page.getByRole('tab', { name: 'Records' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await page.getByTestId('record-row').first().click();
+    await page.getByLabel('Back').click();
+    await expect(page.getByRole('tab', { name: 'Records' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     await expect(page.getByTestId('record-row')).toHaveCount(1);
     await expect(page.getByTestId('record-row')).toContainText('225 lb');
 

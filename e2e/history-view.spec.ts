@@ -80,6 +80,11 @@ test.describe('history view', () => {
     await expect(page.getByRole('heading', { name: WORKOUT })).toBeVisible();
 
     // Each set carries the effort it was logged with, not one figure for both.
+    // The arrow beside the title, which is the only way back that is not the
+    // browser's own — this screen is reached from three places. Matched by
+    // label rather than role: it is a button when there is history to pop.
+    await expect(page.getByLabel('Back')).toBeVisible();
+
     const entry = page.getByTestId('session-entry').first();
     await expect(entry).toContainText('185 lb × 8 @ 2 RIR');
     await expect(entry).toContainText('185 lb × 8 @ 1 RIR');

@@ -1,0 +1,190 @@
+/* Five stops, matching the muscle map's scale so one shading language runs
+   through the app. Stop 0 is "nothing here", drawn as a hairline rather than a
+   colour, because an empty day is not a light workout.
+
+   Its own class, not part of a layout one: the month grid, the year grid and
+   the legend are three different layouts that share one palette, and a token
+   defined on a layout is a token that disappears the next time one of them is
+   reshaped. Every view that paints a stop carries this alongside. */
+.stops {
+  --stop-0: transparent;
+  --stop-1: light-dark(var(--mantine-color-sky-2), var(--mantine-color-sky-9));
+  --stop-2: light-dark(var(--mantine-color-sky-4), var(--mantine-color-sky-8));
+  --stop-3: light-dark(var(--mantine-color-sky-6), var(--mantine-color-sky-6));
+  --stop-4: light-dark(var(--mantine-color-sky-8), var(--mantine-color-sky-4));
+  --empty-border: light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+}
+
+/* One month, Monday-first. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.weekday {
+  text-align: center;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  padding-bottom: 2px;
+}
+
+/* A square cell whatever the column width works out to, so the month does not
+   turn into a grid of letterboxes on a wide screen. */
+.day {
+  all: unset;
+  box-sizing: border-box;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: var(--mantine-radius-sm);
+  border: 1px solid var(--empty-border);
+  font-size: var(--mantine-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--mantine-color-dimmed);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* Outside the month. Kept in the flow so the weekday columns stay aligned. */
+.blank {
+  aspect-ratio: 1;
+}
+
+.day[data-stop='1'] {
+  background: var(--stop-1);
+}
+
+.day[data-stop='2'] {
+  background: var(--stop-2);
+}
+
+.day[data-stop='3'] {
+  background: var(--stop-3);
+}
+
+.day[data-stop='4'] {
+  background: var(--stop-4);
+}
+
+/* A trained day carries a filled square, so the number has to survive being
+   drawn on top of the darkest stop. */
+.day:not([data-stop='0']) {
+  border-color: transparent;
+  color: var(--mantine-color-text);
+  font-weight: 600;
+}
+
+.day[data-today] {
+  outline: 2px solid var(--mantine-color-anchor);
+  outline-offset: 1px;
+}
+
+.day[aria-pressed='true'] {
+  outline: 2px solid var(--mantine-color-text);
+  outline-offset: 1px;
+}
+
+.day:focus-visible {
+  outline: 2px solid var(--mantine-color-anchor);
+  outline-offset: 2px;
+}
+
+/* The contribution graph, stacked in two bands so a year fits a phone without
+   scrolling. Each band is its own week-column grid; the column count comes
+   from the component, since the two halves can differ by one. */
+.year {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.band {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Month names over the column each one starts in. */
+.bandMonths {
+  display: grid;
+  gap: 2px;
+  height: 13px;
+  font-size: 10px;
+  line-height: 13px;
+  color: var(--mantine-color-dimmed);
+}
+
+/* Allowed to overflow its column: a three-letter month is wider than a week. */
+.bandMonth {
+  overflow: visible;
+  white-space: nowrap;
+}
+
+/* Seven rows deep, Monday at the top, filled column by column. */
+.bandDays {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, auto);
+  gap: 2px;
+}
+
+.dot {
+  /* Square at whatever width the column works out to. */
+  aspect-ratio: 1;
+  min-width: 0;
+  border-radius: 2px;
+  border: 1px solid var(--empty-border);
+}
+
+/* The legend swatches keep a fixed size — they are not part of the grid. */
+.swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  border: 1px solid var(--empty-border);
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+}
+
+.swatches {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.dot[data-stop='1'],
+.swatch[data-stop='1'] {
+  background: var(--stop-1);
+  border-color: transparent;
+}
+
+.dot[data-stop='2'],
+.swatch[data-stop='2'] {
+  background: var(--stop-2);
+  border-color: transparent;
+}
+
+.dot[data-stop='3'],
+.swatch[data-stop='3'] {
+  background: var(--stop-3);
+  border-color: transparent;
+}
+
+.dot[data-stop='4'],
+.swatch[data-stop='4'] {
+  background: var(--stop-4);
+  border-color: transparent;
+}
+
+/* Past the end of a short month: holds the column, paints nothing. */
+.dot[data-outside] {
+  border-color: transparent;
+  background: none;
+}

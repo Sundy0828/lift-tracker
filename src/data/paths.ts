@@ -40,6 +40,20 @@ export const paths = {
   /** Tier 2 plus the PR record: one document per exercise. */
   exerciseStat: (uid: string, exerciseId: string): DocumentReference =>
     doc(db, 'users', uid, 'exerciseStats', exerciseId),
+  /** The day index: one document a year, so a calendar reads no sessions. */
+  dayIndexes: (uid: string): CollectionReference => collection(db, 'users', uid, 'calendar'),
+  dayIndex: (uid: string, year: string): DocumentReference =>
+    doc(db, 'users', uid, 'calendar', year),
+  /** The weekly schedule: one document, holding references only (§IDEAS 1.1). */
+  schedule: (uid: string): DocumentReference => doc(db, 'users', uid, 'schedule', 'weekly'),
+  /** Public code index. Readable one code at a time, never listable (§2.9). */
+  friendCode: (code: string): DocumentReference => doc(db, 'friendCodes', code),
+  /** Requests and friendships, one document per pair of accounts. */
+  friendEdges: (): CollectionReference => collection(db, 'friendEdges'),
+  friendEdge: (pairId: string): DocumentReference => doc(db, 'friendEdges', pairId),
+  /** The seeded global library: world-readable, written only by the seed script. */
+  library: (): CollectionReference => collection(db, 'library'),
+  libraryWorkout: (id: string): DocumentReference => doc(db, 'library', id),
   sharedWorkouts: (): CollectionReference => collection(db, 'sharedWorkouts'),
   /** Public-read, owner-only-write: the one collection outside `users/` (§2.9). */
   sharedWorkout: (shareId: string): DocumentReference => doc(db, 'sharedWorkouts', shareId),

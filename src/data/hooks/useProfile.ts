@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { UserProfile } from '@/domain/types';
 import { DEFAULT_PROFILE } from '@/domain/types';
 import { parseProfile } from '../converters/profile';
+import { ensureFriendCode } from '../mutations/friends';
 import { initializeProfile } from '../mutations/profile';
 import { paths } from '../paths';
 import { releaseSync, reportSync } from '../sync';
@@ -56,9 +57,11 @@ export function useProfile(): ProfileState {
         fromCache: next.metadata.fromCache,
       });
 
+      const profile = parseProfile(next.data());
+
       setSnapshot({
         uid,
-        profile: parseProfile(next.data()),
+        profile,
         isPending: false,
         hasPendingWrites: next.metadata.hasPendingWrites,
         fromCache: next.metadata.fromCache,
@@ -67,6 +70,13 @@ export function useProfile(): ProfileState {
       if (!next.exists() && !seeded) {
         seeded = true;
         void initializeProfile(uid);
+      }
+
+      // Only from a server snapshot: the cache can report no code while the
+      // account already has one, and minting a second would strand the first
+      // in a public collection nothing can list to find it again.
+      if (!next.metadata.fromCache) {
+        void ensureFriendCode(uid, profile.friendCode, profile.displayName);
       }
     });
 

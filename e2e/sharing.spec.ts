@@ -273,3 +273,69 @@ test.describe('sharing', () => {
     }
   });
 });
+
+/**
+ * The friend path, end to end across two accounts (IDEAS §4.1).
+ *
+ * One test rather than several, deliberately: the interesting part is the
+ * whole chain — a code resolves, a request needs accepting, and only then can
+ * a share be addressed — and each step is worthless to assert without the ones
+ * before it. Three collections and two sets of rules are exercised on the way.
+ */
+test.describe('friends', () => {
+  test('a code becomes a request, a request becomes a connection, and a workout can be sent', async ({
+    page,
+    context,
+  }) => {
+    const bob = await otherAccount(context, 'friend-bob');
+
+    // --- Bob's code. It exists already; nobody creates one.
+    await bob.goto('/friends');
+    const code = ((await bob.getByTestId('friend-code').textContent()) ?? '').trim();
+    expect(code, 'an account should have a code without asking for one').toMatch(
+      /^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/u,
+    );
+    await expect(bob.getByTestId('friend-qr')).toBeVisible();
+
+    // --- Alice asks. A request, not a connection: nothing appears in either
+    // list until Bob agrees.
+    await signUp(page, 'friend-alice');
+    await page.goto('/friends');
+    await page.getByRole('textbox', { name: 'Add someone by their code' }).fill(code);
+    await page.getByRole('button', { name: 'Send request' }).click();
+    // Exact: a plain string matches case-insensitive substrings, and the
+    // empty-state line reads "Nobody connected yet".
+    await expect(page.getByText('Waiting on them', { exact: true })).toBeVisible();
+    await expect(page.getByText('Connected', { exact: true })).toHaveCount(0);
+
+    // --- Bob accepts.
+    await bob.reload();
+    await expect(bob.getByTestId('friend-request')).toHaveCount(1);
+    await bob.getByRole('button', { name: 'Accept' }).click();
+    await expect(bob.getByText('Connected', { exact: true })).toBeVisible();
+    await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+
+    // --- Alice sends a workout to Bob.
+    await createWorkout(page, 'SENT PUSH');
+    await addExercise(page, 'barbell bench press');
+    await publish(page);
+    await page.getByRole('button', { name: 'Share' }).click();
+    await page.getByRole('combobox', { name: 'Send it to' }).click();
+    await page.getByRole('option').first().click();
+    await page.getByRole('button', { name: /^Send v/u }).click();
+
+    // --- It lands on Bob's Workouts screen, without him being sent a URL.
+    await bob.goto('/workouts');
+    const inbox = bob.getByTestId('inbox-row');
+    await expect(inbox).toHaveCount(1);
+    await expect(inbox).toContainText('SENT PUSH');
+
+    // Opening it is the same public share screen a pasted link opens, so the
+    // import decision is still made there rather than on his behalf.
+    await inbox.click();
+    await expect(bob.getByRole('heading', { name: 'SENT PUSH' })).toBeVisible();
+    await expect(bob.getByText('Add this to your workouts')).toBeVisible();
+
+    await bob.context().close();
+  });
+});

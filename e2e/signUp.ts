@@ -13,6 +13,11 @@ import { expect, type Page } from '@playwright/test';
  * verification URL and visits it, the same way a person clicking the mail
  * would. Flipping `emailVerified` through the emulator's admin endpoint would
  * be shorter and would test nothing: the link is the part that can break.
+ *
+ * The first-run walkthrough is dismissed on the way through, because every
+ * account created here is a first run and a modal over Today would block the
+ * screen each spec is actually about. `onboarding.spec.ts` is the one that
+ * asserts it appears at all.
  */
 
 const AUTH_EMULATOR = 'http://127.0.0.1:9099';
@@ -74,7 +79,22 @@ export async function signUp(page: Page, prefix: string): Promise<string> {
   // The screen polls on its own, but asking directly makes the test wait on an
   // action rather than on a timer.
   await page.getByRole('button', { name: 'I’ve confirmed it' }).click();
+  await dismissTour(page);
   await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
 
   return email;
+}
+
+/** Closes the first-run walkthrough, if it is up. */
+export async function dismissTour(page: Page): Promise<void> {
+  const tour = page.getByTestId('tour');
+  // Waited for rather than probed: it opens once the profile has loaded, which
+  // is a Firestore round trip after Today first paints.
+  await tour.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => undefined);
+  if (!(await tour.isVisible())) return;
+
+  await tour.getByRole('button', { name: 'Skip' }).click();
+  // The dialog itself, not just its body: what blocks the next click is the
+  // overlay, and it outlives the content by a transition.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 }

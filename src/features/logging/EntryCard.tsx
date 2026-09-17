@@ -1,6 +1,6 @@
 import { Badge, Button, Card, Group, Stack, Text, Textarea } from '@mantine/core';
 import { useState } from 'react';
-import type { ExerciseStats, Overlay, WorkoutStats } from '@/domain/overlay';
+import type { ExerciseStats, Overlay, OverlayScope, WorkoutStats } from '@/domain/overlay';
 import type { DeltaChip } from '@/domain/strength';
 import { isComparable, previousSetAt, resolveOverlay, workedPosition } from '@/domain/overlay';
 import type { LoggedSet, SessionEntry } from '@/domain/sessions';
@@ -38,6 +38,8 @@ type Props = SetHandlers & {
   exerciseStats: ExerciseStats | null;
   /** The workout being performed, so tier 1 can be labelled with its name. */
   workoutName: string;
+  /** How far the overlay may look for last time's numbers. */
+  overlayScope: OverlayScope;
   onNotes: (entryKey: string, notes: string) => void;
   /** Only offered for ad-hoc rows: a prescribed row belongs to the workout. */
   onRemoveEntry: ((entryKey: string) => void) | null;
@@ -99,6 +101,7 @@ export function EntryCard({
   workoutStats,
   exerciseStats,
   workoutName,
+  overlayScope,
   onNotes,
   onRemoveEntry,
   onShowExercise,
@@ -106,7 +109,7 @@ export function EntryCard({
 }: Props) {
   const key = keyOf(entry);
   const [notes, setNotes] = useState<string | null>(null);
-  const overlay = resolveOverlay(entry, workoutStats, exerciseStats);
+  const overlay = resolveOverlay(entry, workoutStats, exerciseStats, overlayScope);
   // Named in the off-target note, so "under 8-12" reads on its own.
   const repRangeLabel =
     entry.prescription === null ? null : formatRange(entry.prescription.repRange);

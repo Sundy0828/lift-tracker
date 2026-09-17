@@ -14,10 +14,13 @@ import {
   deleteDoc,
   getDocFromServer,
   getDocsFromServer,
+  query,
+  where,
   writeBatch,
   type CollectionReference,
   type DocumentReference,
 } from 'firebase/firestore';
+import { parseProfile } from '../converters/profile';
 import { markAccountDeleted } from '../deletedAccounts';
 import { googleProvider } from '../firebase';
 import { db } from '../firestore';
@@ -233,6 +236,43 @@ async function deleteTrainingData(uid: string): Promise<void> {
   await deleteRefs(await refsIn(paths.customExercises(uid)));
   await deleteRefs(await refsIn(paths.workoutStats(uid)));
   await deleteRefs(await refsIn(paths.exerciseStats(uid)));
+  // The schedule points at workouts that have just gone, the day index
+  // describes sessions that have just gone, and the friends list is data about
+  // other people held under this account.
+  await deleteRefs([paths.schedule(uid)]);
+  await deleteRefs(await refsIn(paths.dayIndexes(uid)));
+  await deleteFriendEdges(uid);
+  await releaseFriendCode(uid);
+}
+
+/**
+ * Removes every connection this account is part of.
+ *
+ * They live outside `users/{uid}` so deleting the account document does not
+ * reach them — and an edge that outlived one of its two accounts is a name in
+ * somebody else's friend list that resolves to nothing.
+ */
+async function deleteFriendEdges(uid: string): Promise<void> {
+  const snapshot = await getDocsFromServer(
+    query(paths.friendEdges(), where('uids', 'array-contains', uid)),
+  );
+  await deleteRefs(snapshot.docs.map((document) => document.ref));
+}
+
+/**
+ * Takes this account's code out of the public index.
+ *
+ * It lives outside `users/{uid}`, so deleting the account document does not
+ * reach it — and a code left behind would resolve to a uid that no longer
+ * exists, which is a share addressed into a void.
+ *
+ * Read from the server, like everything else here: a stale cache would skip
+ * the one document nothing can clean up later.
+ */
+async function releaseFriendCode(uid: string): Promise<void> {
+  const profile = parseProfile((await getDocFromServer(paths.user(uid))).data());
+  if (profile.friendCode === null) return;
+  await deleteDoc(paths.friendCode(profile.friendCode));
 }
 
 /**

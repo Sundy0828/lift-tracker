@@ -34,9 +34,21 @@ const STOP_CLASSES: Record<HeatStop, string> = {
   4: classes.stop4,
 };
 
+/**
+ * Where the numbers came from.
+ *
+ * `logged` is what you did: warmups and skipped sets contribute nothing, so
+ * skipping a set genuinely shades that muscle lighter. `planned` is the
+ * prescription, which by definition does not move when a session goes
+ * differently. The caption says which, because the two look identical.
+ */
+export type VolumeBasis = 'logged' | 'planned';
+
 export type MuscleMapProps = {
   /** Fine-grained volume; rolled up internally for the diagram. */
   volume: VolumeByMuscle;
+  /** What the numbers count. Changes only the caption. */
+  basis?: VolumeBasis;
   /** Band thresholds — session or weekly (see domain/volume). */
   stops?: readonly [number, number, number, number];
   /** A noun phrase for what the numbers cover, e.g. "this workout". */
@@ -49,6 +61,7 @@ export type MuscleMapProps = {
 
 export function MuscleMap({
   volume,
+  basis = 'logged',
   stops = WEEKLY_STOPS,
   scopeLabel,
   withTable = true,
@@ -101,7 +114,10 @@ export function MuscleMap({
           >
             <Table.Caption>
               Set-equivalents in {scopeLabel} — {formatSetEquivalents(total)} total. A set counts 1
-              for each primary muscle and 0.5 for each secondary.
+              for each primary muscle and 0.5 for each secondary.{' '}
+              {basis === 'logged'
+                ? 'Warmups and skipped sets count for nothing, so skipping shades a muscle lighter.'
+                : 'Counted from the prescription, so it does not move when a set is skipped.'}
             </Table.Caption>
             <Table.Thead>
               <Table.Tr>

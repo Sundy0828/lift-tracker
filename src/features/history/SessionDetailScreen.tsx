@@ -8,11 +8,12 @@ import {
   Skeleton,
   Stack,
   Text,
-  Title,
+  Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
+import { BackTitle } from '@/app/BackTitle';
 import { MuscleMap } from '@/components/MuscleMap';
 import { useOnline } from '@/app/useOnline';
 import { useAuth } from '@/data/hooks/useAuth';
@@ -22,6 +23,7 @@ import { useSession } from '@/data/hooks/useSession';
 import { useWorkoutVersion } from '@/data/hooks/useWorkout';
 import { deleteSession } from '@/data/mutations/sessions';
 import {
+  averageRestSeconds,
   formatDayLabel,
   formatElapsed,
   formatSetCount,
@@ -31,12 +33,12 @@ import {
 } from '@/domain/history';
 import type { LoggedSet, Session, SessionEntry } from '@/domain/sessions';
 import { workedSets } from '@/domain/sessions';
-import { adjustedE1rm, bestSet, formatE1rm, formatSet } from '@/domain/strength';
+import { adjustedE1rm, bestSet, describeE1rm, formatE1rm, formatSet } from '@/domain/strength';
 import type { Unit } from '@/domain/types';
 import { formatWeight } from '@/domain/units';
 import { SESSION_STOPS, sessionVolume } from '@/domain/volume';
 import type { ExerciseSlot } from '@/domain/workouts';
-import { formatPrescription, formatRestSeconds } from '@/domain/workouts';
+import { formatDuration, formatPrescription, formatRestSeconds } from '@/domain/workouts';
 
 /**
  * One past session, rendered against the workout definition it was actually
@@ -93,8 +95,16 @@ function buildRows(slots: readonly ExerciseSlot[] | null, entries: readonly Sess
   return rows;
 }
 
+/**
+ * One logged set, and the rest that followed it.
+ *
+ * The rest belongs to the set that earned it, so it is shown on that row —
+ * which also explains why the last set of an exercise usually has none: the
+ * timer was ended by moving on rather than by another set.
+ */
 function SetLine({ set, displayUnit }: { set: LoggedSet; displayUnit: Unit }) {
   const score = adjustedE1rm(set);
+  const rest = set.restTakenSeconds;
 
   return (
     <Group justify="space-between" wrap="nowrap" gap="xs">
@@ -112,10 +122,24 @@ function SetLine({ set, displayUnit }: { set: LoggedSet; displayUnit: Unit }) {
             skipped
           </Badge>
         ) : null}
+        {rest === null || rest <= 0 ? null : (
+          <Tooltip label="Rest taken after this set" withArrow openDelay={300}>
+            <Text
+              size="xs"
+              c="dimmed"
+              data-testid="set-rest"
+              style={{ fontVariantNumeric: 'tabular-nums' }}
+            >
+              rest {formatDuration(rest)}
+            </Text>
+          </Tooltip>
+        )}
         {score === null ? null : (
-          <Text size="xs" c="dimmed" style={{ fontVariantNumeric: 'tabular-nums' }}>
-            {formatE1rm(score, displayUnit)}
-          </Text>
+          <Tooltip label={describeE1rm(set, displayUnit) ?? ''} withArrow multiline w={260}>
+            <Text size="xs" c="dimmed" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              e1RM {formatE1rm(score, displayUnit)}
+            </Text>
+          </Tooltip>
         )}
       </Group>
     </Group>
@@ -141,6 +165,9 @@ function EntryRow({ row, displayUnit }: { row: Row; displayUnit: Unit }) {
   const sets = entry === null ? [] : entry.sets;
   const done = workedSets(sets);
   const best = bestSet(sets);
+  // Only from rests the timer actually measured, so a session logged with it
+  // off says nothing rather than claiming a rest of zero.
+  const averageRest = averageRestSeconds(sets);
 
   return (
     <Card withBorder padding="sm" data-testid="session-entry">
@@ -191,11 +218,18 @@ function EntryRow({ row, displayUnit }: { row: Row; displayUnit: Unit }) {
             No sets recorded.
           </Text>
         ) : (
-          <Stack gap={2}>
-            {sets.map((set) => (
-              <SetLine key={set.setIndex} set={set} displayUnit={displayUnit} />
-            ))}
-          </Stack>
+          <>
+            <Stack gap={2}>
+              {sets.map((set) => (
+                <SetLine key={set.setIndex} set={set} displayUnit={displayUnit} />
+              ))}
+            </Stack>
+            {averageRest === null ? null : (
+              <Text size="xs" c="dimmed">
+                Rested {formatDuration(averageRest)} between sets on average
+              </Text>
+            )}
+          </>
         )}
 
         {best === null ? null : (
@@ -311,7 +345,7 @@ export default function SessionDetailScreen() {
   if (session === null) {
     return (
       <Stack>
-        <Title order={2}>Session</Title>
+        <BackTitle to="/history" title="Session" />
         <Card withBorder>
           <Text size="sm" c="dimmed">
             {notFound ? 'This session no longer exists.' : 'Loading this session…'}
@@ -335,7 +369,7 @@ export default function SessionDetailScreen() {
   return (
     <Stack>
       <Stack gap={2}>
-        <Title order={2}>{title}</Title>
+        <BackTitle to="/history" title={title} />
         <Text size="sm" c="dimmed">
           {formatDayLabel(session.performedOn)}
           {seconds === null ? '' : ` · ${formatElapsed(seconds)}`}
@@ -351,6 +385,21 @@ export default function SessionDetailScreen() {
             {formatVolumeLoad(totals.volumeLoadKg, displayUnit)}
           </Badge>
         ) : null}
+        {totals.restSeconds === 0 ? null : (
+          <Tooltip
+            label={
+              totals.averageRestSeconds === null
+                ? 'Rest measured by the timer'
+                : `Averaging ${formatDuration(totals.averageRestSeconds)} between sets`
+            }
+            withArrow
+            openDelay={300}
+          >
+            <Badge variant="light" color="gray" data-testid="session-rest">
+              {formatElapsed(totals.restSeconds)} resting
+            </Badge>
+          </Tooltip>
+        )}
         {session.bodyweight === null ? null : (
           <Badge variant="light" color="gray">
             BW {formatWeight(session.bodyweight, displayUnit)}

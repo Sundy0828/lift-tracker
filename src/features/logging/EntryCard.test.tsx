@@ -3,7 +3,7 @@
 import { MantineProvider } from '@mantine/core';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { ExerciseStats, WorkoutStats } from '@/domain/overlay';
+import type { ExerciseStats, OverlayScope, WorkoutStats } from '@/domain/overlay';
 import { buildStatsUpdate } from '@/domain/overlay';
 import type { LoggedSet, Session, SessionEntry } from '@/domain/sessions';
 import { emptySet, newSession } from '@/domain/sessions';
@@ -93,7 +93,11 @@ function setup(
   workoutStats: WorkoutStats | null,
   exerciseStats: ExerciseStats | null,
   workoutName = 'PUSH',
-  options: { handedness?: Handedness; onShowExercise?: (exerciseId: string) => void } = {},
+  options: {
+    handedness?: Handedness;
+    onShowExercise?: (exerciseId: string) => void;
+    overlayScope?: OverlayScope;
+  } = {},
 ) {
   const props = handlers();
   const rendered = render(
@@ -105,6 +109,7 @@ function setup(
         workoutStats={workoutStats}
         exerciseStats={exerciseStats}
         workoutName={workoutName}
+        overlayScope={options.overlayScope ?? 'any'}
         onShowExercise={options.onShowExercise}
         {...props}
       />
@@ -192,6 +197,35 @@ describe('tier 2 — the same lift on another day', () => {
 
     expect(screen.getByText('205 lb × 6 @ 1 RIR')).toBeInTheDocument();
     expect(screen.queryAllByTestId('set-delta')).toHaveLength(0);
+  });
+});
+
+describe('the same-workout scope', () => {
+  /** Pushups on Monday PULL are not a comparison for pushups on Saturday ARMS. */
+  const anywhere = history('push', 'PUSH', [set(0, 205, 6, 1)]).exerciseStats.get('bench') ?? null;
+  const ownHistory = history('push', 'PUSH', [set(0, 185, 8, 2), set(1, 185, 7, 1)]);
+
+  it('puts no number from another workout on a set row', () => {
+    setup(todaysEntry(), null, anywhere, 'CHEST + DELTS', { overlayScope: 'same-workout' });
+
+    expect(screen.queryByText('205 lb × 6 @ 1 RIR')).not.toBeInTheDocument();
+    expect(screen.queryByText('reference')).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId('set-delta')).toHaveLength(0);
+  });
+
+  it('says the lift is known but this workout is not', () => {
+    setup(todaysEntry(), null, anywhere, 'CHEST + DELTS', { overlayScope: 'same-workout' });
+    expect(
+      screen.getByText('First time on this workout — a different day is not a comparison.'),
+    ).toBeInTheDocument();
+  });
+
+  it('still overlays this workout own history', () => {
+    setup(todaysEntry(), ownHistory.workoutStats, anywhere, 'PUSH', {
+      overlayScope: 'same-workout',
+    });
+    expect(screen.getByText('Last')).toBeInTheDocument();
+    expect(screen.getAllByTestId('set-delta').length).toBeGreaterThan(0);
   });
 });
 

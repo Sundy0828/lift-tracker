@@ -20,6 +20,7 @@ import type { Weight } from '@/domain/types';
 import { toSession } from '../converters/session';
 import { db } from '../firestore';
 import { paths } from '../paths';
+import { indexSession, reindexSession, unindexSession } from './dayIndex';
 
 /**
  * Session writes. None but `completeSession` and `deleteSession` are awaited by the UI: Firestore
@@ -32,6 +33,11 @@ import { paths } from '../paths';
  * would show no start time and sort last in history — and when a set was
  * finished is a client fact anyway. `updatedAt` keeps the server timestamp:
  * nothing renders or sorts on it, so its local null is harmless.
+ *
+ * **Every write that changes whether or when a session happened also moves the
+ * day index, in the same batch** (see `mutations/dayIndex`). An index row that
+ * outlived its session, or a completion that landed without one, is what that
+ * pairing rules out.
  */
 
 export function newSessionId(): string {
@@ -118,16 +124,18 @@ export function saveBodyweight(
  * a workout logged the next morning belongs to the night before, and nobody
  * should have to answer a date question to start lifting.
  */
-export function savePerformedOn(
-  uid: string,
-  sessionId: string,
-  performedOn: string,
-): Promise<void> {
-  return setDoc(
-    paths.session(uid, sessionId),
+export function savePerformedOn(uid: string, session: Session, performedOn: string): Promise<void> {
+  const batch = writeBatch(db);
+  batch.set(
+    paths.session(uid, session.id),
     { performedOn, updatedAt: serverTimestamp() },
     { merge: true },
   );
+  // Only a finished session has an index row, and today only a running one can
+  // be re-dated — so this is usually a no-op. It is here so that stays true if
+  // the date ever becomes editable from history.
+  reindexSession(batch, uid, { ...session, performedOn }, session.performedOn);
+  return batch.commit();
 }
 
 export type CompleteSessionResult = { prs: readonly PersonalRecord[]; completedAt: string };
@@ -266,6 +274,8 @@ export async function completeSession(
     batch.set(paths.exerciseStat(uid, exerciseId), { ...stats, updatedAt: serverTimestamp() });
   }
 
+  indexSession(batch, uid, { ...session, status: 'completed', completedAt });
+
   await settleCompletion(uid, session.id, batch.commit());
   return { prs: update.prs, completedAt };
 }
@@ -286,11 +296,17 @@ export function abandonSession(uid: string, session: Session): Promise<void> {
     return deleteDoc(paths.session(uid, session.id));
   }
 
-  return setDoc(
+  const completedAt = new Date().toISOString();
+  const batch = writeBatch(db);
+  batch.set(
     paths.session(uid, session.id),
     { status: 'abandoned', completedAt: Timestamp.now(), updatedAt: serverTimestamp() },
     { merge: true },
   );
+  // An abandoned session still shows in history and still counts towards a
+  // week's sets, so the calendar has to know about it too.
+  indexSession(batch, uid, { ...session, status: 'abandoned', completedAt });
+  return batch.commit();
 }
 
 /** What a query returns from the server, without the session being deleted. */
@@ -319,6 +335,7 @@ export async function deleteSession(uid: string, session: Session): Promise<void
 
   const batch = writeBatch(db);
   batch.delete(paths.session(uid, session.id));
+  unindexSession(batch, uid, session.id, session.performedOn);
 
   // An abandoned session wrote no stats, so its delete needs no rebuild.
   if (session.status === 'completed') {

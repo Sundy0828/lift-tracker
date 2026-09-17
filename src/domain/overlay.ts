@@ -25,9 +25,9 @@ import { occurrenceKey, parsePrescription } from './workouts';
  *   nothing else.
  * - **Tier 2, anywhere.** `exerciseStats/{exerciseId}`, shown subordinate and
  *   labelled with the workout it came from. A useful hint at what to load, and
- *   explicitly *not* a progression comparison — no delta chip.
- * - **Tier 3, NEW.** Neither exists. That is the whole new-exercise rule; no
- *   separate bookkeeping.
+ *   explicitly *not* a progression comparison — no delta chip. `OverlayScope`
+ *   turns it off for callers that must never show a cross-workout number.
+ * - **Tier 3, NEW.** Neither exists, or tier 2 was refused by the scope.
  *
  * Both tiers are plain document reads keyed by id, so opening a session
  * populates the whole overlay from one document plus a read per unmatched
@@ -83,7 +83,18 @@ export type ExerciseStats = {
 export type Overlay =
   | { kind: 'same-workout'; data: LastPerformance }
   | { kind: 'other-workout'; data: LastPerformance }
-  | { kind: 'new' };
+  /** No history to compare. `doneElsewhere` means tier 2 was refused, not absent. */
+  | { kind: 'new'; doneElsewhere: boolean };
+
+/**
+ * How far the overlay may look for a previous performance.
+ *
+ * `same-workout` stops at tier 1. Pushups on Monday PULL and pushups on
+ * Saturday ARMS sit at different points of different sessions, so last time's
+ * numbers from the other day are not the numbers to beat — they read as a
+ * comparison and are not one.
+ */
+export type OverlayScope = 'same-workout' | 'any';
 
 /**
  * What the overlay needs to identify a row. Both an `ExerciseSlot` and a
@@ -103,6 +114,7 @@ export function resolveOverlay(
   target: OverlayTarget,
   workoutStats: WorkoutStats | null,
   exerciseStats: ExerciseStats | null,
+  scope: OverlayScope = 'any',
 ): Overlay {
   const key = occurrenceKey(target.exerciseId, target.occurrenceIndex);
   const sameWorkout = workoutStats?.byOccurrence[key];
@@ -110,7 +122,8 @@ export function resolveOverlay(
     return { kind: 'same-workout', data: sameWorkout };
   }
 
-  if (exerciseStats !== null && workingSets(exerciseStats.lastSets).length > 0) {
+  const elsewhere = exerciseStats !== null && workingSets(exerciseStats.lastSets).length > 0;
+  if (elsewhere && scope === 'any') {
     return {
       kind: 'other-workout',
       data: {
@@ -124,7 +137,7 @@ export function resolveOverlay(
     };
   }
 
-  return { kind: 'new' };
+  return { kind: 'new', doneElsewhere: elsewhere };
 }
 
 /**

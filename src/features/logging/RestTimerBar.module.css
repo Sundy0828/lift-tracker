@@ -21,3 +21,18 @@
 .bar[data-over] .clock {
   color: light-dark(var(--mantine-color-orange-8), var(--mantine-color-orange-4));
 }
+
+/* The countdown as it appears inside the instructions panel, which is drawn
+   above the bar. */
+.pill {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: var(--mantine-radius-sm);
+  font-variant-numeric: tabular-nums;
+  color: light-dark(var(--mantine-color-sky-8), var(--mantine-color-sky-4));
+  background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+}
+
+.pill[data-over] {
+  color: light-dark(var(--mantine-color-orange-8), var(--mantine-color-orange-4));
+}

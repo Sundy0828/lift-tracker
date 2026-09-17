@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { Exercise } from './exercises';
 import {
+  MAX_LIVE_SHARES,
   alignForMerge,
   applyMerge,
   buildSharePayload,
   changeKey,
+  isAtShareCap,
+  liveShares,
+  liveSharesByAge,
+  oldestLiveShare,
+  sharesRemaining,
   customExerciseIds,
   describeNewExercises,
   importAsNewBody,
@@ -54,6 +60,7 @@ function share(over: Partial<SharedWorkout> = {}): SharedWorkout {
   return {
     shareId: 'share1',
     ownerUid: 'sender',
+    toUid: null,
     sourceWorkoutId: 'w-sender',
     versionNumber: 1,
     body: body('PUSH', []),
@@ -540,5 +547,72 @@ describe('applyMerge', () => {
 
     const { changes } = diffWorkout(target, merged);
     expect(new Set(changes.map((change) => changeKey(change)))).toEqual(selected);
+  });
+});
+
+describe('the soft cap on live shares', () => {
+  /** `n` shares, oldest first, every one of them live. */
+  function many(count: number) {
+    return Array.from({ length: count }, (_, index) =>
+      share({ shareId: `s${String(index)}`, createdAt: `2026-01-${String(index + 10)}` }),
+    );
+  }
+
+  it('counts only the shares that are still open', () => {
+    const shares = [...many(3), share({ shareId: 'off', revoked: true })];
+    expect(liveShares(shares)).toHaveLength(3);
+  });
+
+  it('is not reached below the limit, and is reached at it', () => {
+    expect(isAtShareCap(many(MAX_LIVE_SHARES - 1))).toBe(false);
+    expect(isAtShareCap(many(MAX_LIVE_SHARES))).toBe(true);
+  });
+
+  it('does not count a revoked share against the limit', () => {
+    const shares = [
+      ...many(MAX_LIVE_SHARES - 1),
+      share({ shareId: 'off', revoked: true, createdAt: '2020-01-01' }),
+    ];
+    expect(isAtShareCap(shares)).toBe(false);
+  });
+
+  it('offers the oldest live share as the one to turn off', () => {
+    const shares = [
+      share({ shareId: 'new', createdAt: '2026-05-01' }),
+      share({ shareId: 'old', createdAt: '2026-01-01' }),
+      share({ shareId: 'older-but-off', createdAt: '2020-01-01', revoked: true }),
+    ];
+    expect(oldestLiveShare(shares)?.shareId).toBe('old');
+  });
+
+  it('offers nothing when everything is already turned off', () => {
+    expect(oldestLiveShare([share({ revoked: true })])).toBeNull();
+    expect(oldestLiveShare([])).toBeNull();
+  });
+
+  it('orders the open links oldest first, which is what is offered to revoke', () => {
+    const shares = [
+      share({ shareId: 'mid', createdAt: '2026-03-01' }),
+      share({ shareId: 'new', createdAt: '2026-05-01' }),
+      share({ shareId: 'old', createdAt: '2026-01-01' }),
+      share({ shareId: 'off', createdAt: '2020-01-01', revoked: true }),
+    ];
+    expect(liveSharesByAge(shares).map((one) => one.shareId)).toEqual(['old', 'mid', 'new']);
+  });
+
+  it('reports the room left, and never goes negative', () => {
+    expect(sharesRemaining([])).toBe(MAX_LIVE_SHARES);
+    expect(sharesRemaining(many(3))).toBe(MAX_LIVE_SHARES - 3);
+    expect(sharesRemaining(many(MAX_LIVE_SHARES + 5))).toBe(0);
+  });
+
+  it('frees room the moment a link is turned off', () => {
+    const full = many(MAX_LIVE_SHARES);
+    expect(sharesRemaining(full)).toBe(0);
+
+    const [first, ...rest] = full;
+    const afterRevoke = [{ ...(first ?? share()), revoked: true }, ...rest];
+    expect(sharesRemaining(afterRevoke)).toBe(1);
+    expect(isAtShareCap(afterRevoke)).toBe(false);
   });
 });

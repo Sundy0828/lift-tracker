@@ -18,6 +18,7 @@ import {
   previewMerge,
 } from '@/domain/sharing';
 import { describeChange } from '@/domain/workoutDiff';
+import { PANEL_DROPDOWN_Z_INDEX } from '@/features/exercises/Panel';
 import { describeShareError } from './shareError';
 
 type Mode = 'new' | 'merge';
@@ -118,6 +119,7 @@ export function ImportPanel({ shared }: { shared: SharedWorkout }) {
         <Text fw={600}>Add this to your workouts</Text>
 
         <Select
+          comboboxProps={{ zIndex: PANEL_DROPDOWN_Z_INDEX }}
           label="How"
           data={[
             { value: 'new', label: 'Import as a new workout' },
@@ -143,6 +145,7 @@ export function ImportPanel({ shared }: { shared: SharedWorkout }) {
               session&rsquo;s numbers still show up under every exercise you keep.
             </Text>
             <Select
+              comboboxProps={{ zIndex: PANEL_DROPDOWN_Z_INDEX }}
               label="Merge into"
               placeholder={live.length === 0 ? 'No workouts yet' : 'Pick a workout'}
               data={live.map((workout) => ({

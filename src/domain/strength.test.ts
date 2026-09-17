@@ -7,6 +7,7 @@ import {
   bestSet,
   compareSets,
   describeComparison,
+  describeE1rm,
   e1rm,
   epley,
   formatE1rm,
@@ -257,5 +258,40 @@ describe('formatting', () => {
   it('renders an e1RM in the display unit', () => {
     expect(formatE1rm(100, 'kg')).toBe('100 kg');
     expect(formatE1rm(100, 'lb')).toBe('220.5 lb');
+  });
+});
+
+describe('describeE1rm', () => {
+  it('says the number is an estimated single, not a weight anybody lifted', () => {
+    // The case that prompted it: a record of 61.3 lb from a set of 40 × 15.
+    const text = describeE1rm({ weight: { value: 40, unit: 'lb' }, reps: 15, rir: 1 }, 'lb');
+
+    expect(text).toContain('40 lb × 15 @ 1 RIR');
+    expect(text).toContain('estimates a single of 61.3 lb');
+  });
+
+  it('explains that reps in reserve are counted as reps', () => {
+    const text = describeE1rm({ weight: { value: 40, unit: 'lb' }, reps: 15, rir: 1 }, 'lb');
+    expect(text).toContain('scores as 16');
+  });
+
+  it('says nothing about reserve when there was none', () => {
+    const text = describeE1rm({ weight: { value: 225, unit: 'lb' }, reps: 3, rir: 0 }, 'lb');
+    expect(text).not.toContain('reserve');
+  });
+
+  it('warns that a long set reads high', () => {
+    const long = describeE1rm({ weight: { value: 40, unit: 'lb' }, reps: 15, rir: 1 }, 'lb');
+    const short = describeE1rm({ weight: { value: 225, unit: 'lb' }, reps: 5, rir: 1 }, 'lb');
+
+    expect(long).toContain('reads high');
+    expect(short).not.toContain('reads high');
+  });
+
+  it('has nothing to say about a set that cannot be scored', () => {
+    expect(describeE1rm({ weight: null, reps: 8, rir: 1 }, 'lb')).toBeNull();
+    expect(
+      describeE1rm({ weight: { value: 40, unit: 'lb' }, reps: null, rir: 1 }, 'lb'),
+    ).toBeNull();
   });
 });

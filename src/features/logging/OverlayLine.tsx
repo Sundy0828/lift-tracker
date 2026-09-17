@@ -60,7 +60,9 @@ export function OverlayLine({ overlay, workoutName }: Props) {
   if (overlay.kind === 'new') {
     return (
       <Text size="xs" c="dimmed">
-        First time — no history to compare against yet.
+        {overlay.doneElsewhere
+          ? 'First time on this workout — a different day is not a comparison.'
+          : 'First time — no history to compare against yet.'}
       </Text>
     );
   }

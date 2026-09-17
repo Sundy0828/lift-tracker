@@ -1,4 +1,4 @@
-import { Badge, Card, Group, Stack, Text } from '@mantine/core';
+import { Badge, Card, Group, Stack, Text, UnstyledButton } from '@mantine/core';
 import type { WorkoutBody } from '@/domain/workouts';
 import {
   exerciseSlots,
@@ -22,8 +22,18 @@ import {
  * lookup. That is what makes a share render at all: a recipient cannot resolve
  * the sender's custom-exercise ids, and the denormalised name is the point
  * (§2.9).
+ *
+ * `onShowExercise` makes each row tappable. The library passes it, because
+ * every id there is a bundled catalog one and so always resolves; a share does
+ * not, because a sender's custom exercise would open an empty panel.
  */
-export function WorkoutPreview({ body }: { body: WorkoutBody }) {
+export function WorkoutPreview({
+  body,
+  onShowExercise,
+}: {
+  body: WorkoutBody;
+  onShowExercise?: ((exerciseId: string) => void) | undefined;
+}) {
   const exercises = exerciseSlots(body.slots);
 
   return (
@@ -51,19 +61,40 @@ export function WorkoutPreview({ body }: { body: WorkoutBody }) {
         ) : (
           <Card key={slot.slotId} withBorder padding="xs">
             <Stack gap={2}>
-              <Group gap="xs" wrap="nowrap">
-                <Text size="sm" fw={600} truncate style={{ minWidth: 0 }}>
-                  {slot.exerciseName}
-                </Text>
-                {slot.supersetGroup === null ? null : (
-                  <Badge size="xs" variant="light" color="sky">
-                    circuit
-                  </Badge>
+              <Group gap="xs" wrap="nowrap" justify="space-between">
+                <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+                  <Text size="sm" fw={600} truncate style={{ minWidth: 0 }}>
+                    {slot.exerciseName}
+                  </Text>
+                  {slot.supersetGroup === null ? null : (
+                    <Badge size="xs" variant="light" color="sky">
+                      circuit
+                    </Badge>
+                  )}
+                </Group>
+                {onShowExercise === undefined ? null : (
+                  <UnstyledButton
+                    aria-label={`How to do ${slot.exerciseName}`}
+                    data-testid="preview-how-to"
+                    style={{ flexShrink: 0 }}
+                    onClick={() => {
+                      onShowExercise(slot.exerciseId);
+                    }}
+                  >
+                    <Badge size="xs" variant="light" color="gray" style={{ cursor: 'pointer' }}>
+                      How to
+                    </Badge>
+                  </UnstyledButton>
                 )}
               </Group>
               <Text size="xs" c="dimmed">
                 {formatPrescription(slot.prescription)}
               </Text>
+              {slot.prescription.loadHint === null ? null : (
+                <Text size="xs" c="dimmed">
+                  {slot.prescription.loadHint}
+                </Text>
+              )}
               {slot.notes === '' ? null : (
                 <Text size="xs" c="dimmed" fs="italic">
                   {slot.notes}

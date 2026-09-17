@@ -3,8 +3,8 @@ import { signUp } from './signUp';
 
 /**
  * The rest timer as it is used mid-workout: read the instructions without
- * leaving the session, watch a rest run over rather than vanish, and end it
- * by hand. Also covers the rest starting on a fully entered set, starting one
+ * leaving the session or losing sight of the countdown, watch a rest run over
+ * rather than vanish, and end it by hand. Also covers the rest starting on a fully entered set, starting one
  * manually with the automatic one off, and the nudge for a load and a rep
  * count entered the wrong way round.
  *
@@ -115,6 +115,25 @@ async function storedRests(page: Page, uid: string): Promise<number[]> {
   return rests;
 }
 
+/**
+ * The stacking order an element actually resolves to.
+ *
+ * Read from the nearest ancestor-or-self carrying a numeric `z-index`, because
+ * the value that decides what covers what is set on Mantine's modal root
+ * rather than on the dialog element the test can select.
+ */
+async function stackingOf(page: Page, selector: string): Promise<number> {
+  return page.evaluate((query) => {
+    let node: Element | null = document.querySelector(query);
+    while (node !== null) {
+      const value = Number.parseInt(getComputedStyle(node).zIndex, 10);
+      if (!Number.isNaN(value)) return value;
+      node = node.parentElement;
+    }
+    return 0;
+  }, selector);
+}
+
 test.describe('the rest timer', () => {
   test('instructions open over the session, and the rest keeps running past zero', async ({
     page,
@@ -136,12 +155,20 @@ test.describe('the rest timer', () => {
     await expect(drawer).toBeVisible();
     await expect(drawer.getByText(EXERCISE).first()).toBeVisible();
 
-    // The session is still underneath, and the timer is still on top of the
-    // drawer and still counting. Neither is what a navigation would do.
+    // The session is still underneath, which is not what a navigation would do.
     await expect(page.getByRole('heading', { name: WORKOUT })).toBeVisible();
-    await expect(clock).toBeVisible();
+
+    // The panel is drawn **above** the pinned bar, so the instructions are not
+    // covered by the timer; the countdown comes with it into the header, so it
+    // is still readable and still counting.
+    expect(await stackingOf(page, '[role="dialog"]')).toBeGreaterThan(
+      await stackingOf(page, '[role="timer"]'),
+    );
+
+    const pill = drawer.getByTestId('rest-pill');
+    await expect(pill).toBeVisible();
     await expect
-      .poll(async () => clock.textContent(), {
+      .poll(async () => pill.textContent(), {
         message: 'the rest should keep counting while the instructions are open',
       })
       .not.toBe(beforeDrawer);

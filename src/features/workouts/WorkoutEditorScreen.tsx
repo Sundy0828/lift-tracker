@@ -358,6 +358,7 @@ export default function WorkoutEditorScreen() {
             {/* Session bands, not weekly: one workout is one session's work,
                 and with no plan above it nothing here knows your week. */}
             <MuscleMap
+              basis="planned"
               volume={volume}
               stops={SESSION_STOPS}
               scopeLabel="this workout"

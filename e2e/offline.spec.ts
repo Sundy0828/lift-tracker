@@ -132,6 +132,17 @@ async function serverSessions(page: Page, uid: string): Promise<Document[]> {
 }
 
 /** Every weight in a session document, in the order they were logged. */
+/** The day-index documents on the server, one per year. */
+async function serverCalendar(page: Page, uid: string): Promise<Document[]> {
+  const response = await page.request.get(
+    `${FIRESTORE_EMULATOR}/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${uid}/calendar`,
+    { headers: { Authorization: 'Bearer owner' } },
+  );
+  expect(response.ok(), 'the firestore emulator should answer for the calendar').toBe(true);
+  const { documents = [] } = (await response.json()) as { documents?: Document[] };
+  return documents;
+}
+
 function loggedWeights(session: Document): number[] {
   const weights: number[] = [];
   for (const entry of session.fields?.['entries']?.arrayValue?.values ?? []) {
@@ -208,20 +219,41 @@ test.describe('offline', () => {
     await context.setOffline(false);
     await expect(page.getByText(/^Offline/u)).toBeHidden();
 
+    // Polled on the **status**, not on the document existing. Starting the
+    // session queued a create with `status: 'active'` and finishing it queued a
+    // second write on the same document, so a poll that stopped at "a session
+    // reached the server" would routinely read the first one and call the
+    // completion lost.
     await expect
-      .poll(async () => (await serverSessions(page, uid)).length, {
-        timeout: 30_000,
-        message: 'the queued session should reach the emulator once reconnected',
-      })
-      .toBe(1);
+      .poll(
+        async () => {
+          const [document] = await serverSessions(page, uid);
+          return document?.fields?.['status']?.stringValue ?? null;
+        },
+        {
+          timeout: 30_000,
+          message: 'the queued completion should reach the emulator once reconnected',
+        },
+      )
+      .toBe('completed');
 
-    const [synced] = await serverSessions(page, uid);
+    const sessions = await serverSessions(page, uid);
+    expect(sessions).toHaveLength(1);
+
+    const [synced] = sessions;
     expect(synced).toBeTruthy();
-    expect(synced?.fields?.['status']?.stringValue).toBe('completed');
     expect(synced?.fields?.['workoutName']?.stringValue).toBe(WORKOUT);
     // The sets themselves, not just the document: an empty session that synced
     // would satisfy every assertion above it.
     expect(loggedWeights(synced ?? { name: '' })).toEqual([100, 100, 95]);
+
+    // The calendar's day index moves in the same batch as the completion, so
+    // it has to have arrived too — a session on the server with no index row
+    // would be a calendar that quietly disagrees with history.
+    const calendar = await serverCalendar(page, uid);
+    expect(calendar, 'the day index should have synced alongside the session').toHaveLength(1);
+    const rows = calendar[0]?.fields?.['sessions']?.mapValue?.fields ?? {};
+    expect(Object.keys(rows)).toHaveLength(1);
 
     // The session is still readable in the app at the same URL it was logged at.
     await page.goto(sessionUrl);

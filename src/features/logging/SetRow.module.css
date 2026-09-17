@@ -5,7 +5,9 @@
 .row {
   --delta-up: light-dark(var(--mantine-color-teal-8), var(--mantine-color-teal-4));
   --delta-down: light-dark(var(--mantine-color-red-8), var(--mantine-color-red-4));
-  --delta-same: var(--mantine-color-dimmed);
+  /* Blue, not grey: "nothing moved" is a result, and a result you can read at
+     arm's length. Grey made it look like the row had not been judged yet. */
+  --delta-same: light-dark(var(--mantine-color-blue-7), var(--mantine-color-blue-4));
   --under: light-dark(var(--mantine-color-red-7), var(--mantine-color-red-5));
   --on-target: light-dark(var(--mantine-color-teal-7), var(--mantine-color-teal-5));
   /* A set missing a number will not reach your history at all, which is worse
@@ -256,11 +258,15 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The sign carries the meaning; the colour only reinforces it. */
+/* The sign carries the meaning; the colour only reinforces it. A tinted pill
+   rather than coloured text, so the verdict is readable across a gym. */
 .delta {
   font-size: var(--mantine-font-size-xs);
-  font-weight: 600;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: var(--mantine-radius-sm);
+  background: color-mix(in srgb, currentColor 16%, transparent);
 }
 
 /* The note names the range it missed or the number it lacks, so every one of

@@ -8,20 +8,21 @@ service cloud.firestore {
     }
 
     /**
-     * Shared workouts (§2.9) — the one collection outside users/{uid}, and so
-     * the only place these rules carry real weight.
+     * Shared workouts (§2.9) — the one collection outside users/{uid} that any
+     * account writes, and so the place these rules carry real weight.
      *
      * `get` and `list` are split on purpose. A share is public to fetch **one
      * at a time**, because an unguessable link is the whole access control; it
      * is never listable by a stranger, or the collection would be a directory
-     * of everyone's workouts. Listing is confined to your own shares, which is
-     * also what makes the owner's inventory query legal: rules are evaluated
-     * per candidate document, so a query that does not constrain `ownerUid` is
-     * refused outright rather than quietly filtered.
+     * of everyone's workouts. Listing is confined to the shares you own and
+     * the shares addressed to you — rules are evaluated per candidate
+     * document, so a query that constrains neither is refused outright rather
+     * than quietly filtered.
      *
      * `ownerUid` is immutable after create. Without that, an owner could hand
      * a share to someone else — or a third party could take one — and every
-     * check below keys on it.
+     * check below keys on it. `toUid` is frozen for the same reason: it
+     * decides who else may list the document.
      */
     match /sharedWorkouts/{shareId} {
       function isOwner() {
@@ -33,14 +34,22 @@ service cloud.firestore {
       // Revoked means gone. The owner keeps reading theirs so they can see
       // what they have turned off.
       allow get: if resource.data.revoked == false || isOwner();
-      allow list: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+      // `get()` with a default rather than a field read: a share written
+      // before recipients existed has no `toUid`, and reading a missing field
+      // denies the whole query — which would break the owner's own inventory.
+      allow list: if request.auth != null
+                  && (request.auth.uid == resource.data.ownerUid
+                      || request.auth.uid == resource.data.get('toUid', ''));
 
       // A share you create is yours and starts live. Claiming someone else's
-      // uid is the attack this closes.
+      // uid is the attack this closes. A recipient is optional, and naming one
+      // grants that account nothing but the right to list this document.
       allow create: if request.auth != null
                     && request.resource.data.ownerUid is string
                     && request.auth.uid == request.resource.data.ownerUid
-                    && request.resource.data.revoked == false;
+                    && request.resource.data.revoked == false
+                    && (request.resource.data.get('toUid', null) == null
+                        || request.resource.data.toUid is string);
 
       // A live share is frozen. Only the owner, and only the revoked flag:
       // every other field stays as it was created.
@@ -49,6 +58,123 @@ service cloud.firestore {
                     && request.resource.data.revoked is bool;
 
       allow delete: if isOwner();
+    }
+
+    /**
+     * Friend codes (IDEAS §4.1) — a public index from a short code to a uid.
+     *
+     * It is deliberately the *smallest* public document in the app: a uid and
+     * a chosen name, nothing about training. That is what keeps the friend
+     * feature out of the rules — there is no projection of your history for a
+     * friend to read, so there is no rule describing one.
+     *
+     * `get` without `list`, the same split as a share: a code is fetched by
+     * someone who was told it, and the collection is never a directory.
+     * Holding a code is claimed with `create`, which Firestore only allows on
+     * a document that does not exist — so two accounts cannot hold one.
+     */
+    match /friendCodes/{code} {
+      function ownsCode() {
+        return request.auth != null
+               && resource.data.uid is string
+               && request.auth.uid == resource.data.uid;
+      }
+
+      allow get: if request.auth != null;
+      allow list: if false;
+
+      allow create: if request.auth != null
+                    && request.resource.data.uid is string
+                    && request.auth.uid == request.resource.data.uid
+                    && request.resource.data.displayName is string
+                    && request.resource.data.displayName.size() <= 40;
+
+      // Only the name, and only by the holder. The uid is what every lookup
+      // trusts, so it never moves.
+      allow update: if ownsCode()
+                    && request.resource.data.uid == resource.data.uid
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
+                    && request.resource.data.displayName is string
+                    && request.resource.data.displayName.size() <= 40;
+
+      allow delete: if ownsCode();
+    }
+
+    /**
+     * Friend connections (IDEAS §4.1) — request and friendship in one document.
+     *
+     * **One document per pair**, keyed by the two uids sorted and joined. That
+     * id is what stops a pair holding two mirror-image requests: whoever asks
+     * second is refused by `create`, reads what is there, and accepts it.
+     *
+     * Readable and listable only by the two accounts named in `uids`, which is
+     * also what makes the app's one query legal — an `array-contains` on your
+     * own uid. A query that did not constrain it is refused outright rather
+     * than quietly filtered.
+     *
+     * **Accepting is the only update, and only the recipient may make it.**
+     * The pair, the direction and the sender's name are all fixed at create,
+     * so an accepted connection cannot be turned into one you never agreed to.
+     */
+    match /friendEdges/{pairId} {
+      function pair() {
+        return resource.data.uids;
+      }
+
+      function isParty() {
+        return request.auth != null && request.auth.uid in pair();
+      }
+
+      allow get, list: if isParty();
+
+      // A request is sent by you, to somebody else, and starts pending. `uids`
+      // has to name exactly the two of you, or the document would be readable
+      // by an account that is not part of it.
+      allow create: if request.auth != null
+                    && request.resource.data.fromUid == request.auth.uid
+                    && request.resource.data.toUid is string
+                    && request.resource.data.toUid != request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.uids.size() == 2
+                    && request.resource.data.uids.hasOnly([
+                         request.resource.data.fromUid,
+                         request.resource.data.toUid
+                       ])
+                    && request.resource.data.uids.hasAll([
+                         request.resource.data.fromUid,
+                         request.resource.data.toUid
+                       ])
+                    && request.resource.data.fromName is string
+                    && request.resource.data.fromName.size() <= 40;
+
+      // Only the side that was asked, only from pending, and only the three
+      // fields an acceptance moves.
+      allow update: if request.auth != null
+                    && request.auth.uid == resource.data.toUid
+                    && resource.data.status == 'pending'
+                    && request.resource.data.status == 'accepted'
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'toName', 'respondedAt'])
+                    && request.resource.data.toName is string
+                    && request.resource.data.toName.size() <= 40;
+
+      // Declining, withdrawing and unfriending are the same write. Either side
+      // may make it: a connection nobody can leave is not one to enter.
+      allow delete: if isParty();
+    }
+
+    /**
+     * The seeded global library (IDEAS §3) — read by everyone, written by
+     * nobody.
+     *
+     * There is no submission path, so there is no client write to allow. The
+     * collection is filled by `scripts/seed-library.ts` through the Admin SDK,
+     * which bypasses these rules; a client that tries to publish into it is
+     * refused here rather than in the UI.
+     */
+    match /library/{workoutId} {
+      allow get, list: if true;
+      allow write: if false;
     }
 
     match /{document=**} {

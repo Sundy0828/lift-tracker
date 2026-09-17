@@ -25,6 +25,7 @@
     "icons": "node scripts/generate-icons.ts",
     "catalog:update": "node --import ./scripts/ts-resolve.mjs scripts/build-catalog.ts",
     "seed": "node --import ./scripts/ts-resolve.mjs scripts/seed-history.ts",
+    "seed:library": "node --import ./scripts/ts-resolve.mjs scripts/seed-library.ts",
     "prune-users": "node --import ./scripts/ts-resolve.mjs scripts/prune-users.ts",
     "verify-user": "node --import ./scripts/ts-resolve.mjs scripts/verify-user.ts"
   },
@@ -40,6 +41,7 @@
     "@tanstack/react-virtual": "^3.14.10",
     "dayjs": "^1.11.23",
     "firebase": "^12.18.0",
+    "qrcode-generator": "^2.0.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.1"

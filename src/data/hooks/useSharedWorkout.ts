@@ -135,3 +135,40 @@ export function useShares(): SharesState {
   if (uid === null || snapshot?.uid !== uid) return SHARES_PENDING;
   return snapshot;
 }
+
+/**
+ * Shares somebody sent *to* this account (IDEAS §4.1).
+ *
+ * The mirror of `useShares`, and legal for the same reason: the rules allow
+ * listing shares whose `toUid` is yours, so the filter is not a convenience —
+ * without it the query is refused. A revoked one is dropped, because to a
+ * recipient revoked means gone.
+ */
+export function useInbox(): SharesState {
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+
+  useEffect(() => {
+    if (uid === null) return;
+
+    return onSnapshot(
+      query(paths.sharedWorkouts(), where('toUid', '==', uid)),
+      (next) => {
+        const shares: SharedWorkout[] = [];
+        for (const document of next.docs) {
+          const parsed = toSharedWorkout(document.id, document.data());
+          if (parsed !== null && !parsed.revoked) shares.push(parsed);
+        }
+        shares.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+        setSnapshot({ uid, shares, isPending: false });
+      },
+      () => {
+        setSnapshot({ uid, shares: [], isPending: false });
+      },
+    );
+  }, [uid]);
+
+  if (uid === null || snapshot?.uid !== uid) return SHARES_PENDING;
+  return snapshot;
+}

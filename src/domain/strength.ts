@@ -213,6 +213,38 @@ export function formatE1rm(e1rmKg: number, displayUnit: Unit): string {
   return `${formatNumber(fromKg(e1rmKg, displayUnit))} ${displayUnit}`;
 }
 
+/**
+ * Where an estimate came from, for a tooltip beside the number.
+ *
+ * A record reading `61.3 lb` next to a set of `40 lb × 15` looks wrong until
+ * you know it is an estimated **single**, not a weight anybody lifted — and
+ * that reps in reserve are counted as reps you had left. Both are stated here
+ * rather than left to be worked out.
+ *
+ * A long set gets a caveat as well. Epley is a straight line through a curve,
+ * and past about ten reps it reads high; a record set at fifteen reps is a
+ * real number but a soft one.
+ */
+export function describeE1rm(set: SetLoad, displayUnit: Unit): string | null {
+  const score = adjustedE1rm(set);
+  if (score === null || set.reps === null) return null;
+
+  const effective = set.reps + (set.rir ?? 0);
+  const reserve =
+    set.rir === null || set.rir === 0
+      ? ''
+      : ` Reps in reserve count as reps you had left, so it scores as ${String(effective)}.`;
+  const rough =
+    effective > LONG_SET_REPS
+      ? ' Past about ten reps the estimate reads high, so treat a long set as a rough one.'
+      : '';
+
+  return `${formatSet(set, displayUnit)} estimates a single of ${formatE1rm(score, displayUnit)}.${reserve}${rough}`;
+}
+
+/** Past this many effective reps, Epley drifts high enough to be worth saying. */
+const LONG_SET_REPS = 12;
+
 /** Renders `185 × 9 @ 2 RIR`, omitting the parts that were not recorded. */
 export function formatSet(
   set: SetLoad,

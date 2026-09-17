@@ -85,6 +85,19 @@ registerRoute(
  */
 const REST_TAG = 'rest-timer';
 
+/**
+ * Seconds between repeats, and how many there are.
+ *
+ * One buzz through a jacket pocket, with music playing, is missed often enough
+ * to be worth saying twice — and a notification that keeps going is worse than
+ * one that is missed, so it stops after three.
+ */
+const REPEAT_MS = 25_000;
+const REPEAT_LIMIT = 3;
+
+/** Long-short-long, so it is not another message alert. */
+const VIBRATE = [180, 90, 180, 90, 300];
+
 let restTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function cancelRest(): void {
@@ -92,37 +105,56 @@ function cancelRest(): void {
   restTimeout = null;
 }
 
-async function fireRestNotification(body: string): Promise<void> {
-  restTimeout = null;
-
-  // Any previous rest notification is dismissed first. Re-using the tag alone
-  // would replace it *silently*, and a rest timer that ends without a buzz has
-  // failed at its only job.
+async function closeRestNotifications(): Promise<void> {
   for (const stale of await self.registration.getNotifications({ tag: REST_TAG })) {
     stale.close();
   }
+}
+
+/**
+ * Shows the notification, and queues the next repeat.
+ *
+ * Any previous one is dismissed first: re-using the tag alone replaces it
+ * *silently*, and a rest timer that ends without a buzz has failed at its only
+ * job. `renotify` says the same thing to the browsers that honour it.
+ *
+ * `requireInteraction` keeps it on screen until it is dealt with, which is the
+ * point — the case this exists for is a phone that is not being looked at.
+ */
+async function fireRestNotification(body: string, round: number): Promise<void> {
+  restTimeout = null;
+  await closeRestNotifications();
 
   // A pocket buzz with nothing to look at is worse than nothing, so the
   // notification names what is next.
-  await self.registration.showNotification('Rest is over', {
+  await self.registration.showNotification(round === 0 ? 'Rest is over' : 'Still resting', {
     body,
     tag: REST_TAG,
-    requireInteraction: false,
+    requireInteraction: true,
+    renotify: true,
+    silent: false,
+    vibrate: VIBRATE,
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
+    actions: [{ action: 'done', title: 'Done resting' }],
     data: { url: '/' },
-  });
+  } as NotificationOptions);
+
+  if (round + 1 >= REPEAT_LIMIT) return;
+  restTimeout = setTimeout(() => {
+    void fireRestNotification(body, round + 1);
+  }, REPEAT_MS);
 }
 
 function scheduleRest(endsAt: number, body: string): void {
   cancelRest();
   const delay = endsAt - Date.now();
   if (delay <= 0) {
-    void fireRestNotification(body);
+    void fireRestNotification(body, 0);
     return;
   }
   restTimeout = setTimeout(() => {
-    void fireRestNotification(body);
+    void fireRestNotification(body, 0);
   }, delay);
 }
 
@@ -162,13 +194,24 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
       return;
     case 'REST_TIMER_CANCEL':
       cancelRest();
+      // A rest dealt with in the app must not leave a sticky notification
+      // behind it; `requireInteraction` means nothing else would clear it.
+      void closeRestNotifications();
       return;
   }
 });
 
-/** Tapping the notification comes back to the session, not to a new tab. */
+/**
+ * Tapping the notification comes back to the session, not to a new tab.
+ *
+ * The Done action dismisses the rest without opening anything: the phone is in
+ * a pocket, the buzz has done its job, and the next thing is the bar not the
+ * app.
+ */
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
   event.notification.close();
+  cancelRest();
+  if (event.action === 'done') return;
 
   event.waitUntil(
     (async () => {

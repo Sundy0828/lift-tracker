@@ -98,6 +98,7 @@ export default function ExercisesScreen() {
     <div className={classes.screen}>
       <ExerciseBrowser
         title="Exercises"
+        backTo="/settings"
         onNew={() => {
           setEditing(null);
           setFormOpen(true);
