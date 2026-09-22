@@ -3,6 +3,14 @@ on:
   push:
     branches:
       - master
+    # Inert files. They change nothing that ships.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.env.example'
+      - '.gitignore'
+  # Deploys a commit that the filter above skipped.
+  workflow_dispatch:
 
 # A newer push to master makes an in-flight run pointless: it would verify and
 # deploy a commit that is already behind.

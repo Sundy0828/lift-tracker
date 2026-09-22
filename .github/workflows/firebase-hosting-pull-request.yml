@@ -1,6 +1,13 @@
 name: Deploy to Firebase Hosting on PR
 
-on: pull_request
+on:
+  pull_request:
+    # Inert files. They change nothing that ships.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.env.example'
+      - '.gitignore'
 
 permissions:
   checks: write

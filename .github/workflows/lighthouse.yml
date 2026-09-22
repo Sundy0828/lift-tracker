@@ -14,7 +14,45 @@ on:
   push:
     branches:
       - master
+    # It measures the production bundle. Test code and the security rules
+    # stay out of that bundle.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.env.example'
+      - '.gitignore'
+      - 'e2e/**'
+      - 'playwright.config.ts'
+      - 'tsconfig.e2e.json'
+      - '.env.e2e'
+      - 'rules/**'
+      - 'firestore.rules'
+      - 'firestore.indexes.json'
+      - 'vitest.rules.config.ts'
+      - 'tsconfig.rules.json'
+      - 'src/test/**'
+      - 'src/**/*.test.ts'
+      - 'src/**/*.test.tsx'
   pull_request:
+    # It measures the production bundle. Test code and the security rules
+    # stay out of that bundle.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.env.example'
+      - '.gitignore'
+      - 'e2e/**'
+      - 'playwright.config.ts'
+      - 'tsconfig.e2e.json'
+      - '.env.e2e'
+      - 'rules/**'
+      - 'firestore.rules'
+      - 'firestore.indexes.json'
+      - 'vitest.rules.config.ts'
+      - 'tsconfig.rules.json'
+      - 'src/test/**'
+      - 'src/**/*.test.ts'
+      - 'src/**/*.test.tsx'
 
 # A newer commit on the same ref makes an in-flight run pointless.
 concurrency:

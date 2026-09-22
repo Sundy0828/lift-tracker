@@ -17,7 +17,21 @@ on:
   push:
     branches:
       - master
+    # The suite reads no documentation and no performance budget.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.env.example'
+      - '.gitignore'
+      - 'lighthouserc.cjs'
   pull_request:
+    # The suite reads no documentation and no performance budget.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.env.example'
+      - '.gitignore'
+      - 'lighthouserc.cjs'
 
 # A newer commit on the same ref makes an in-flight run pointless.
 concurrency:
