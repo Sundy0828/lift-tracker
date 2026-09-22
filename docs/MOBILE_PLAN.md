@@ -35,13 +35,13 @@ TypeScript sit in `src/domain/` with no React and no Firebase imports. That code
 as-is. The UI (`src/features/`, ~14,300 lines, plus `src/app/`, ~1,400 lines) is written against
 Mantine in 66 files. That code does not move to mobile.
 
-| Layer                                                                  | Lines         | Depends on                         | Portable to React Native?     |
-| ---------------------------------------------------------------------- | ------------- | ---------------------------------- | ----------------------------- |
-| `src/domain/` (overlay, strength, volume, diff, sharing, tests)        | ~13,200       | nothing                            | Yes, unchanged                |
-| `src/catalog/` (bundled exercise data + search index)                  | ~400 + JSON   | nothing                            | Yes, unchanged                |
-| `src/data/` (Firebase converters, hooks, mutations)                    | ~3,800        | Firebase JS SDK, React             | Mostly, behind a small adapter |
-| `src/features/` (screens)                                              | ~14,300       | Mantine, dnd-kit, CSS modules      | No, rewrite per screen        |
-| `src/app/` (router, PWA shell, service worker)                         | ~1,400        | Vite PWA, Workbox, react-router    | No, web only                  |
+| Layer                                                           | Lines       | Depends on                      | Portable to React Native?      |
+| --------------------------------------------------------------- | ----------- | ------------------------------- | ------------------------------ |
+| `src/domain/` (overlay, strength, volume, diff, sharing, tests) | ~13,200     | nothing                         | Yes, unchanged                 |
+| `src/catalog/` (bundled exercise data + search index)           | ~400 + JSON | nothing                         | Yes, unchanged                 |
+| `src/data/` (Firebase converters, hooks, mutations)             | ~3,800      | Firebase JS SDK, React          | Mostly, behind a small adapter |
+| `src/features/` (screens)                                       | ~14,300     | Mantine, dnd-kit, CSS modules   | No, rewrite per screen         |
+| `src/app/` (router, PWA shell, service worker)                  | ~1,400      | Vite PWA, Workbox, react-router | No, web only                   |
 
 The web app already has a rest timer, a service-worker notification and dnd-kit reordering. The
 limits are the browser's, not the code's:
@@ -60,20 +60,20 @@ keep working on web through the change.
 
 ## 2. The options compared
 
-| | A. Port everything to React Native (Expo + react-native-web) | B. Monorepo: web / mobile / shared | C. Wrap the PWA with Capacitor |
-| --- | --- | --- | --- |
-| Web app | Rewritten in RN primitives, served through react-native-web | Untouched; current Vite PWA keeps shipping | Untouched |
-| Mobile app | Native iOS/Android from the same code | New Expo app, native UI | Current web UI inside a native shell |
-| Code reused | `domain`, `catalog`, most of `data` | `domain`, `catalog`, most of `data` | 100% |
-| Code thrown away | All ~15,700 lines of Mantine UI and PWA shell | None | None |
-| Code written | One new UI (all screens, once) | One new UI (all screens, once) | Plugin glue: timer, notifications, haptics |
-| Rest timer / notifications | Native | Native | Native (background task + local notification plugins) |
-| Drag and drop | Native gesture handler on mobile; same on web, feels less web-like | Native on mobile, dnd-kit stays on web | Still dnd-kit in a WebView; no improvement |
-| Web performance | Worse. react-native-web ships a large runtime; Mantine, CSS modules, Workbox and the Lighthouse budgets go away | Same as today | Same as today |
-| Look and feel | One UI on both. Web looks like a mobile app | Two UIs. Each matches its platform | One UI, web-styled |
-| Store presence | Yes | Yes | Yes, but Apple can reject thin WebView apps |
-| Ongoing cost | One codebase, one UI | Two UIs to keep in step; shared logic changes once | Lowest |
-| Rough effort | Largest: rebuild web and mobile at once | Large: build mobile only | Smallest: days to a couple of weeks |
+|                            | A. Port everything to React Native (Expo + react-native-web)                                                    | B. Monorepo: web / mobile / shared                 | C. Wrap the PWA with Capacitor                        |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------- |
+| Web app                    | Rewritten in RN primitives, served through react-native-web                                                     | Untouched; current Vite PWA keeps shipping         | Untouched                                             |
+| Mobile app                 | Native iOS/Android from the same code                                                                           | New Expo app, native UI                            | Current web UI inside a native shell                  |
+| Code reused                | `domain`, `catalog`, most of `data`                                                                             | `domain`, `catalog`, most of `data`                | 100%                                                  |
+| Code thrown away           | All ~15,700 lines of Mantine UI and PWA shell                                                                   | None                                               | None                                                  |
+| Code written               | One new UI (all screens, once)                                                                                  | One new UI (all screens, once)                     | Plugin glue: timer, notifications, haptics            |
+| Rest timer / notifications | Native                                                                                                          | Native                                             | Native (background task + local notification plugins) |
+| Drag and drop              | Native gesture handler on mobile; same on web, feels less web-like                                              | Native on mobile, dnd-kit stays on web             | Still dnd-kit in a WebView; no improvement            |
+| Web performance            | Worse. react-native-web ships a large runtime; Mantine, CSS modules, Workbox and the Lighthouse budgets go away | Same as today                                      | Same as today                                         |
+| Look and feel              | One UI on both. Web looks like a mobile app                                                                     | Two UIs. Each matches its platform                 | One UI, web-styled                                    |
+| Store presence             | Yes                                                                                                             | Yes                                                | Yes, but Apple can reject thin WebView apps           |
+| Ongoing cost               | One codebase, one UI                                                                                            | Two UIs to keep in step; shared logic changes once | Lowest                                                |
+| Rough effort               | Largest: rebuild web and mobile at once                                                                         | Large: build mobile only                           | Smallest: days to a couple of weeks                   |
 
 Option A does not save the UI work. Mantine has no React Native version, so every screen is
 rewritten either way. Option A also makes you rewrite and re-tune the web app you already have, and
@@ -125,14 +125,14 @@ lift-tracker/
   firebase.json, firestore.rules, rules/, scripts/   # stay at the root
 ```
 
-| Package | Contents | Platform code allowed | Notes |
-| --- | --- | --- | --- |
-| `domain` | types, overlay, strength, volume, workoutDiff, sharing, schedule, history, export | None | Moves unchanged. Keep the no-React, no-Firebase lint rule |
-| `catalog` | generated JSON, `index.ts`, refinements | None | `scripts/build-catalog.ts` writes here |
-| `data` | converters, mutations, hooks, sync state, auth hook | Firebase JS SDK, React | Firestore access stays confined here for both apps |
-| `data` adapters | `platform.ts` interface: `persistence`, `now()`, `scheduleAlarm()`, `cancelAlarm()`, `haptic()` | Web impl in `apps/web`, native impl in `apps/mobile` | Small. Only for things the browser and phone do differently |
-| `apps/web` | everything under `src/app` and `src/features`, `sw.ts`, `index.html`, Vite config, e2e | Web | Imports from `@lift/domain`, `@lift/data`. No behavior change |
-| `apps/mobile` | Expo screens, navigation, native timer, notifications, drag and drop | React Native | Imports the same packages |
+| Package         | Contents                                                                                        | Platform code allowed                                | Notes                                                         |
+| --------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------- |
+| `domain`        | types, overlay, strength, volume, workoutDiff, sharing, schedule, history, export               | None                                                 | Moves unchanged. Keep the no-React, no-Firebase lint rule     |
+| `catalog`       | generated JSON, `index.ts`, refinements                                                         | None                                                 | `scripts/build-catalog.ts` writes here                        |
+| `data`          | converters, mutations, hooks, sync state, auth hook                                             | Firebase JS SDK, React                               | Firestore access stays confined here for both apps            |
+| `data` adapters | `platform.ts` interface: `persistence`, `now()`, `scheduleAlarm()`, `cancelAlarm()`, `haptic()` | Web impl in `apps/web`, native impl in `apps/mobile` | Small. Only for things the browser and phone do differently   |
+| `apps/web`      | everything under `src/app` and `src/features`, `sw.ts`, `index.html`, Vite config, e2e          | Web                                                  | Imports from `@lift/domain`, `@lift/data`. No behavior change |
+| `apps/mobile`   | Expo screens, navigation, native timer, notifications, drag and drop                            | React Native                                         | Imports the same packages                                     |
 
 Rules that keep the two UIs cheap:
 
@@ -257,15 +257,15 @@ when back online. Web unchanged.
 
 ## 6. How each missing feature gets built on mobile
 
-| Feature | Web today | Mobile approach | Shared piece |
-| --- | --- | --- | --- |
-| Rest timer that survives background | `useRestCountdown` in the page, `sw.ts` holds the deadline as a fallback | Store `deadlineAt` (epoch ms) in session state. On resume, remaining = `deadlineAt - now()`. No interval runs in the background | `useRestCountdown` moves to `@lift/data`; only `now()` and `scheduleAlarm()` come from the platform adapter |
-| Timer notification | Service worker, sticky, repeats twice at 25 s, Done action | `expo-notifications` local notification scheduled at `deadlineAt`, with a Done action category and two follow-ups. Cancel all on Done or on next set | Same repeat policy, expressed in `domain` as a list of offsets |
-| Clock / elapsed session time | `performedOn` plus render-time math | Same math. Show elapsed in the header from `startedAt`. Optional iOS Live Activity later (third-party Expo module) | `domain/sessions.ts` already has the timestamps |
-| Foreground alert | Vibration API and `profile.restChime` tone | `expo-haptics` and `expo-av` (or `expo-audio`) using the same `restChime` profile flag | Profile field unchanged |
-| Drag and drop | `@dnd-kit/sortable` in `SortableList.tsx` | `react-native-gesture-handler` + `react-native-reanimated` sortable list. Long-press lifts, auto-scroll near edges, haptic on lift and drop | `domain/workouts.ts` reorder function takes `(slots, from, to)` and both UIs call it |
-| Swipe row | `SwipeRow.tsx` with pointer events | Gesture-handler `Swipeable` | Action list (delete, duplicate) defined once |
-| Keep screen on | Wake Lock API, limited support | `expo-keep-awake` while a session is active | Setting flag in profile |
+| Feature                             | Web today                                                                | Mobile approach                                                                                                                                      | Shared piece                                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Rest timer that survives background | `useRestCountdown` in the page, `sw.ts` holds the deadline as a fallback | Store `deadlineAt` (epoch ms) in session state. On resume, remaining = `deadlineAt - now()`. No interval runs in the background                      | `useRestCountdown` moves to `@lift/data`; only `now()` and `scheduleAlarm()` come from the platform adapter |
+| Timer notification                  | Service worker, sticky, repeats twice at 25 s, Done action               | `expo-notifications` local notification scheduled at `deadlineAt`, with a Done action category and two follow-ups. Cancel all on Done or on next set | Same repeat policy, expressed in `domain` as a list of offsets                                              |
+| Clock / elapsed session time        | `performedOn` plus render-time math                                      | Same math. Show elapsed in the header from `startedAt`. Optional iOS Live Activity later (third-party Expo module)                                   | `domain/sessions.ts` already has the timestamps                                                             |
+| Foreground alert                    | Vibration API and `profile.restChime` tone                               | `expo-haptics` and `expo-av` (or `expo-audio`) using the same `restChime` profile flag                                                               | Profile field unchanged                                                                                     |
+| Drag and drop                       | `@dnd-kit/sortable` in `SortableList.tsx`                                | `react-native-gesture-handler` + `react-native-reanimated` sortable list. Long-press lifts, auto-scroll near edges, haptic on lift and drop          | `domain/workouts.ts` reorder function takes `(slots, from, to)` and both UIs call it                        |
+| Swipe row                           | `SwipeRow.tsx` with pointer events                                       | Gesture-handler `Swipeable`                                                                                                                          | Action list (delete, duplicate) defined once                                                                |
+| Keep screen on                      | Wake Lock API, limited support                                           | `expo-keep-awake` while a session is active                                                                                                          | Setting flag in profile                                                                                     |
 
 Permission timing stays as the web app does it: ask for notifications the first time a rest starts,
 never at first launch.
@@ -274,11 +274,11 @@ never at first launch.
 
 ## 7. Risks
 
-| Risk | Impact | Mitigation |
-| --- | --- | --- |
+| Risk                                              | Impact                                          | Mitigation                                                                                                                                                                         |
+| ------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Firebase JS SDK has no disk cache on React Native | An offline workout is lost if iOS kills the app | Phase 0 spike. If confirmed, use `@react-native-firebase` on mobile behind the `@lift/data` adapter, or persist the active session yourself in `expo-sqlite` / MMKV until it syncs |
-| Two UIs drift | A feature ships on web and not on mobile | Feature work starts in shared packages. Keep one parity checklist in this doc |
-| Metro and workspace packages | Duplicate React copies, slow resolution | Single `react` version pinned at the root; `node-linker=hoisted`; Expo monorepo guide; test in Phase 2 before writing screens |
-| Mantine theme and RN styles diverge | Apps look unrelated | `ui-tokens` package is the only source of colors, spacing and type scale |
-| Web bundle grows from shared package boundaries | Lighthouse and `check-bundle-size` fail | Packages export ESM with `sideEffects: false`; run the size gate in Phase 1 before merging |
-| Playwright e2e covers web only | Mobile regressions go unnoticed | Maestro flows for the Phase 3 logging path first; grow with each phase |
+| Two UIs drift                                     | A feature ships on web and not on mobile        | Feature work starts in shared packages. Keep one parity checklist in this doc                                                                                                      |
+| Metro and workspace packages                      | Duplicate React copies, slow resolution         | Single `react` version pinned at the root; `node-linker=hoisted`; Expo monorepo guide; test in Phase 2 before writing screens                                                      |
+| Mantine theme and RN styles diverge               | Apps look unrelated                             | `ui-tokens` package is the only source of colors, spacing and type scale                                                                                                           |
+| Web bundle grows from shared package boundaries   | Lighthouse and `check-bundle-size` fail         | Packages export ESM with `sideEffects: false`; run the size gate in Phase 1 before merging                                                                                         |
+| Playwright e2e covers web only                    | Mobile regressions go unnoticed                 | Maestro flows for the Phase 3 logging path first; grow with each phase                                                                                                             |
