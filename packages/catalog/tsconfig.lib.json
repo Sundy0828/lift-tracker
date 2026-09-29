@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // DOM for `fetch` only; React Native provides the same global.
+    "lib": ["ES2023", "DOM"],
+    "types": [],
+    "outDir": "./node_modules/.tmp/types/lib",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.lib.tsbuildinfo"
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"],
+  "references": [{ "path": "../domain/tsconfig.lib.json" }]
+}

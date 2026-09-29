@@ -1,9 +1,9 @@
 /**
  * Fills the global workout library.
  *
- *   npm run seed:library              # dry run: prints what it would write
- *   npm run seed:library -- --write   # actually does it
- *   npm run seed:library -- --prune --write
+ *   pnpm run seed:library              # dry run: prints what it would write
+ *   pnpm run seed:library --write      # actually does it
+ *   pnpm run seed:library --prune --write
  *
  * **Dry run by default**, so the safe thing is also the thing you get by
  * typing less. `--prune` also deletes library documents the seed no longer
@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { cert, initializeApp, type ServiceAccount } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
-import { parseLibraryWorkout } from '@/domain/library';
+import { parseLibraryWorkout } from '@lift/domain/library';
 import { SEED_LIBRARY, seedGroupRest, seedSlots, type SeedWorkout } from './library-seed';
 
 const has = (name: string): boolean => process.argv.includes(`--${name}`);

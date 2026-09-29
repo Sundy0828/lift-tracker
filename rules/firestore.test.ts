@@ -28,8 +28,8 @@ import { afterAll, afterEach, beforeAll, describe, it } from 'vitest';
  * defence for data the UI has no say over, and a signed-in stranger can talk
  * to Firestore directly.
  *
- * Needs the emulator: `npm run emulators`, then `npm run test:rules`. Kept out
- * of `npm test` on purpose, so the unit suite stays runnable with nothing
+ * Needs the emulator: `pnpm run emulators`, then `pnpm run test:rules`. Kept out
+ * of `pnpm test` on purpose, so the unit suite stays runnable with nothing
  * installed but node.
  */
 

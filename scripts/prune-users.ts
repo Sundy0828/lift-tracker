@@ -1,9 +1,9 @@
 /**
  * Deletes throwaway accounts and everything they own.
  *
- *   npm run prune-users                 # dry run: prints what it would delete
- *   npm run prune-users -- --delete     # actually does it
- *   npm run prune-users -- --domain lift-tracker.dev --delete
+ *   pnpm run prune-users                 # dry run: prints what it would delete
+ *   pnpm run prune-users --delete        # actually does it
+ *   pnpm run prune-users --domain lift-tracker.dev --delete
  *
  * **Dry run by default.** Nothing is removed unless `--delete` is passed, so
  * the safe thing is also the thing you get by typing less.

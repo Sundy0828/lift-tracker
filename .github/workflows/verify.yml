@@ -19,19 +19,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Reads the pnpm version from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
-      # Reads dist/ and fails on a §3 budget regression. Here rather than in
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run lint
+      - run: pnpm test
+      - run: pnpm run build
+      # Reads apps/web/dist/ and fails on a §3 budget regression. Here rather than in
       # its own workflow because it is deterministic — same commit, same bytes,
       # same verdict — so it is fit to block a deploy.
-      - run: npm run size
+      - run: pnpm run size
 
   # The security rules, against the real emulator (Appendix A). Its own job so
   # it runs beside the others and gets its own emulator: the suite clears
@@ -42,14 +44,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Reads the pnpm version from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
+          cache: pnpm
       # The Firestore emulator is a Java process.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-      - run: npm ci
-      - run: npm run test:rules:ci
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test:rules:ci

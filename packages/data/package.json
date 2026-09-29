@@ -1,0 +1,22 @@
+{
+  "name": "@lift/data",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./hooks/useAuth": "./src/hooks/useAuth.tsx",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@lift/catalog": "workspace:*",
+    "@lift/domain": "workspace:*",
+    "firebase": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:"
+  }
+}

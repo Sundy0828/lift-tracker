@@ -1,0 +1,16 @@
+{
+  "name": "@lift/catalog",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "update": "node --import ../../scripts/ts-resolve.mjs scripts/build-catalog.ts"
+  },
+  "dependencies": {
+    "@lift/domain": "workspace:*"
+  }
+}

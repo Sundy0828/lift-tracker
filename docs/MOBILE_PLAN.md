@@ -12,7 +12,9 @@ phase leaves web deployable and the root gates green.
 
 - [x] **Option B**: monorepo with `web`, `mobile` and shared packages. Web stays the Vite PWA.
       Mobile is a new Expo app with a native UI. No Capacitor detour.
-- [x] **Firebase SDK on mobile**: decided after the Phase 0 spike.
+- [x] **Firebase SDK on mobile** (2026-09-28): `@react-native-firebase`. The JS SDK's Firestore
+      cache is memory only on React Native, so a queued write dies with the app. The native SDKs
+      persist to disk by default. Decided from documentation, not from an iPhone test. See Phase 0.
 - [x] **Package manager**: pnpm workspaces.
 - [x] **First release**: iOS and Android together. React Native carries nearly everything; expect a
       couple of small native implementations behind the platform adapter.
@@ -107,10 +109,21 @@ calls into shared hooks.
 
 ## 4. Target architecture
 
-pnpm workspaces. pnpm's strict, non-hoisted `node_modules` catches a screen that imports something
-its package never declared, which is the main way two UIs drift. Metro needs `node-linker=hoisted`
-in `.npmrc` (or Expo's documented pnpm setup) because it does not follow pnpm symlinks well. Vite is
-fine either way.
+pnpm workspaces with pnpm's default isolated installs. They catch a screen that imports something
+its package never declared, which is the main way two UIs drift. Expo has supported isolated
+installs since SDK 54 and configures Metro for monorepos itself, so there is no
+`node-linker=hoisted` (hoisting would switch that check off).
+
+**One version of every shared dependency.** A pnpm catalog in `pnpm-workspace.yaml` holds the
+version of anything more than one package uses (React, `@types/react*`, `@types/node`, Firebase,
+TypeScript, Vitest). Each `package.json` says `"catalog:"`. Packages only one app uses (Mantine and
+Vite for web, `expo-*` for mobile) stay in that app. Expo-managed packages follow
+`npx expo install`.
+
+React is pinned exactly, at the version the Expo SDK bundles: 19.3.0, from **Expo SDK 58**. Web's
+`react-router` 8 needs ≥ 19.2.7, which rules out SDK 57's 19.2.3. React Native's renderer does not
+enforce a React version at runtime, but SDK 58's pin is the tested pairing. Bump React only together
+with the Expo SDK. Shared packages declare `react` as a peer; Vite also dedupes it as a guard.
 
 ```
 lift-tracker/
@@ -122,7 +135,8 @@ lift-tracker/
     catalog/      # src/catalog as-is. JSON + search index
     data/         # converters, hooks, mutations, sync. Firebase + React only
     ui-tokens/    # colors, spacing, type scale as plain TS, consumed by Mantine theme and RN styles
-  firebase.json, firestore.rules, rules/, scripts/   # stay at the root
+  rules/          # security-rules suite, its own workspace package
+  firebase.json, firestore.rules, scripts/   # stay at the root
 ```
 
 | Package         | Contents                                                                                        | Platform code allowed                                | Notes                                                         |
@@ -170,39 +184,130 @@ flowchart LR
 
 Prove the two unknowns before moving anything.
 
-- [ ] `npx create-expo-app` in a scratch folder. Copy `src/domain` in. Run its vitest suite under
-      the RN TypeScript config.
-- [ ] Sign in with the existing Firebase project. Read one workout with the Firebase JS SDK. Repeat
-      with `@react-native-firebase`.
-- [ ] Kill the app with a pending offline write. Relaunch. Check which SDK kept the write.
-- [ ] Schedule a local notification 90 s out, background the app, lock the phone. Confirm it fires
-      on a real iPhone and a real Android phone.
+- [x] `npx create-expo-app` in a scratch folder. Copy `src/domain` in. Run its vitest suite under
+      the RN TypeScript config. _Done 2026-09-28 in `C:\Git\lift-spike` (Expo SDK 57, RN 0.86).
+      688/688 tests pass. Clean `tsc` with this repo's strict flags, and with no DOM lib. Both
+      platforms bundle to Hermes bytecode._
+- [x] Sign in with the existing Firebase project. Read one workout with the Firebase JS SDK. Repeat
+      with `@react-native-firebase`. _Replaced by a type and bundle check: both SDKs compile and
+      bundle for both platforms. The first real read happens in Phase 2._
+- [x] Kill the app with a pending offline write. Relaunch. Check which SDK kept the write.
+      _Decided from documentation (no iPhone available):_
+  - The JS SDK's persistent cache needs IndexedDB. React Native has none, so the SDK logs "missing
+    IndexedDB… Offline persistence has been disabled" and falls back to memory. The feature
+    request is still open:
+    [firebase-js-sdk#7947](https://github.com/firebase/firebase-js-sdk/issues/7947).
+  - The native SDKs that `@react-native-firebase` wraps have "offline persistence enabled by
+    default" on Android and Apple platforms
+    ([Firebase docs](https://firebase.google.com/docs/firestore/manage-data/enable-offline)).
+- [x] Schedule a local notification 90 s out, background the app, lock the phone. _iOS decided from
+      documentation: a scheduled local notification is delivered by the OS, whether the app is
+      suspended, killed or the phone is locked
+      ([UNTimeIntervalNotificationTrigger](https://developer.apple.com/documentation/usernotifications/untimeintervalnotificationtrigger)).
+      Android lateness is still worth one run on a real Android phone. It is a Phase 3 tuning
+      question, not a blocker._
 
-**Exit:** a written choice of Firebase SDK and a yes/no on background notifications.
+**Exit (met 2026-09-28):** `@react-native-firebase` on mobile. Background notifications: yes.
+
+**Verify in the first TestFlight build (Phase 3):** kill the app mid-session with the network off,
+relaunch online, and check that the sets arrive in Firestore. This is the check Phase 0 skipped
+on iOS. If the sets do not arrive, stop and revisit the SDK choice before any more screens.
+
+The spike app (`C:\Git\lift-spike`, runbook in its `SPIKE.md`) can still run the Android tests.
+
+Found so far, and what each changes later:
+
+- **Versions differ.** Expo 57 pins `react` 19.2.3. Web uses `^19.2.8`. Expo uses TypeScript
+  6.0, web uses 5.9. _Resolved after Phase 1: everything moved to React 19.3.0 (Expo SDK 58) and
+  TypeScript 6.0 (see "Dependency alignment" below)._
+- **JS SDK auth typings.** `firebase/auth` puts a top-level `types` before `react-native` in its
+  exports. TypeScript therefore never sees `getReactNativePersistence`. The fix is a `paths`
+  entry that points at `@firebase/auth/dist/rn/index.rn.d.ts`. Needed only if mobile uses the JS
+  SDK.
+- **RNFB modular API matches the JS SDK.** `getFirestore`, `doc`, `setDoc`, `getDocs`,
+  `getDocFromServer` and `disableNetwork` have the same names. Only the imports differ. So the
+  `@lift/data` adapter can be an import alias, not a wrapper layer.
+- **No Mac and no Android SDK on this machine.** Builds go through EAS (cloud). Android dev builds
+  are free. A real-iPhone build needs a paid Apple Developer account. Phase 6 needs that account
+  anyway.
+- **Offline test uses `disableNetwork()`, not airplane mode.** A dev build loads its JS from Metro
+  over wifi, so airplane mode would break the app, not only Firestore.
 
 ### Phase 1: Workspaces, no behavior change
 
-- [ ] Switch to pnpm: `pnpm-workspace.yaml`, `.npmrc` with `node-linker=hoisted`, delete
-      `package-lock.json`. Create `apps/web`, `packages/domain`, `packages/catalog`,
-      `packages/data`, `packages/ui-tokens`.
-- [ ] `git mv` folders. Fix imports to `@lift/domain` etc. Keep `tsconfig` project references; each
-      package gets its own `tsconfig.json` and `package.json` with `exports`.
-- [ ] Move Vite, PWA, Playwright, Lighthouse and bundle-size configs under `apps/web`. Root scripts
-      delegate with `pnpm --filter web run <script>`.
-- [ ] Move theme colors and spacing into `ui-tokens`; Mantine theme reads from it.
-- [ ] Add a lint rule: `packages/domain` and `packages/catalog` may not import `react`, `firebase`
-      or `@mantine/*`.
-- [ ] Update `.github/workflows/*` paths. Firebase Hosting deploys `apps/web/dist`.
+_Done 2026-09-28, uncommitted._
 
-**Exit:** production deploy has the same feature set. Lighthouse and bundle budgets unchanged.
+- [x] Switch to pnpm: `pnpm-workspace.yaml`, delete `package-lock.json`. Create `apps/web`,
+      `packages/domain`, `packages/catalog`, `packages/data`, `packages/ui-tokens`. _pnpm 11.27.1
+      via `packageManager`. Isolated installs, not `node-linker=hoisted` (see §4). The lockfile was
+      converted with `pnpm import`, so all 51 direct dependencies kept npm's exact versions.
+      `rules/` became its own package (`@lift/rules`)._
+- [x] `git mv` folders. Fix imports to `@lift/domain` etc. Keep `tsconfig` project references; each
+      package gets its own `tsconfig.json` and `package.json` with `exports`. _Imports keep their
+      old shape: `@/domain/x` → `@lift/domain/x`, `@/data/x` → `@lift/data/x`. Each package has a
+      `tsconfig.lib.json` and a `tsconfig.test.json`._
+- [x] Move Vite, PWA, Playwright, Lighthouse and bundle-size configs under `apps/web`. Root scripts
+      delegate with `pnpm --filter @lift/web run <script>`. _`.env` files stay at the root
+      (`envDir`)._
+- [x] Move theme colors and spacing into `ui-tokens`; Mantine theme reads from it. _Accent ramps,
+      presets, font, primary shades and compact button sizes. Sizes are unitless numbers._
+- [x] Add a lint rule: `packages/domain`, `packages/catalog` and `packages/ui-tokens` may not import
+      React, React Native, Firebase or `@mantine/*`. _Also: `packages/data` may not import Mantine,
+      react-dom, react-router or dnd-kit._
+- [x] Update `.github/workflows/*` paths. Firebase Hosting deploys `apps/web/dist`. _All five
+      workflows use `pnpm/action-setup@v6` and `pnpm install --frozen-lockfile`._
+- [x] ~~Pin web to Expo's React at the root.~~ Not with SDK 57: `react-router` 8 needs React ≥
+      19.2.7 and SDK 57 pins 19.2.3. Solved the other way round below: both apps on SDK 58's React.
+- [x] Make the catalog loader injectable. _`packages/catalog/src/source.ts` reads the JSON (web:
+      `?url` + `fetch`). Phase 2 adds `source.native.ts`, which bundles the JSON._
+
+Found on the way:
+
+- `sw.ts` imported `workbox-core` without declaring it. npm's hoisting hid that; pnpm did not. Now
+  declared.
+- The seed script uses the Firebase client SDK, which is now a root dev dependency.
+- pnpm refuses unreviewed install scripts. `pnpm-workspace.yaml` declines the same three that npm 11
+  already skipped (`@firebase/util`, `protobufjs`, `re2`).
+- Some script names (`deploy`, `update`) are also pnpm built-ins. Always write `pnpm run <script>`.
+
+**Exit:** met locally, same feature set. Typecheck and lint clean. 862/862 unit tests (688 domain,
+29 catalog, 16 data, 129 web). 52/52 rules tests. 85/85 e2e. The bundle-size report is identical
+to the pre-move build, chunk for chunk, and so is the list of emitted assets. First CI run and
+deploy still to watch.
+
+### Dependency alignment (after Phase 1, 2026-09-28)
+
+- [x] pnpm catalog for shared dependencies (§4).
+- [x] React 19.3.0 and `react-dom` 19.3.0, exact. One React in the whole lockfile.
+- [x] TypeScript 6.0.3, the newest typescript-eslint supports (`< 6.1`). The only fix needed was
+      removing the deprecated `baseUrl` from three web tsconfigs. TypeScript 7 waits for
+      typescript-eslint.
+- [x] Everything else to latest: Mantine 9.6.3, `react-router` 8.4.0, Vite 8.3.1, Vitest 5.0.2,
+      Firebase 12.19.0, jsdom 30, Playwright 1.63, ESLint 10.11, and patch releases.
+- [x] Initial-JS budget raised from 150 to 155 kB. React 19.3.0's `react-dom` is 8.3 kB larger
+      gzipped; all other upgrades together add 0.8 kB. Now 153.2 kB. Recorded in BUILD_PLAN §3.
 
 ### Phase 2: Mobile shell
 
-- [ ] `apps/mobile` with Expo SDK, `expo-router`, TypeScript strict, same ESLint base.
+- [ ] `apps/mobile` on **Expo SDK 58**, whose React (19.3.0) matches the catalog. `expo-router`,
+      TypeScript strict, same ESLint base. SDK 58 was in preview on 2026-09-28. If it is still not
+      stable, start on the preview and move to the release before any store build.
 - [ ] Metro config for workspace packages. Confirm `@lift/domain` and `@lift/catalog` import and
-      tree-shake.
+      tree-shake, and that only one React ends up in the bundle.
+- [ ] Put every Firebase import in `@lift/data` through one `sdk.ts` re-export file. Mobile adds
+      `sdk.native.ts` that re-exports the same names from `@react-native-firebase/*`. Metro picks
+      `.native.ts` automatically and Vite ignores it, so hooks and mutations stay shared. _Moved
+      from Phase 1: it can only be typechecked once the RNFB packages are installed._
+      `firebase.ts` and `firestore.ts` (web persistence setup) get `.native.ts` siblings the same
+      way.
+- [ ] `packages/catalog/src/source.native.ts`: the catalog JSON bundled into the app.
 - [ ] Auth (sign in, email verification, sign out) using the `@lift/data` auth hook plus the Phase 0
-      SDK choice.
+      SDK choice. Google sign-in needs a native library; the web popup flow does not work in an
+      app.
+- [ ] After sign-in, prime the cache: open listeners on workouts, schedule, profile and recent
+      sessions. Then the first gym visit with no signal still shows today's workout.
+- [ ] EAS project, development build profile, and access to the friend's Apple and Play teams
+      (App Manager or Admin in App Store Connect; user in Play Console).
 - [ ] Read-only screens: Today, Workouts list, Workout detail. Bottom tabs matching `BottomNav.tsx`.
 - [ ] Sync strip / offline indicator from `useSyncState`.
 
@@ -216,7 +321,11 @@ The reason for the project.
 - [ ] Rest timer: shared `useRestCountdown` plus native `platform.scheduleAlarm`. Deadline stored as
       a timestamp, never a running interval.
 - [ ] Local notification at deadline with Done action and repeat. Haptic and optional chime in the
-      foreground.
+      foreground. On iOS, set `interruptionLevel: 'timeSensitive'` (and enable the Time Sensitive
+      Notifications capability) so a Focus mode does not hide the alert. The ring/silent switch
+      still mutes sound, so rely on vibration and the banner.
+- [ ] First TestFlight / Play internal build goes to beta users here. Run the kill-mid-session
+      check from Phase 0 on an iPhone (a tester's is fine).
 - [ ] Keep-awake toggle while a session is active.
 - [ ] Bodyweight entry and PR flag on save.
 
@@ -278,7 +387,7 @@ never at first launch.
 | ------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Firebase JS SDK has no disk cache on React Native | An offline workout is lost if iOS kills the app | Phase 0 spike. If confirmed, use `@react-native-firebase` on mobile behind the `@lift/data` adapter, or persist the active session yourself in `expo-sqlite` / MMKV until it syncs |
 | Two UIs drift                                     | A feature ships on web and not on mobile        | Feature work starts in shared packages. Keep one parity checklist in this doc                                                                                                      |
-| Metro and workspace packages                      | Duplicate React copies, slow resolution         | Single `react` version pinned at the root; `node-linker=hoisted`; Expo monorepo guide; test in Phase 2 before writing screens                                                      |
+| Metro and workspace packages                      | Duplicate React copies, slow resolution         | One React version in the catalog, matched to the Expo SDK; React as a peer in shared packages; Expo monorepo guide; test in Phase 2 before writing screens                         |
 | Mantine theme and RN styles diverge               | Apps look unrelated                             | `ui-tokens` package is the only source of colors, spacing and type scale                                                                                                           |
 | Web bundle grows from shared package boundaries   | Lighthouse and `check-bundle-size` fail         | Packages export ESM with `sideEffects: false`; run the size gate in Phase 1 before merging                                                                                         |
 | Playwright e2e covers web only                    | Mobile regressions go unnoticed                 | Maestro flows for the Phase 3 logging path first; grow with each phase                                                                                                             |
