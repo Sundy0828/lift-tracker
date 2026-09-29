@@ -7,7 +7,7 @@
  * this script can write it, the app could have. No service-account key is
  * needed and none is stored.
  *
- *   npm run seed -- --email demo@example.com --password 'Hunter2$Hunter2'
+ *   pnpm run seed --email demo@example.com --password 'Hunter2$Hunter2'
  *
  * Flags:
  *   --email / --password   the account to seed. Created if it does not exist.
@@ -39,12 +39,12 @@ import {
   type DocumentReference,
   type Firestore,
 } from 'firebase/firestore';
-import type { ExerciseStats, WorkoutStats } from '@/domain/overlay';
-import { buildStatsUpdate } from '@/domain/overlay';
-import type { LoggedSet, Session, SessionEntry } from '@/domain/sessions';
-import { localDateKey, sessionExerciseIds } from '@/domain/sessions';
-import type { ExerciseSlot, Prescription, WorkoutBody } from '@/domain/workouts';
-import { DEFAULT_PRESCRIPTION } from '@/domain/workouts';
+import type { ExerciseStats, WorkoutStats } from '@lift/domain/overlay';
+import { buildStatsUpdate } from '@lift/domain/overlay';
+import type { LoggedSet, Session, SessionEntry } from '@lift/domain/sessions';
+import { localDateKey, sessionExerciseIds } from '@lift/domain/sessions';
+import type { ExerciseSlot, Prescription, WorkoutBody } from '@lift/domain/workouts';
+import { DEFAULT_PRESCRIPTION } from '@lift/domain/workouts';
 
 // --- CLI ------------------------------------------------------------------
 

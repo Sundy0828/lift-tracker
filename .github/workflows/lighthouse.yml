@@ -21,18 +21,16 @@ on:
       - 'docs/**'
       - '.env.example'
       - '.gitignore'
-      - 'e2e/**'
-      - 'playwright.config.ts'
-      - 'tsconfig.e2e.json'
+      - 'apps/web/e2e/**'
+      - 'apps/web/playwright.config.ts'
+      - 'apps/web/tsconfig.e2e.json'
       - '.env.e2e'
       - 'rules/**'
       - 'firestore.rules'
       - 'firestore.indexes.json'
-      - 'vitest.rules.config.ts'
-      - 'tsconfig.rules.json'
-      - 'src/test/**'
-      - 'src/**/*.test.ts'
-      - 'src/**/*.test.tsx'
+      - 'apps/web/src/test/**'
+      - '**/*.test.ts'
+      - '**/*.test.tsx'
   pull_request:
     # It measures the production bundle. Test code and the security rules
     # stay out of that bundle.
@@ -41,18 +39,16 @@ on:
       - 'docs/**'
       - '.env.example'
       - '.gitignore'
-      - 'e2e/**'
-      - 'playwright.config.ts'
-      - 'tsconfig.e2e.json'
+      - 'apps/web/e2e/**'
+      - 'apps/web/playwright.config.ts'
+      - 'apps/web/tsconfig.e2e.json'
       - '.env.e2e'
       - 'rules/**'
       - 'firestore.rules'
       - 'firestore.indexes.json'
-      - 'vitest.rules.config.ts'
-      - 'tsconfig.rules.json'
-      - 'src/test/**'
-      - 'src/**/*.test.ts'
-      - 'src/**/*.test.tsx'
+      - 'apps/web/src/test/**'
+      - '**/*.test.ts'
+      - '**/*.test.tsx'
 
 # A newer commit on the same ref makes an in-flight run pointless.
 concurrency:
@@ -65,20 +61,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Reads the pnpm version from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       # A production build: it is the bundle that ships, and the one the §3
       # budgets are about.
-      - run: npm run build
-      - run: npm run lighthouse
+      - run: pnpm run build
+      - run: pnpm run lighthouse
       - name: Upload the reports
         # Also on success: the numbers are the point, not just the failures.
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: lighthouse-reports
-          path: .lighthouseci/
+          path: apps/web/.lighthouseci/
           retention-days: 7

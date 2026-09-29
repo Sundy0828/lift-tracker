@@ -1,0 +1,32 @@
+packages:
+  - apps/*
+  - packages/*
+  - rules
+
+# One version for every dependency used by more than one project. Each
+# package.json says "catalog:" instead of a version, so they move together.
+#
+# React is exact, not a range: web and mobile must run the same React, and
+# mobile's comes from the Expo SDK (SDK 58 bundles 19.3.0). Bump it together
+# with the Expo SDK, never on its own.
+#
+# TypeScript stops at 6.0: typescript-eslint supports < 6.1. The 7.x native
+# compiler waits for that support.
+catalog:
+  react: 19.3.0
+  react-dom: 19.3.0
+  '@types/react': ^19.3.0
+  '@types/react-dom': ^19.3.0
+  '@types/node': ^26.6.3
+  firebase: ^12.19.0
+  typescript: ~6.0.3
+  vitest: ^5.0.2
+
+# Install scripts npm already skipped (npm 11 blocks them by default). None is
+# needed: @firebase/util writes optional auto-init defaults, protobufjs only
+# prints a version notice, and re2 is an optional native regex for
+# firebase-tools, which falls back to the JS engine without it.
+allowBuilds:
+  '@firebase/util': false
+  protobufjs: false
+  re2: false
