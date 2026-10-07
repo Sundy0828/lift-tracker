@@ -1,4 +1,4 @@
-import { documentId, onSnapshot, query, where } from 'firebase/firestore';
+import { documentId, onSnapshot, query, where } from '../sdk/firestore';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ExerciseStats, WorkoutStats } from '@lift/domain/overlay';
 import { toExerciseStats, toWorkoutStats } from '../converters/session';

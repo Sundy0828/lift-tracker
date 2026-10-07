@@ -1,4 +1,4 @@
-import { onSnapshot } from 'firebase/firestore';
+import { onSnapshot } from '../sdk/firestore';
 import { useEffect, useState } from 'react';
 import type { UserProfile } from '@lift/domain/types';
 import { DEFAULT_PROFILE } from '@lift/domain/types';

@@ -1,4 +1,4 @@
-import { Timestamp, deleteDoc, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
+import { Timestamp, deleteDoc, doc, serverTimestamp, setDoc, writeBatch } from '../sdk/firestore';
 import type { Workout, WorkoutBody } from '@lift/domain/workouts';
 import { cloneBody, diffWorkout } from '@lift/domain/workoutDiff';
 import { db } from '../firestore';

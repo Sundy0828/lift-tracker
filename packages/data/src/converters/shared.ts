@@ -1,4 +1,4 @@
-import { Timestamp, type DocumentData } from 'firebase/firestore';
+import { Timestamp, type DocumentData } from '../sdk/firestore';
 import type { SharedWorkout } from '@lift/domain/sharing';
 import { parseSharedWorkout } from '@lift/domain/sharing';
 

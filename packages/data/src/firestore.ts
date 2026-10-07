@@ -8,7 +8,7 @@ import {
 import { app, useEmulators } from './firebase';
 
 /**
- * The Firestore instance, kept in its own module so the SDK stays out of the
+ * The Firestore instance for web (mobile: `firestore.native.ts`), kept in its own module so the SDK stays out of the
  * entry chunk (see ./firebase). Everything that reaches this module is behind
  * a lazy route or a dynamic import.
  *

@@ -8,6 +8,8 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo"
   },
   "include": ["src"],
+  // The .native.ts seam is checked from apps/mobile (tsconfig.json there).
+  "exclude": ["src/**/*.native.ts"],
   "references": [
     { "path": "../domain/tsconfig.lib.json" },
     { "path": "../catalog/tsconfig.lib.json" }

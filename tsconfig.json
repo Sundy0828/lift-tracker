@@ -6,6 +6,7 @@
     { "path": "./packages/catalog" },
     { "path": "./packages/data" },
     { "path": "./apps/web" },
+    { "path": "./apps/mobile" },
     { "path": "./rules" },
     { "path": "./tsconfig.scripts.json" }
   ]

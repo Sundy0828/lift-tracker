@@ -1,4 +1,4 @@
-import { serverTimestamp, setDoc } from 'firebase/firestore';
+import { serverTimestamp, setDoc } from '../sdk/firestore';
 import type { Handedness, Unit } from '@lift/domain/types';
 import { DEFAULT_PROFILE } from '@lift/domain/types';
 import { isAccountDeleted } from '../deletedAccounts';

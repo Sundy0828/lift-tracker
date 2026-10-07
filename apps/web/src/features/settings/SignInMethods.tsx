@@ -19,7 +19,7 @@ import {
   unlinkProvider,
 } from '@lift/data/mutations/account';
 import { PasswordRequirements } from '@/features/auth/PasswordRequirements';
-import { isAcceptable, SUMMARY } from '@/features/auth/password';
+import { isAcceptable, SUMMARY } from '@lift/domain/password';
 
 /**
  * The ways into this account, and adding more of them.

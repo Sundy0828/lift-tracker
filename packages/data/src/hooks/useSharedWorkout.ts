@@ -1,4 +1,4 @@
-import { getDoc, onSnapshot, query, where } from 'firebase/firestore';
+import { getDoc, onSnapshot, query, where } from '../sdk/firestore';
 import { useEffect, useState } from 'react';
 import type { SharedWorkout } from '@lift/domain/sharing';
 import { toSharedWorkout } from '../converters/shared';

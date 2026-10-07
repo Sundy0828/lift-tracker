@@ -1,4 +1,4 @@
-import { Timestamp, type DocumentData } from 'firebase/firestore';
+import { Timestamp, type DocumentData } from '../sdk/firestore';
 import { DEFAULT_PROFILE, isHandedness, type UserProfile } from '@lift/domain/types';
 import { isUnit } from '@lift/domain/units';
 

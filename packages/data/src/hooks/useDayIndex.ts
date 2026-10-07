@@ -1,4 +1,4 @@
-import { onSnapshot } from 'firebase/firestore';
+import { onSnapshot } from '../sdk/firestore';
 import { useEffect, useState } from 'react';
 import type { DaySummary } from '@lift/domain/calendar';
 import { parseDayIndex } from '@lift/domain/dayIndex';

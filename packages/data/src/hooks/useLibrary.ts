@@ -1,4 +1,4 @@
-import { getDocs } from 'firebase/firestore';
+import { getDocs } from '../sdk/firestore';
 import { useEffect, useState } from 'react';
 import type { LibraryWorkout } from '@lift/domain/library';
 import { parseLibraryWorkout } from '@lift/domain/library';

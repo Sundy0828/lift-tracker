@@ -1,4 +1,4 @@
-import { onSnapshot, query } from 'firebase/firestore';
+import { onSnapshot, query } from '../sdk/firestore';
 import { useEffect, useState } from 'react';
 import type { CustomExercise } from '@lift/domain/exercises';
 import { toCustomExercise } from '../converters/exercise';

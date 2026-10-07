@@ -1,4 +1,4 @@
-import { Timestamp, type DocumentData } from 'firebase/firestore';
+import { Timestamp, type DocumentData } from '../sdk/firestore';
 import type { CustomExercise } from '@lift/domain/exercises';
 import { parseCustomExercise } from '@lift/domain/exercises';
 

@@ -289,27 +289,52 @@ deploy still to watch.
 
 ### Phase 2: Mobile shell
 
-- [ ] `apps/mobile` on **Expo SDK 58**, whose React (19.3.0) matches the catalog. `expo-router`,
-      TypeScript strict, same ESLint base. SDK 58 was in preview on 2026-09-28. If it is still not
-      stable, start on the preview and move to the release before any store build.
-- [ ] Metro config for workspace packages. Confirm `@lift/domain` and `@lift/catalog` import and
-      tree-shake, and that only one React ends up in the bundle.
-- [ ] Put every Firebase import in `@lift/data` through one `sdk.ts` re-export file. Mobile adds
-      `sdk.native.ts` that re-exports the same names from `@react-native-firebase/*`. Metro picks
-      `.native.ts` automatically and Vite ignores it, so hooks and mutations stay shared. _Moved
-      from Phase 1: it can only be typechecked once the RNFB packages are installed._
-      `firebase.ts` and `firestore.ts` (web persistence setup) get `.native.ts` siblings the same
-      way.
-- [ ] `packages/catalog/src/source.native.ts`: the catalog JSON bundled into the app.
-- [ ] Auth (sign in, email verification, sign out) using the `@lift/data` auth hook plus the Phase 0
-      SDK choice. Google sign-in needs a native library; the web popup flow does not work in an
-      app.
-- [ ] After sign-in, prime the cache: open listeners on workouts, schedule, profile and recent
-      sessions. Then the first gym visit with no signal still shows today's workout.
-- [ ] EAS project, development build profile, and access to the friend's Apple and Play teams
-      (App Manager or Admin in App Store Connect; user in Play Console).
-- [ ] Read-only screens: Today, Workouts list, Workout detail. Bottom tabs matching `BottomNav.tsx`.
-- [ ] Sync strip / offline indicator from `useSyncState`.
+- [x] `apps/mobile` on **Expo SDK 58**, whose React (19.3.0) matches the catalog. `expo-router`,
+      TypeScript strict, same ESLint base. _SDK 58.0.2 went stable during the phase; it still pins
+      `react-native` 0.88.0-rc.3. Display name "Lift" (matches the PWA's `short_name`). App id is
+      the placeholder `dev.placeholder.lifttracker` until decided._
+- [x] Metro config for workspace packages. _No custom Metro config needed: Expo's default handles
+      the workspace. Verified from the bundle's source map: one React, one copy of React Native
+      Firebase, and no Firestore/Auth web SDK. React Native Firebase itself bundles a small
+      `firebase/app` for its web fallback._
+- [x] Every Firebase import in `@lift/data` goes through `src/sdk/firestore.ts` and
+      `src/sdk/auth.ts`; `.native.ts` siblings re-export the same names from
+      `@react-native-firebase/*`. `firebase.ts` and `firestore.ts` have `.native.ts` siblings.
+      Google popups became `signInWithGoogle`, `linkGoogle`, `reauthenticateWithGoogle`; the native
+      ones reject with `auth/operation-not-supported-in-this-environment` for now. `instanceof
+FirebaseError` became `firestoreErrorCode()`, because the native SDK throws its own class.
+      _`apps/mobile/tsconfig.json` compiles `@lift/data` from source with `moduleSuffixes`, so the
+      whole data layer is typechecked against React Native Firebase's types: it passes unchanged.
+      Web bundle identical to before, chunk for chunk._
+- [x] `packages/catalog/src/source.native.ts`: the catalog JSON bundled into the app.
+- [x] Auth (sign in, email verification, sign out) using the `@lift/data` auth hook. _Email and
+      password, with account creation, password reset and the confirm-your-email gate. The password
+      rules moved from the web app to `@lift/domain/password` so both apps share them._
+- [ ] Google sign-in on mobile: a native Google sign-in library, plus the SHA-1 fingerprints of the
+      EAS dev key and (later) the Play App Signing key in Firebase. iOS will also need Sign in
+      with Apple (App Store rule for apps that offer Google sign-in). _Deferred until the store
+      accounts are available; not needed to develop._
+- [x] After sign-in, prime the cache: listeners on workouts, schedule, profile and active sessions
+      stay open for the whole signed-in session (`PrimeCache` in `app/(app)/_layout.tsx`).
+- [x] EAS project and development build. _`@sundy/lift-tracker` on Expo; `eas.json` has
+      development, preview and production profiles. Android dev build installed and working on a
+      real phone (2026-10-06). App id `com.sundy0828.lifttracker`, registered as an Android app in
+      Firebase. iOS registration and the friend's Apple/Play access wait until his accounts are
+      available._
+- [x] Read-only screens: Today, Workouts list, Workout detail. Bottom tabs matching `BottomNav.tsx`
+      (History is a placeholder until Phase 5). _Tab icons come with the next native build: an
+      icon set needs a native font or SVG module, and adding one means a new dev build._
+- [x] Sync strip / offline indicator from `useSyncState`. _Uses Firestore's own offline signal
+      (every listener answering from cache) rather than a network-status module._
+
+Notes from running it:
+
+- Connecting the phone to Metro over Wi-Fi failed on this PC even with the network set to Private
+  and Node allowed through the firewall. `pnpm --filter @lift/mobile start --tunnel` works. The
+  local-network cause (router client isolation, phone VPN or a different network) is not found
+  yet.
+- E2E in CI is paused (manual runs only): it hangs after the last workouts test on GitHub's Linux
+  runners, reproducibly, but passes locally. See the note in `.github/workflows/e2e.yml`.
 
 **Exit:** you can open the app at the gym and see today's workout offline.
 

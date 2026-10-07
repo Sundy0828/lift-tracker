@@ -1,4 +1,4 @@
-import { onSnapshot } from 'firebase/firestore';
+import { onSnapshot } from '../sdk/firestore';
 import { useEffect, useState } from 'react';
 import type { Schedule } from '@lift/domain/schedule';
 import { EMPTY_SCHEDULE, parseSchedule } from '@lift/domain/schedule';

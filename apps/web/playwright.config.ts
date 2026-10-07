@@ -11,6 +11,11 @@ export default defineConfig({
   // unbounded parallelism is self-inflicted contention: sign-ins start timing
   // out. Four keeps the suite quick without starving it.
   workers: process.env['CI'] ? 1 : 4,
+  // A cap on the whole run, so a hang below the test level (a stuck browser
+  // or worker, which the per-test timeout cannot reach) ends with a report
+  // naming the test that was running, instead of silence until the CI job
+  // limit.
+  globalTimeout: process.env['CI'] ? 20 * 60_000 : 0,
   reporter: process.env['CI'] ? 'github' : 'list',
   use: {
     baseURL: `http://localhost:${String(PORT)}`,

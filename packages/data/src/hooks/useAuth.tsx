@@ -1,16 +1,15 @@
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { auth } from '../firebase';
 import {
-  browserPopupRedirectResolver,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
-  signInWithPopup,
+  signInWithGoogle,
   signOut,
   type User,
-} from 'firebase/auth';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { auth, googleProvider } from '../firebase';
+} from '../sdk/auth';
 
 export type AuthStatus = 'loading' | 'signed-in' | 'signed-out';
 
@@ -84,9 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       status,
       isEmailVerified,
-      signInWithGoogle: async () => {
-        await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
-      },
+      signInWithGoogle: () => signInWithGoogle(auth),
       signInWithEmail: async (email, password) => {
         await signInWithEmailAndPassword(auth, email, password);
       },

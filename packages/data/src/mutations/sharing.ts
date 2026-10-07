@@ -1,4 +1,4 @@
-import { Timestamp, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
+import { Timestamp, serverTimestamp, setDoc, writeBatch } from '../sdk/firestore';
 import type { ImportPlan, SharePayload } from '@lift/domain/sharing';
 import { importAsNewBody } from '@lift/domain/sharing';
 import { diffWorkout } from '@lift/domain/workoutDiff';

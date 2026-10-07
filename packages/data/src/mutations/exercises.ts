@@ -1,4 +1,4 @@
-import { deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { deleteDoc, doc, serverTimestamp, setDoc } from '../sdk/firestore';
 import type { Equipment } from '@lift/domain/exercises';
 import { CUSTOM_ID_PREFIX } from '@lift/domain/exercises';
 import type { MuscleGroup } from '@lift/domain/muscles';

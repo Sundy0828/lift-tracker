@@ -15,7 +15,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@lift/data/hooks/useAuth';
 import { useEmulators } from '@lift/data/firebase';
 import { PasswordRequirements } from './PasswordRequirements';
-import { isAcceptable, problem as passwordProblem, SUMMARY } from './password';
+import { isAcceptable, problem as passwordProblem, SUMMARY } from '@lift/domain/password';
 
 type Mode = 'sign-in' | 'register' | 'reset';
 

@@ -1,9 +1,4 @@
-import {
-  collection,
-  doc,
-  type CollectionReference,
-  type DocumentReference,
-} from 'firebase/firestore';
+import { collection, doc, type CollectionReference, type DocumentReference } from './sdk/firestore';
 import { db } from './firestore';
 
 /**

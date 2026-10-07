@@ -13,6 +13,7 @@ export default tseslint.config(
       '**/playwright-report',
       '**/test-results',
       '**/.lighthouseci',
+      'apps/mobile/.expo',
     ],
   },
 
@@ -132,6 +133,26 @@ export default tseslint.config(
     // @lift/data holds providers and hooks, not fast-refreshable screens.
     files: ['packages/data/**/*.{ts,tsx}'],
     rules: { 'react-refresh/only-export-components': 'off' },
+  },
+  // --- Mobile (Expo / React Native). --------------------------------------
+  {
+    files: ['apps/mobile/src/**/*.{ts,tsx}'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['firebase', 'firebase/*', '@firebase/*', '@react-native-firebase/*'],
+              message:
+                'Firebase access is confined to @lift/data — consume a hook from @lift/data/hooks instead.',
+            },
+          ],
+        },
+      ],
+    },
   },
   {
     files: ['apps/web/src/sw.ts'],

@@ -1,8 +1,8 @@
-import { FirebaseError } from 'firebase/app';
-import { limit, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { limit, onSnapshot, orderBy, query, where } from '../sdk/firestore';
 import { useEffect, useState } from 'react';
 import type { Session } from '@lift/domain/sessions';
 import { toSession } from '../converters/session';
+import { firestoreErrorCode } from '../sdk/errors';
 import { paths } from '../paths';
 import { useAuth } from './useAuth';
 
@@ -51,12 +51,13 @@ const PENDING: ExerciseSessionsState = {
 };
 
 function describe(error: unknown): string {
-  if (error instanceof FirebaseError && error.code === 'failed-precondition') {
+  const code = firestoreErrorCode(error);
+  if (code === 'failed-precondition') {
     // The one failure with a specific, actionable cause: the composite index
     // this query needs has not been deployed to the project.
     return 'This lift’s history needs a Firestore index that has not been deployed yet. Run `firebase deploy --only firestore:indexes`.';
   }
-  if (error instanceof FirebaseError && error.code === 'permission-denied') {
+  if (code === 'permission-denied') {
     return 'You do not have access to this history.';
   }
   return error instanceof Error ? error.message : 'Could not load this history.';

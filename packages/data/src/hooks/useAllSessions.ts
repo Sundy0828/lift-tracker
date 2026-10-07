@@ -1,4 +1,4 @@
-import { getDocs, limit, orderBy, query } from 'firebase/firestore';
+import { getDocs, limit, orderBy, query } from '../sdk/firestore';
 import { useEffect, useState } from 'react';
 import type { Session } from '@lift/domain/sessions';
 import { toSession } from '../converters/session';

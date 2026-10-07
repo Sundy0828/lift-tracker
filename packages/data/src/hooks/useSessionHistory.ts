@@ -1,4 +1,4 @@
-import { limit, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { limit, onSnapshot, orderBy, query, where } from '../sdk/firestore';
 import { useCallback, useEffect, useState } from 'react';
 import type { Session } from '@lift/domain/sessions';
 import { toSession } from '../converters/session';

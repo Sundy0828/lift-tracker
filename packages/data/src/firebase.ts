@@ -3,14 +3,14 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   connectAuthEmulator,
-  GoogleAuthProvider,
   indexedDBLocalPersistence,
   initializeAuth,
   type Auth,
 } from 'firebase/auth';
 
 /**
- * App + Auth only. This module is on the first-paint path (the auth gate needs
+ * App + Auth only, for web. On mobile, Metro picks `firebase.native.ts`.
+ * This module is on the first-paint path (the auth gate needs
  * it), so it must never import `firebase/firestore` — that SDK is ~149 kB
  * gzipped, larger than the whole initial-JS budget in §3. The Firestore
  * instance lives in `./firestore`, which is only reachable from lazy chunks.
@@ -37,15 +37,14 @@ export const app: FirebaseApp = initializeApp(options);
  * from `apis.google.com` during startup — a third-party request and ~155 ms of
  * main thread on a throttled mobile profile, on every visit, to support a
  * redirect flow this app does not use. The popup calls pass the resolver
- * themselves, so it now loads when somebody taps "Continue with Google".
+ * themselves (see `./sdk/auth.ts`), so it now loads when somebody taps
+ * "Continue with Google".
  *
  * The persistence list is the one `getAuth` uses; nothing else changes.
  */
 export const auth: Auth = initializeAuth(app, {
   persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence],
 });
-
-export const googleProvider = new GoogleAuthProvider();
 
 if (useEmulators) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });

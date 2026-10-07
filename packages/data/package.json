@@ -14,9 +14,23 @@
     "firebase": "catalog:"
   },
   "peerDependencies": {
+    "@react-native-firebase/app": "catalog:",
+    "@react-native-firebase/auth": "catalog:",
+    "@react-native-firebase/firestore": "catalog:",
     "react": "catalog:"
   },
   "devDependencies": {
     "@types/react": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@react-native-firebase/app": {
+      "optional": true
+    },
+    "@react-native-firebase/auth": {
+      "optional": true
+    },
+    "@react-native-firebase/firestore": {
+      "optional": true
+    }
   }
 }

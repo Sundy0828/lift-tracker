@@ -1,4 +1,4 @@
-import { Timestamp, deleteDoc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { Timestamp, deleteDoc, getDoc, setDoc, updateDoc } from '../sdk/firestore';
 import type { FriendCode, FriendEdge } from '@lift/domain/friends';
 import {
   cleanDisplayName,

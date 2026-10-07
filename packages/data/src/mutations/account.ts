@@ -1,16 +1,4 @@
 import {
-  EmailAuthProvider,
-  browserPopupRedirectResolver,
-  deleteUser,
-  linkWithCredential,
-  linkWithPopup,
-  reauthenticateWithCredential,
-  reauthenticateWithPopup,
-  unlink,
-  updatePassword,
-  type User,
-} from 'firebase/auth';
-import {
   deleteDoc,
   getDocFromServer,
   getDocsFromServer,
@@ -19,12 +7,22 @@ import {
   writeBatch,
   type CollectionReference,
   type DocumentReference,
-} from 'firebase/firestore';
+} from '../sdk/firestore';
 import { parseProfile } from '../converters/profile';
 import { markAccountDeleted } from '../deletedAccounts';
-import { googleProvider } from '../firebase';
 import { db } from '../firestore';
 import { paths } from '../paths';
+import {
+  EmailAuthProvider,
+  deleteUser,
+  linkGoogle as linkGoogleProvider,
+  linkWithCredential,
+  reauthenticateWithCredential,
+  reauthenticateWithGoogle,
+  unlink,
+  updatePassword,
+  type User,
+} from '../sdk/auth';
 import { resetProfile } from './profile';
 
 /**
@@ -72,7 +70,7 @@ export async function reauthenticate(user: User, password: string): Promise<void
   const method = reauthMethod(user);
 
   if (method === 'google') {
-    await reauthenticateWithPopup(user, googleProvider, browserPopupRedirectResolver);
+    await reauthenticateWithGoogle(user);
     return;
   }
 
@@ -162,7 +160,7 @@ async function withFreshLogin<T>(
 
 /** Adds Google as a way into this account. Opens Google's own popup. */
 export async function linkGoogle(user: User): Promise<void> {
-  await linkWithPopup(user, googleProvider, browserPopupRedirectResolver);
+  await linkGoogleProvider(user);
 }
 
 /**

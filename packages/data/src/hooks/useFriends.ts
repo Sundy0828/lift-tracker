@@ -1,4 +1,4 @@
-import { onSnapshot, query, where } from 'firebase/firestore';
+import { onSnapshot, query, where } from '../sdk/firestore';
 import { useEffect, useState } from 'react';
 import type { FriendEdge } from '@lift/domain/friends';
 import { parseFriendEdge } from '@lift/domain/friends';

@@ -1,4 +1,4 @@
-import { onSnapshot, query, where } from 'firebase/firestore';
+import { onSnapshot, query, where } from '../sdk/firestore';
 import { useEffect, useState } from 'react';
 import type { Session } from '@lift/domain/sessions';
 import { toSession } from '../converters/session';

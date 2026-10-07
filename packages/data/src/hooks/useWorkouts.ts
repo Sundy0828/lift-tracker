@@ -1,4 +1,4 @@
-import { onSnapshot, orderBy, query } from 'firebase/firestore';
+import { onSnapshot, orderBy, query } from '../sdk/firestore';
 import { useEffect, useState } from 'react';
 import type { Workout } from '@lift/domain/workouts';
 import { toWorkout } from '../converters/workout';

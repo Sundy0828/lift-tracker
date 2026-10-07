@@ -39,7 +39,7 @@ import { isHandedness } from '@lift/domain/types';
 import { formatRestSeconds } from '@lift/domain/workouts';
 import { formatWeight, isUnit, stepFor } from '@lift/domain/units';
 import { PasswordRequirements } from '@/features/auth/PasswordRequirements';
-import { isAcceptable, problem as passwordProblem, SUMMARY } from '@/features/auth/password';
+import { isAcceptable, problem as passwordProblem, SUMMARY } from '@lift/domain/password';
 import { AppearanceCard } from './AppearanceCard';
 import { ExportCard } from './ExportCard';
 import { SignInMethods } from './SignInMethods';

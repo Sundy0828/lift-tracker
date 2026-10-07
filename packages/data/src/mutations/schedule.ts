@@ -1,4 +1,4 @@
-import { setDoc } from 'firebase/firestore';
+import { setDoc } from '../sdk/firestore';
 import type { Schedule, ScheduleDay } from '@lift/domain/schedule';
 import { setDay, withoutWorkout } from '@lift/domain/schedule';
 import { paths } from '../paths';

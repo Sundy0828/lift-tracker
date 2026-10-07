@@ -1,4 +1,4 @@
-import { onSnapshot } from 'firebase/firestore';
+import { onSnapshot } from '../sdk/firestore';
 import { useEffect, useState } from 'react';
 import type { ExerciseStats } from '@lift/domain/overlay';
 import { toExerciseStats } from '../converters/session';

@@ -1,5 +1,5 @@
 import { Stack, Text } from '@mantine/core';
-import { disallowedCharacters, requirements, SPECIALS } from './password';
+import { disallowedCharacters, requirements, SPECIALS } from '@lift/domain/password';
 
 /**
  * The policy as a live checklist under a new-password field.

@@ -5,8 +5,8 @@ import {
   orderBy,
   query,
   writeBatch,
-} from 'firebase/firestore';
-import type { WriteBatch } from 'firebase/firestore';
+} from '../sdk/firestore';
+import type { WriteBatch } from '../sdk/firestore';
 import type { DaySummary } from '@lift/domain/calendar';
 import { summariseSession } from '@lift/domain/calendar';
 import { DAY_INDEX_VERSION, byIndexYear, indexYearOf, toIndexRow } from '@lift/domain/dayIndex';

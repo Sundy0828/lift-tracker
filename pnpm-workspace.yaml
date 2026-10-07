@@ -21,6 +21,12 @@ catalog:
   firebase: ^12.19.0
   typescript: ~6.0.3
   vitest: ^5.0.2
+  # Mobile. Expo SDK 58 pins react-native; the native Firebase SDK is shared
+  # with @lift/data, which typechecks its .native.ts seam against it.
+  react-native: 0.88.0-rc.3
+  '@react-native-firebase/app': ^26.4.0
+  '@react-native-firebase/auth': ^26.4.0
+  '@react-native-firebase/firestore': ^26.4.0
 
 # Install scripts npm already skipped (npm 11 blocks them by default). None is
 # needed: @firebase/util writes optional auto-init defaults, protobufjs only

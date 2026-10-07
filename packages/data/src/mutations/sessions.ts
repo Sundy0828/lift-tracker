@@ -1,4 +1,4 @@
-import type { Query } from 'firebase/firestore';
+import type { Query } from '../sdk/firestore';
 import {
   Timestamp,
   deleteDoc,
@@ -10,7 +10,7 @@ import {
   setDoc,
   where,
   writeBatch,
-} from 'firebase/firestore';
+} from '../sdk/firestore';
 import type { ExerciseStats, PersonalRecord } from '@lift/domain/overlay';
 import { buildStatsUpdate } from '@lift/domain/overlay';
 import { rebuildExerciseStats, rebuildWorkoutStats } from '@lift/domain/rebuild';
