@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { saveSessionEntries } from '@lift/data/mutations/sessions';
 import type { Session, SessionEntry } from '@lift/domain/sessions';
+import { saveSessionEntries } from '../mutations/sessions';
+import { platform } from '../platform';
 
 /**
  * The set grid's working copy, and the debounced write behind it.
@@ -113,19 +114,12 @@ export function useSessionDraft(uid: string | null, session: Session | null): Se
    * navigating away mid-set must not lose the set.
    */
   useEffect(() => {
-    const onHide = (): void => {
-      // `pagehide` and a hidden `visibilitychange` rather than `beforeunload`:
-      // on a phone, being backgrounded is how a page actually stops running,
-      // and `beforeunload` is not reliably fired for it.
-      if (document.visibilityState === 'hidden') flush();
-    };
-
-    window.addEventListener('pagehide', flush);
-    document.addEventListener('visibilitychange', onHide);
+    // Being backgrounded is how an app actually stops running on a phone, so
+    // that is the moment to write, not an unload that may never come.
+    const unsubscribe = platform().onBackground(flush);
 
     return () => {
-      window.removeEventListener('pagehide', flush);
-      document.removeEventListener('visibilitychange', onHide);
+      unsubscribe();
       flush();
     };
   }, [flush]);

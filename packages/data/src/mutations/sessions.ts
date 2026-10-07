@@ -19,6 +19,7 @@ import { newSession, sessionExerciseIds, totalPerformedSets } from '@lift/domain
 import type { Weight } from '@lift/domain/types';
 import { toSession } from '../converters/session';
 import { db } from '../firestore';
+import { newRecordId } from '../ids';
 import { paths } from '../paths';
 import { indexSession, reindexSession, unindexSession } from './dayIndex';
 
@@ -41,7 +42,7 @@ import { indexSession, reindexSession, unindexSession } from './dayIndex';
  */
 
 export function newSessionId(): string {
-  return crypto.randomUUID();
+  return newRecordId();
 }
 
 /** Everything but the sets: the shape a session document is created with. */

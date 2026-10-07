@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { cancelRestNotification, scheduleRestNotification } from './notifications';
+import { restTag } from '@lift/domain/rest';
+import { platform } from '../platform';
 
 /**
  * The rest timer's *state* — a deadline, the set that earned it, and the
@@ -23,7 +24,10 @@ import { cancelRestNotification, scheduleRestNotification } from './notification
  * **Nothing here ticks.** The countdown re-renders twice a second, and this
  * hook lives on the active-session screen, so ticking here would re-render
  * every set row twice a second and undo the memoization the set grid depends
- * on (§3). The ticking belongs to `RestTimerBar`.
+ * on (§3). The ticking belongs to the rest bar, through `useRestCountdown`.
+ *
+ * How the end of a rest reaches a locked phone is the platform's business
+ * (see ../platform): this hook only hands over the deadline.
  */
 
 /** Which set a rest is owed to. */
@@ -86,14 +90,14 @@ export function useRestTimer(): RestTimer {
     if (total <= 0 || endsAt <= Date.now()) {
       setRest(null);
       current.current = null;
-      void cancelRestNotification();
+      void platform().cancelRestAlarm();
       return;
     }
 
     const next: Rest = { startedAt: endsAt - total * 1000, endsAt, label, owner };
     setRest(next);
     current.current = next;
-    void scheduleRestNotification(endsAt, label);
+    void platform().scheduleRestAlarm(endsAt, label, restTag(owner));
   }, []);
 
   const start = useCallback(
@@ -129,7 +133,7 @@ export function useRestTimer(): RestTimer {
       // gives fifteen more seconds rather than a deadline still in the past.
       const from = Math.max(Date.now(), running.endsAt);
       const endsAt = Math.max(Date.now(), from + seconds * 1000);
-      void scheduleRestNotification(endsAt, running.label);
+      void platform().scheduleRestAlarm(endsAt, running.label, restTag(running.owner));
       const next = { ...running, endsAt };
       current.current = next;
       return next;
@@ -139,14 +143,14 @@ export function useRestTimer(): RestTimer {
   const stop = useCallback(() => {
     setRest(null);
     current.current = null;
-    void cancelRestNotification();
+    void platform().cancelRestAlarm();
   }, []);
 
   // A rest that outlived the screen it belongs to would buzz about a session
   // that is already finished.
   useEffect(
     () => () => {
-      void cancelRestNotification();
+      void platform().cancelRestAlarm();
     },
     [],
   );

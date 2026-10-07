@@ -22,6 +22,12 @@ export type Palette = {
   /** Strip backgrounds for the sync states. */
   offline: string;
   syncing: string;
+  /** A set compared with last time: better, worse, level. As the web's `--delta-*`. */
+  up: string;
+  down: string;
+  same: string;
+  /** A set that needs attention: off its rep range, or missing a number. */
+  warn: string;
 };
 
 const LIGHT = {
@@ -33,6 +39,10 @@ const LIGHT = {
   danger: '#e03131',
   offline: '#fff3bf',
   syncing: '#e7f5ff',
+  up: '#099268',
+  down: '#e03131',
+  same: '#1c7ed6',
+  warn: '#e8590c',
 };
 
 const DARK = {
@@ -44,6 +54,10 @@ const DARK = {
   danger: '#ff6b6b',
   offline: '#5c4813',
   syncing: '#1b3a57',
+  up: '#38d9a9',
+  down: '#ff8787',
+  same: '#4dabf7',
+  warn: '#ffa94d',
 };
 
 export function usePalette(): Palette {

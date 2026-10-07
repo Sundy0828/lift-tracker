@@ -637,6 +637,23 @@ describe('finishing early', () => {
   });
 });
 
+describe('toggleSetComplete and the rest taken', () => {
+  const session = start(body([slot('a', 'bench')]));
+
+  it('forgets the rest measured before a set is unticked and ticked again', () => {
+    let entries = toggleSetComplete(session.entries, 'a', 0, '2025-08-24T17:05:00.000Z');
+    entries = updateSet(entries, 'a', 0, { restTakenSeconds: 24 });
+    entries = toggleSetComplete(entries, 'a', 0);
+    expect(entries[0]?.sets[0]?.restTakenSeconds).toBeNull();
+
+    entries = toggleSetComplete(entries, 'a', 0, '2025-08-24T17:09:00.000Z');
+    expect(entries[0]?.sets[0]).toMatchObject({
+      completedAt: '2025-08-24T17:09:00.000Z',
+      restTakenSeconds: null,
+    });
+  });
+});
+
 describe('lastCompletedSet', () => {
   const session = start(body([slot('a', 'bench'), slot('b', 'row')]));
 

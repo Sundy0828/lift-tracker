@@ -36,3 +36,11 @@ allowBuilds:
   '@firebase/util': false
   protobufjs: false
   re2: false
+
+# Held on Expo Modules API 1.0 releases. expo-application 58.0.4 moved its
+# Android module to API 2.0, and with expo 58.0.2's modules core the module is
+# linked but never registered: the app throws "Cannot find native module
+# 'ExpoApplication'" at launch (expo-notifications imports it). Lift this when
+# the Expo SDK patch is bumped, and check a dev build before relying on it.
+overrides:
+  expo-application: 58.0.3

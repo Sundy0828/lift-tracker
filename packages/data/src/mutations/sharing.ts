@@ -29,6 +29,11 @@ import { paths } from '../paths';
  * A uuid rather than a short code: the link is the only access control on a
  * public document, so it has to be unguessable. There is no listing of other
  * people's shares, so nothing else can enumerate them.
+ *
+ * Hence `crypto` and nothing weaker, unlike `newRecordId` (../ids). React
+ * Native has no `crypto` global, so on a phone this throws rather than mint a
+ * guessable link. Sharing on mobile (Phase 5) needs a secure source such as
+ * expo-crypto.
  */
 export function newShareId(): string {
   return crypto.randomUUID();

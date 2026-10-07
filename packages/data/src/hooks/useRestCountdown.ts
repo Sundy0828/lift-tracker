@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { platform } from '../platform';
 import type { Rest } from './useRestTimer';
 
 /**
@@ -36,11 +37,11 @@ export function useRestCountdown(rest: Rest | null): RestCountdown {
     const resync = (): void => {
       setNow(Date.now());
     };
-    document.addEventListener('visibilitychange', resync);
+    const unsubscribe = platform().onForeground(resync);
 
     return () => {
       clearInterval(interval);
-      document.removeEventListener('visibilitychange', resync);
+      unsubscribe();
     };
   }, [rest]);
 

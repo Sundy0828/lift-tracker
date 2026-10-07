@@ -1,11 +1,11 @@
 import { Button, Group, Progress, Text } from '@mantine/core';
 import { useEffect, useRef } from 'react';
+import { useRestCountdown } from '@lift/data/hooks/useRestCountdown';
+import type { Rest } from '@lift/data/hooks/useRestTimer';
+import { restTotal } from '@lift/data/hooks/useRestTimer';
 import { formatDuration } from '@lift/domain/workouts';
 import { buzz, chime } from './alert';
 import { notificationState } from './notifications';
-import type { Rest } from './useRestTimer';
-import { restTotal } from './useRestTimer';
-import { useRestCountdown } from './useRestCountdown';
 import classes from './RestTimerBar.module.css';
 
 /**

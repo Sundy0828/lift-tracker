@@ -342,17 +342,100 @@ Notes from running it:
 
 The reason for the project.
 
-- [ ] Active session screen: set grid, overlay numbers, RIR, unit toggle, all from shared hooks.
-- [ ] Rest timer: shared `useRestCountdown` plus native `platform.scheduleAlarm`. Deadline stored as
-      a timestamp, never a running interval.
-- [ ] Local notification at deadline with Done action and repeat. Haptic and optional chime in the
+_**Done on Android, 2026-10-07.** Exit met on a real phone: a full workout logged offline,
+alerts on time with the screen locked, the lock-screen countdown, Done from the notification, and
+a rest (adjusted or not) surviving the app being killed. Left for when the store accounts arrive:
+the beta builds and every iOS check (see the open item below). 882/882 unit tests._
+
+- [x] Active session screen: set grid, overlay numbers, RIR, unit toggle, all from shared hooks.
+      _`app/(app)/session/[sessionId].tsx`, a handler-for-handler port of the web screen. Started
+      from Today or the workout detail through `app/(app)/start/[workoutId].tsx`, which publishes
+      unpublished edits first (as web does) and resumes an unfinished session of the same workout
+      instead of starting a second one. Unit toggle (lb/kg) sits in the session header._
+- [x] Rest timer: shared `useRestCountdown` plus native `platform.scheduleAlarm`. Deadline stored as
+      a timestamp, never a running interval. _`useRestTimer`, `useRestCountdown` and
+      `useSessionDraft` moved from `apps/web` to `@lift/data/hooks`. They reach the device through
+      `@lift/data/platform` (`scheduleRestAlarm`, `cancelRestAlarm`, `onBackground`,
+      `onForeground`), which each app registers at startup: `apps/web/src/app/platform.ts` and
+      `apps/mobile/src/platform.ts`. A rest still running when the app was killed is rebuilt on
+      return from the set that earned it (`restToResume` in `@lift/domain/rest`); nothing else
+      about it is stored._
+- [x] Local notification at deadline with Done action and repeat. Haptic and optional chime in the
       foreground. On iOS, set `interruptionLevel: 'timeSensitive'` (and enable the Time Sensitive
       Notifications capability) so a Focus mode does not hide the alert. The ring/silent switch
-      still mutes sound, so rely on vibration and the banner.
+      still mutes sound, so rely on vibration and the banner. _The repeat policy is
+      `restAlertOffsets()` in `@lift/domain/rest` (0, 25, 50 s); all three are scheduled with the
+      OS up front. Done opens the app, so the screen can record the rest taken. The entitlement is
+      in `app.json`. The chime is `assets/chime.wav`, made by `scripts/make-chime.mjs` with the
+      web's tones._
 - [ ] First TestFlight / Play internal build goes to beta users here. Run the kill-mid-session
-      check from Phase 0 on an iPhone (a tester's is fine).
-- [ ] Keep-awake toggle while a session is active.
-- [ ] Bodyweight entry and PR flag on save.
+      check from Phase 0 on an iPhone (a tester's is fine). _Waits on the store accounts._
+- [x] Keep-awake toggle while a session is active. _On for the whole live session, off once it
+      is finished, as the web's wake lock._
+- [x] Bodyweight entry and PR flag on save. _Bodyweight, date and notes in the folded "Session
+      details" card. Records are announced in an alert after Finish._
+
+To check on the next dev build:
+
+- Lock the phone mid-rest: three alerts arrive (deadline, +25 s, +50 s). With a Focus mode on, on
+  iOS, they still break through.
+- Press Done on the notification: the app opens and the rest bar clears.
+- Kill the app mid-rest and reopen the session: the countdown picks up where it was.
+- Android lateness (Phase 0 left this open). If alerts arrive late, the next step is exact
+  alarms (`SCHEDULE_EXACT_ALARM`), which Play reviews.
+
+Found on the first Phase 3 build: Expo is migrating modules to the Expo Modules API 2.0 in SDK 58
+patch releases. `expo-application` 58.0.4 and `expo-haptics` 58.0.5 are 2.0 modules, and with
+`expo` 58.0.2 they are linked into the build but never registered ("Cannot find native module
+'ExpoApplication'"). Both are held on their last 1.0 releases (an `overrides` entry in
+`pnpm-workspace.yaml`, `expo-notifications` pinned to 58.1.0). Bump the Expo SDK patch as one set,
+then lift the hold and confirm on a dev build.
+
+Also found: Hermes has no `crypto` global, so starting a workout threw. Record ids (sessions,
+workouts, custom exercises) now come from `newRecordId` in `@lift/data/ids`, which falls back to a
+`Math.random` uuid: they only need to be unique within an account. Share ids still require
+`crypto` and throw on a phone, so a guessable link can never be minted; Phase 5 sharing needs
+`expo-crypto`. Phase 5 must also fix `deleteSession`'s `navigator.onLine` check, which React Native
+leaves undefined (it would always refuse as offline).
+
+From the first timer test (2026-10-07):
+
+- **Android alerts arrived ~20 s late.** Without the exact-alarm permission, expo-notifications
+  falls back to an inexact alarm. Now `USE_EXACT_ALARM` (granted at install) plus
+  `delivery: 'alarmClock'`, which the system never defers. Side effect: an alarm icon in the status
+  bar while a rest runs.
+- **Lock-screen countdown.** `src/restCountdown.*`, driven from the platform adapter, so starting,
+  adjusting and ending a rest all reach it. The OS ticks the clock in both cases; the app sends one
+  update per rest.
+  - Android: a local Expo module, `modules/rest-countdown` (Kotlin, Expo Modules API 1.0). A
+    silent ongoing notification whose chronometer counts down to the deadline, removed there. On
+    Android 16 it asks to be a Live Update, a status-bar chip.
+  - iOS: a Live Activity through `expo-widgets` and `@expo/ui` (Lock Screen and Dynamic Island,
+    `Text(timerInterval:countsDown:)`). Config checked with `expo config --type introspect`.
+    Untested: an iOS build also waits on registering the iOS app in Firebase
+    (`ios.googleServicesFile`), as well as the Apple account.
+  - The fallback is `restCountdown.tsx`, not `.ts`: Metro tries every platform variant of one
+    extension before the next, so a `.ts` fallback would beat `.ios.tsx`.
+  - `expo-widgets` is kept out of the Android build (`expo.autolinking.android.exclude`). `@expo/ui`
+    stays in: expo-router loads it eagerly on Android.
+- **An adjusted rest lost its −15s/+15s after a kill.** The resume rebuilt the planned rest. Each
+  scheduled alert now carries the deadline and the set it belongs to (`restTag`), and the session
+  screen reads it back (`scheduledRestEndsAt`) before falling back to the plan.
+- **A set ticked again lost its rest after a kill.** `toggleSetComplete` kept the old
+  `restTakenSeconds`, so a set unticked and ticked again read as already rested. It now clears it
+  both ways (shared domain code, so web too; nothing else reads the field).
+- **Phase 6:** `USE_EXACT_ALARM` is reviewed by Play. A rest timer is the app's core feature,
+  which the policy allows, but say so in the declaration. If Play refuses it, switch to
+  `SCHEDULE_EXACT_ALARM` with a prompt to grant it in Settings.
+
+Known gaps, by design for now:
+
+- Leaving the session screen mid-rest cancels the alarm, as on the web. Coming back rebuilds the
+  rest from the set that earned it.
+- Ad-hoc sessions cannot add exercises on the phone yet; that needs the exercise picker
+  (Phase 4). Mobile only starts sessions from a workout.
+- The "load and reps look swapped" query is an in-screen notice above the rest bar, not a toast.
+- The web's initial JS grew 0.5 kB (153.7 of 155 kB) from registering the platform adapter.
 
 **Exit:** full workout logged offline on a phone, timer fires with the screen locked, session syncs
 when back online. Web unchanged.

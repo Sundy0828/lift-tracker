@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.sundy0828.lifttracker"
+      "bundleIdentifier": "com.sundy0828.lifttracker",
+      "entitlements": {
+        "com.apple.developer.usernotifications.time-sensitive": true
+      }
     },
     "android": {
       "package": "com.sundy0828.lifttracker",
@@ -20,7 +23,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "permissions": ["android.permission.USE_EXACT_ALARM"]
     },
     "plugins": [
       "expo-router",
@@ -34,7 +38,16 @@
             "useFrameworks": "dynamic"
           }
         }
-      ]
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png"
+        }
+      ],
+      "expo-audio",
+      "expo-asset",
+      ["expo-widgets", {}]
     ],
     "extra": {
       "router": {

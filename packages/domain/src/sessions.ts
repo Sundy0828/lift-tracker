@@ -306,7 +306,14 @@ export function updateSet(
   }));
 }
 
-/** Marks a set done, or undoes that. Clears `skipped` either way. */
+/**
+ * Marks a set done, or undoes that. Clears `skipped` either way.
+ *
+ * Also clears `restTakenSeconds`: the rest it measured followed a finish that
+ * no longer stands. Kept, it made a set ticked again after a mis-tap read as
+ * already rested, so its new rest could not be picked up after the app was
+ * killed (see `restToResume`).
+ */
 export function toggleSetComplete(
   entries: readonly SessionEntry[],
   key: string,
@@ -317,7 +324,12 @@ export function toggleSetComplete(
     ...entry,
     sets: entry.sets.map((set) =>
       set.setIndex === setIndex
-        ? { ...set, completedAt: set.completedAt === null ? at : null, skipped: false }
+        ? {
+            ...set,
+            completedAt: set.completedAt === null ? at : null,
+            skipped: false,
+            restTakenSeconds: null,
+          }
         : set,
     ),
   }));

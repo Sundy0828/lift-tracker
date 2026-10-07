@@ -2,6 +2,7 @@ import { Timestamp, deleteDoc, doc, serverTimestamp, setDoc, writeBatch } from '
 import type { Workout, WorkoutBody } from '@lift/domain/workouts';
 import { cloneBody, diffWorkout } from '@lift/domain/workoutDiff';
 import { db } from '../firestore';
+import { newRecordId } from '../ids';
 import { paths } from '../paths';
 
 /**
@@ -22,7 +23,7 @@ import { paths } from '../paths';
  */
 
 export function newId(): string {
-  return crypto.randomUUID();
+  return newRecordId();
 }
 
 export function createWorkout(uid: string, workoutId: string, name: string): Promise<void> {

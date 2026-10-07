@@ -9,10 +9,11 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '../../../components/Screen';
 import { Body, Button, Card, Loading, Title } from '../../../components/ui';
+import { startWorkout } from '../../../components/WorkoutRow';
 
 /**
- * One workout, read-only: its slots as the working copy has them now.
- * Editing (and drag-to-reorder) arrives in Phase 4.
+ * One workout, read-only: its slots as the working copy has them now, and the
+ * button that starts it. Editing (and drag-to-reorder) arrives in Phase 4.
  */
 export default function WorkoutDetail() {
   const { workoutId } = useLocalSearchParams<{ workoutId: string }>();
@@ -52,6 +53,15 @@ export default function WorkoutDetail() {
         {workout.currentVersion > 0 ? ` · version ${String(workout.currentVersion)}` : ''}
       </Body>
       {workout.notes === '' ? null : <Body>{workout.notes}</Body>}
+
+      {workout.slots.some((slot) => slot.kind === 'exercise') ? (
+        <Button
+          label="Start this workout"
+          onPress={() => {
+            startWorkout(workout.id);
+          }}
+        />
+      ) : null}
 
       {workout.slots.map((slot) =>
         slot.kind === 'rest' ? (
