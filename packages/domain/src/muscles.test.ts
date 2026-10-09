@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  musclesInRegion,
   BASE_MUSCLE_GROUPS,
   EXTENDED_MUSCLE_GROUPS,
   MUSCLE_EXTENSIONS,
@@ -203,5 +204,17 @@ describe('parseBaseMuscleGroups', () => {
 
   it('keeps base names', () => {
     expect(parseBaseMuscleGroups(['shoulders', 'calves'])).toEqual(['shoulders', 'calves']);
+  });
+});
+
+describe('musclesInRegion', () => {
+  it('lists a region with its extensions', () => {
+    expect(musclesInRegion('Shoulders')).toEqual(
+      expect.arrayContaining(['shoulders', 'rear delts', 'side delts']),
+    );
+  });
+
+  it('is empty for no region, which matches every exercise', () => {
+    expect(musclesInRegion(null)).toEqual([]);
   });
 });

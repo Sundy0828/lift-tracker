@@ -7,6 +7,9 @@ import {
   REST_SLOT_ID,
   activeGroupIds,
   createRestSlot,
+  duplicateSlot,
+  moveSlot,
+  placeSlot,
   exerciseSlots,
   groupRounds,
   groupWithSlot,
@@ -774,5 +777,142 @@ describe('adding after a circuit', () => {
     expect(groupRounds(slots.filter((item) => item.supersetGroup === 'g1'))).toBe(
       DEFAULT_PRESCRIPTION.sets,
     );
+  });
+});
+
+describe('duplicateSlot', () => {
+  it('puts the copy straight after the original, with its own id and occurrence', () => {
+    const next = duplicateSlot(base(), 'a', 'a2');
+    expect(next.map((item) => item.slotId)).toEqual(['warm', 'a', 'a2', 'b', 'c']);
+    expect(find(next, 'a2')).toMatchObject({ exerciseId: 'pushup', occurrenceIndex: 1 });
+    expect(find(next, 'a')?.occurrenceIndex).toBe(0);
+  });
+
+  it('keeps the copy in the circuit, so the run stays contiguous', () => {
+    const grouped = base().map((item) =>
+      item.slotId === 'warm' ? item : { ...item, supersetGroup: 'g' },
+    );
+    const next = duplicateSlot(grouped, 'b', 'b2');
+    expect(find(next, 'b2')?.supersetGroup).toBe('g');
+    expect(reconcileGroups(next)).toEqual(next);
+  });
+
+  it('copies a rest row as a rest row of the same length', () => {
+    const slots = [...base(), createRestSlot('r', 90)];
+    const next = duplicateSlot(slots, 'r', 'r2');
+    expect(find(next, 'r2')).toMatchObject({ kind: 'rest', occurrenceIndex: 0 });
+    expect(restSlotSeconds(find(next, 'r2') ?? slot())).toBe(90);
+  });
+
+  it('does not share the prescription object with the original', () => {
+    const slots = base();
+    const next = duplicateSlot(slots, 'a', 'a2');
+    expect(find(next, 'a2')?.prescription).not.toBe(find(next, 'a')?.prescription);
+  });
+
+  it('returns the list unchanged for an unknown slot', () => {
+    expect(duplicateSlot(base(), 'nope', 'x')).toEqual(base());
+  });
+});
+
+describe('placeSlot and moveSlot', () => {
+  /** Warm-up, then a, b, c as one circuit of 3 rounds. */
+  function circuit(): ExerciseSlot[] {
+    return base().map((item) =>
+      item.slotId === 'warm'
+        ? item
+        : {
+            ...item,
+            supersetGroup: 'g',
+            prescription: { ...item.prescription, sets: 3, restSeconds: 0 },
+          },
+    );
+  }
+
+  const ids = (slots: readonly ExerciseSlot[]): string[] => slots.map((item) => item.slotId);
+
+  it('reorders a plain slot without touching its prescription', () => {
+    const slots = base();
+    const next = moveSlot(slots, 'c', { before: 'a', group: null });
+    expect(ids(next)).toEqual(['warm', 'c', 'a', 'b']);
+    expect(find(next, 'c')).toEqual(find(slots, 'c'));
+  });
+
+  it('moves to the end with a null before', () => {
+    expect(ids(moveSlot(base(), 'warm', { before: null, group: null }))).toEqual([
+      'a',
+      'b',
+      'c',
+      'warm',
+    ]);
+  });
+
+  it('joins a circuit when dropped inside it, taking its rounds', () => {
+    const next = moveSlot(circuit(), 'warm', { before: 'c', group: 'g' });
+    expect(ids(next)).toEqual(['a', 'b', 'warm', 'c']);
+    expect(find(next, 'warm')).toMatchObject({
+      supersetGroup: 'g',
+      prescription: { sets: 3, restSeconds: 0 },
+    });
+  });
+
+  it('can land first inside a circuit', () => {
+    const next = moveSlot(circuit(), 'warm', { before: 'a', group: 'g' });
+    expect(ids(next)).toEqual(['warm', 'a', 'b', 'c']);
+    expect(find(next, 'warm')?.supersetGroup).toBe('g');
+  });
+
+  it('leaves a circuit when dropped just below it, though still next to it', () => {
+    const slots = [...circuit(), slot({ slotId: 'z', exerciseId: 'z' })];
+    const next = moveSlot(slots, 'c', { before: 'z', group: null });
+    expect(ids(next)).toEqual(['warm', 'a', 'b', 'c', 'z']);
+    expect(find(next, 'c')).toMatchObject({
+      supersetGroup: null,
+      prescription: { restSeconds: null },
+    });
+    expect(find(next, 'a')?.supersetGroup).toBe('g');
+  });
+
+  it('leaves in place from the gap just above itself, outside the circuit', () => {
+    const next = moveSlot(circuit(), 'a', { before: 'a', group: null });
+    expect(ids(next)).toEqual(['warm', 'a', 'b', 'c']);
+    expect(find(next, 'a')?.supersetGroup).toBeNull();
+    expect(find(next, 'b')?.supersetGroup).toBe('g');
+  });
+
+  it('dissolves a circuit left with one member', () => {
+    const two = circuit().filter((item) => item.slotId !== 'c');
+    const next = moveSlot(two, 'b', { before: 'warm', group: null });
+    expect(next.every((item) => item.supersetGroup === null)).toBe(true);
+  });
+
+  it('keeps a member that moves within its circuit as it was', () => {
+    const slots = circuit();
+    const next = moveSlot(slots, 'c', { before: 'a', group: 'g' });
+    expect(ids(next)).toEqual(['warm', 'c', 'a', 'b']);
+    expect(find(next, 'c')).toEqual(find(slots, 'c'));
+  });
+
+  it('keeps a rest row its length when it joins', () => {
+    const slots = [...circuit(), createRestSlot('r', 45)];
+    const next = moveSlot(slots, 'r', { before: 'b', group: 'g' });
+    expect(find(next, 'r')).toMatchObject({
+      supersetGroup: 'g',
+      prescription: { restSeconds: 45 },
+    });
+  });
+
+  it('places a new slot into a gap, as the insert rows do', () => {
+    const fresh = slot({ slotId: 'n', exerciseId: 'n' });
+    const inside = placeSlot(circuit(), fresh, { before: null, group: 'g' });
+    expect(ids(inside)).toEqual(['warm', 'a', 'b', 'c', 'n']);
+    expect(find(inside, 'n')?.supersetGroup).toBe('g');
+
+    const outside = placeSlot(circuit(), fresh, { before: null, group: null });
+    expect(find(outside, 'n')?.supersetGroup).toBeNull();
+  });
+
+  it('returns the list unchanged for an unknown slot', () => {
+    expect(moveSlot(base(), 'nope', { before: null, group: null })).toEqual(base());
   });
 });

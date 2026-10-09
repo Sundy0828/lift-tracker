@@ -1,6 +1,7 @@
 import { MantineProvider } from '@mantine/core';
 import { Suspense, lazy, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AuthProvider } from '@lift/data/hooks/useAuth';
+import { DEFAULT_COLOR_SCHEME } from '@lift/ui-tokens';
 import { hideSplash } from './splash';
 import { buildTheme } from './theme';
 import { useThemePreset } from './themePreset';
@@ -69,7 +70,7 @@ export function Providers({ children }: { children: ReactNode }) {
   const theme = useMemo(() => buildTheme(preset), [preset]);
 
   return (
-    <MantineProvider theme={theme} defaultColorScheme="dark">
+    <MantineProvider theme={theme} defaultColorScheme={DEFAULT_COLOR_SCHEME}>
       <DeferredNotifications />
       <AuthProvider>{children}</AuthProvider>
     </MantineProvider>

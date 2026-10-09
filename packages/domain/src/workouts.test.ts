@@ -27,6 +27,7 @@ import {
   parseSlot,
   reorder,
   sliderBound,
+  stepRange,
   slotOccurrenceKey,
   supersetGroups,
   totalSets,
@@ -544,5 +545,38 @@ describe('a circuit in the estimate', () => {
     expect(estimateWorkoutSeconds(workout('W', [one, createRestSlot('r1', 45)]), 120)).toBe(
       SET + 30 + 45,
     );
+  });
+});
+
+describe('stepRange', () => {
+  const reps = { floor: 1, ceiling: 30, minGap: REPS_MIN_GAP };
+
+  it('moves one end on its own while the gap allows', () => {
+    expect(stepRange({ min: 8, max: 12 }, 'min', 1, reps)).toEqual({ min: 9, max: 12 });
+    expect(stepRange({ min: 8, max: 12 }, 'max', -1, reps)).toEqual({ min: 8, max: 11 });
+  });
+
+  it('pushes the other end rather than collapsing the window', () => {
+    expect(stepRange({ min: 8, max: 10 }, 'min', 1, reps)).toEqual({ min: 9, max: 11 });
+    expect(stepRange({ min: 8, max: 10 }, 'max', -1, reps)).toEqual({ min: 7, max: 9 });
+  });
+
+  it('refuses a step that would leave the bounds', () => {
+    expect(stepRange({ min: 1, max: 3 }, 'min', -1, reps)).toEqual({ min: 1, max: 3 });
+    expect(stepRange({ min: 1, max: 3 }, 'max', -1, reps)).toEqual({ min: 1, max: 3 });
+    expect(stepRange({ min: 28, max: 30 }, 'min', 1, reps)).toEqual({ min: 28, max: 30 });
+    expect(stepRange({ min: 10, max: 30 }, 'max', 1, reps)).toEqual({ min: 10, max: 30 });
+  });
+
+  it('leaves an imported fixed target alone until an end moves', () => {
+    expect(stepRange({ min: 10, max: 10 }, 'max', 1, reps)).toEqual({ min: 9, max: 11 });
+    expect(stepRange({ min: 10, max: 10 }, 'min', -1, reps)).toEqual({ min: 9, max: 11 });
+  });
+
+  it('works for RIR, which starts at 0', () => {
+    const rir = { floor: 0, ceiling: 5, minGap: RIR_MIN_GAP };
+    expect(stepRange({ min: 0, max: 1 }, 'min', 1, rir)).toEqual({ min: 1, max: 2 });
+    expect(stepRange({ min: 1, max: 2 }, 'max', -1, rir)).toEqual({ min: 0, max: 1 });
+    expect(stepRange({ min: 0, max: 1 }, 'max', -1, rir)).toEqual({ min: 0, max: 1 });
   });
 });

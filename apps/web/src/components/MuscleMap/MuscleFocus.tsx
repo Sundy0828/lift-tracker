@@ -2,7 +2,7 @@ import { Text } from '@mantine/core';
 import type { MuscleGroup } from '@lift/domain/muscles';
 import { baseMuscleOf, muscleLabel } from '@lift/domain/muscles';
 import { BodyPair } from './BodyFigure';
-import type { BodyRegion } from './bodyPolygons';
+import type { BodyRegion } from '@lift/domain/bodyMap';
 import map from './MuscleMap.module.css';
 import classes from './MuscleFocus.module.css';
 

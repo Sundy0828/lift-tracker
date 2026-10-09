@@ -196,6 +196,36 @@ export function sliderBound(softMax: number, current: number): number {
 }
 
 /**
+ * One step of a range edited with steppers rather than a two-thumb slider.
+ *
+ * Behaves as the web's slider does with `pushOnOverlap`: moving one end into
+ * the other carries the other along, so raising the bottom of 8-10 to 9 makes
+ * 9-11 rather than refusing. The ends stay `minGap` apart and inside
+ * `[floor, ceiling]`; a step that cannot keep both is not taken.
+ *
+ * A range already narrower than `minGap` (an imported fixed target) is not
+ * forced wider until one of its ends is moved.
+ */
+export function stepRange(
+  range: RepRange,
+  edge: 'min' | 'max',
+  delta: number,
+  bounds: { floor: number; ceiling: number; minGap: number },
+): RepRange {
+  const { floor, ceiling, minGap } = bounds;
+
+  if (edge === 'min') {
+    const min = range.min + delta;
+    if (min < floor || min + minGap > ceiling) return range;
+    return { min, max: Math.max(range.max, min + minGap) };
+  }
+
+  const max = range.max + delta;
+  if (max > ceiling || max - minGap < floor) return range;
+  return { min: Math.min(range.min, max - minGap), max };
+}
+
+/**
  * Rest as a plain seconds count: `120s`.
  *
  * Configuration is expressed in seconds everywhere — the stored value, the
@@ -309,6 +339,35 @@ export function insertSlotAfter(
 
   const next = [...slots];
   next.splice(position + 1, 0, joined);
+  return next;
+}
+
+/**
+ * Copies a slot to sit directly after itself: another round of the same
+ * movement, or the same pause again.
+ *
+ * The copy stays in the original's circuit, which keeps the run contiguous,
+ * and takes the next occurrence index, so its overlay history is its own
+ * rather than the original's (see `nextOccurrenceIndex`).
+ */
+export function duplicateSlot(
+  slots: readonly ExerciseSlot[],
+  slotId: string,
+  newSlotId: string,
+): ExerciseSlot[] {
+  const position = slots.findIndex((slot) => slot.slotId === slotId);
+  const original = slots[position];
+  if (original === undefined) return [...slots];
+
+  const copy: ExerciseSlot = {
+    ...original,
+    slotId: newSlotId,
+    occurrenceIndex: original.kind === 'rest' ? 0 : nextOccurrenceIndex(slots, original.exerciseId),
+    prescription: { ...original.prescription },
+  };
+
+  const next = [...slots];
+  next.splice(position + 1, 0, copy);
   return next;
 }
 
@@ -636,6 +695,84 @@ export function reconcileGroups(slots: readonly ExerciseSlot[]): ExerciseSlot[] 
         run !== undefined && position >= run.start && position < run.start + run.length;
       return inside ? slot : detach(slot);
     }),
+  );
+}
+
+/**
+ * A gap in the list, as a drop or insert target: before `before` (null for
+ * the end), and either inside circuit `group` or outside every circuit.
+ *
+ * Two gaps can share a `before`: the last one inside a circuit and the first
+ * one after it both sit before the next slot. `group` is what tells them
+ * apart, which is what lets a drop land at the end of a circuit or just
+ * outside it.
+ */
+export type SlotPlace = { before: string | null; group: string | null };
+
+/**
+ * Puts a slot (new, or already lifted out of the list) into a gap.
+ *
+ * Its circuit is the gap's: a slot dropped inside a circuit joins it, taking
+ * its round count and dropping its own rest to 0, as `groupWithSlot` does. One
+ * dropped outside leaves any circuit it was in. A slot that stays in the same
+ * circuit, or stays out of all of them, keeps its prescription untouched.
+ */
+export function placeSlot(
+  slots: readonly ExerciseSlot[],
+  slot: ExerciseSlot,
+  place: SlotPlace,
+): ExerciseSlot[] {
+  const { group } = place;
+
+  let placed: ExerciseSlot;
+  if (group === slot.supersetGroup) {
+    placed = slot;
+  } else if (group === null) {
+    placed = detach(slot);
+  } else if (slot.kind === 'rest') {
+    placed = { ...slot, supersetGroup: group };
+  } else {
+    const members = slots.filter((item) => item.supersetGroup === group);
+    const rounds =
+      groupRounds(members) ??
+      exerciseSlots(members)[0]?.prescription.sets ??
+      slot.prescription.sets;
+    placed = {
+      ...slot,
+      supersetGroup: group,
+      prescription: { ...slot.prescription, sets: rounds, restSeconds: 0 },
+    };
+  }
+
+  const found =
+    place.before === null ? -1 : slots.findIndex((item) => item.slotId === place.before);
+  const next = [...slots];
+  next.splice(found === -1 ? slots.length : found, 0, placed);
+  // Settles any circuit the slot left: one left with a single member dissolves.
+  return reconcileGroups(next);
+}
+
+/**
+ * Moves a slot into a gap: the drop at the end of a drag. See `placeSlot`
+ * for how the gap decides its circuit.
+ *
+ * The gap directly before the slot is its own position, so it moves nowhere,
+ * though it can still leave or join a circuit there.
+ */
+export function moveSlot(
+  slots: readonly ExerciseSlot[],
+  slotId: string,
+  place: SlotPlace,
+): ExerciseSlot[] {
+  const position = slots.findIndex((item) => item.slotId === slotId);
+  const slot = slots[position];
+  if (slot === undefined) return [...slots];
+
+  const before = place.before === slotId ? (slots[position + 1]?.slotId ?? null) : place.before;
+  return placeSlot(
+    slots.filter((item) => item.slotId !== slotId),
+    slot,
+    { before, group: place.group },
   );
 }
 

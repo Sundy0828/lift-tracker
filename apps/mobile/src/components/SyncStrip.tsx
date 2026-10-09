@@ -29,7 +29,9 @@ export function SyncStrip() {
       accessibilityRole="summary"
       accessibilityLiveRegion="polite"
     >
-      <Text style={[styles.text, { color: palette.text }]}>{message}</Text>
+      <Text style={[styles.text, { color: offline ? palette.offlineText : palette.syncingText }]}>
+        {message}
+      </Text>
     </View>
   );
 }

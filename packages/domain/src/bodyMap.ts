@@ -1,4 +1,4 @@
-import type { MuscleGroup } from '@lift/domain/muscles';
+import type { MuscleGroup } from './muscles';
 
 /**
  * Front and back body diagrams.

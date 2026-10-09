@@ -12,7 +12,7 @@ import { CustomExerciseForm } from '@/features/exercises/CustomExerciseForm';
 import { ExerciseBrowser } from '@/features/exercises/ExerciseBrowser';
 import { ExerciseDetailDrawer } from '@/features/exercises/ExerciseDetailDrawer';
 import { Panel } from '@/features/exercises/Panel';
-import { musclesInRegion } from '@/features/exercises/bodyRegions';
+import { musclesInRegion } from '@lift/domain/muscles';
 import { useRecentSearches } from './useRecentSearches';
 
 type Props = {

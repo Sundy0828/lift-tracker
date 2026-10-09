@@ -1,6 +1,6 @@
 import { memo } from 'react';
-import type { BodyRegion, BodyView } from './bodyPolygons';
-import { VIEW_BOX, inertFor, regionsFor } from './bodyPolygons';
+import type { BodyRegion, BodyView } from '@lift/domain/bodyMap';
+import { VIEW_BOX, inertFor, regionsFor } from '@lift/domain/bodyMap';
 import classes from './BodyFigure.module.css';
 
 type Props = {

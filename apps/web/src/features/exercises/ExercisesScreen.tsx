@@ -12,7 +12,7 @@ import { search } from '@lift/domain/search';
 import { useRecentSearches } from '@/features/workouts/useRecentSearches';
 import type { CustomExerciseDraft } from './CustomExerciseForm';
 import { CustomExerciseForm } from './CustomExerciseForm';
-import { musclesInRegion } from './bodyRegions';
+import { musclesInRegion } from '@lift/domain/muscles';
 import { ExerciseBrowser } from './ExerciseBrowser';
 import { ExerciseDetailDrawer } from './ExerciseDetailDrawer';
 import classes from './ExercisesScreen.module.css';

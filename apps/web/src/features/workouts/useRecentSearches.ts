@@ -1,29 +1,22 @@
 import { useCallback, useState } from 'react';
+import { parseRecentSearches, rememberSearch } from '@lift/domain/recentSearches';
 
 /**
  * The last few exercise searches that led somewhere, per device.
  *
  * `localStorage`, not the profile: this is a typing shortcut, not training
- * data, and it is worth nothing on another device.
+ * data, and it is worth nothing on another device. The list's rules are
+ * shared with the phone (`@lift/domain/recentSearches`).
  */
 
 const KEY = 'lift-tracker.recent-exercise-searches';
 
-/** Enough to cover a training block's worth of habits, short enough to scan. */
-const MAX = 6;
-
 function read(): string[] {
   try {
-    const raw = localStorage.getItem(KEY);
-    if (raw === null) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return (parsed as readonly unknown[])
-      .filter((item): item is string => typeof item === 'string' && item.trim() !== '')
-      .slice(0, MAX);
+    return parseRecentSearches(localStorage.getItem(KEY));
   } catch {
-    // Private mode, blocked site data, or somebody else's JSON in the key.
-    // An empty history costs a person nothing.
+    // Private mode or blocked site data. An empty history costs a person
+    // nothing.
     return [];
   }
 }
@@ -48,13 +41,9 @@ export function useRecentSearches(): RecentSearches {
   const [recent, setRecent] = useState<readonly string[]>(read);
 
   const remember = useCallback((query: string): void => {
-    const trimmed = query.trim();
-    if (trimmed === '') return;
-
     setRecent((current) => {
-      const key = trimmed.toLowerCase();
-      const next = [trimmed, ...current.filter((item) => item.toLowerCase() !== key)].slice(0, MAX);
-      write(next);
+      const next = rememberSearch(current, query);
+      if (next !== current) write(next);
       return next;
     });
   }, []);

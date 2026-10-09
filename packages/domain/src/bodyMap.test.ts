@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MUSCLE_GROUPS, baseMuscleOf, isMuscleGroup } from '@lift/domain/muscles';
+import { MUSCLE_GROUPS, baseMuscleOf, isMuscleGroup } from './muscles';
 import {
   BACK_INERT,
   BACK_REGIONS,
@@ -9,7 +9,7 @@ import {
   VIEW_BOX,
   inertFor,
   regionsFor,
-} from './bodyPolygons';
+} from './bodyMap';
 
 const ALL_REGIONS = [...FRONT_REGIONS, ...BACK_REGIONS];
 

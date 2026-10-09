@@ -140,3 +140,5 @@ export const COMPACT_BUTTON_SIZES: Readonly<Record<string, { height: number; pad
     'compact-sm': { height: 36, paddingX: 16 },
     'compact-md': { height: 36, paddingX: 16 },
   };
+
+export * from './colors';

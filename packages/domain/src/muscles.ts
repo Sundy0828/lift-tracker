@@ -215,3 +215,8 @@ export const MUSCLE_OPTIONS_BY_REGION: {
   group: region,
   items: muscles.map((muscle) => ({ value: muscle, label: muscleLabel(muscle) })),
 }));
+
+/** Every muscle of one display region. Empty for `null`, which matches all of them. */
+export function musclesInRegion(region: string | null): readonly MuscleGroup[] {
+  return MUSCLE_GROUPS_BY_REGION.find((entry) => entry.region === region)?.muscles ?? [];
+}

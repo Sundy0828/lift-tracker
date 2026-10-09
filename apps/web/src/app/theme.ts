@@ -2,8 +2,10 @@ import { createTheme, type ButtonProps, type MantineTheme } from '@mantine/core'
 import {
   ACCENT_PRESETS,
   COMPACT_BUTTON_SIZES,
+  DARK,
   DEFAULT_ACCENT_ID,
   FONT_FAMILY,
+  GRAY,
   HEADING_WEIGHT,
   PRIMARY_SHADE,
   accentById,
@@ -34,7 +36,9 @@ export function buildTheme(presetId: string = DEFAULT_PRESET_ID) {
   return createTheme({
     primaryColor: 'sky',
     primaryShade: PRIMARY_SHADE,
-    colors: { sky: presetById(presetId).colors },
+    // The neutrals are Mantine's defaults, registered from the shared tokens
+    // so the phone (which has no Mantine) draws with the same values.
+    colors: { sky: presetById(presetId).colors, gray: GRAY, dark: DARK },
     // A pastel primary needs dark label text on filled controls to stay readable.
     autoContrast: true,
     defaultRadius: 'md',

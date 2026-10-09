@@ -1,71 +1,32 @@
-import { DEFAULT_ACCENT_ID, PRIMARY_SHADE, accentById } from '@lift/ui-tokens';
-import { useColorScheme } from 'react-native';
+import {
+  DEFAULT_ACCENT_ID,
+  DEFAULT_COLOR_SCHEME,
+  accentById,
+  schemeColors,
+  type SchemeColors,
+} from '@lift/ui-tokens';
 
 /**
- * Colours for the current colour scheme.
+ * Colours, from the tokens the web theme is built on (`@lift/ui-tokens`), so
+ * a row, a border or a dimmed label is the same hex on the phone as in the
+ * browser.
  *
- * The accent comes from `@lift/ui-tokens`, the same ramp and shade the web
- * theme uses, so the two apps read as one product. The neutrals approximate
- * Mantine's defaults, which the web app uses as-is and the tokens do not
- * carry.
+ * The scheme is the web's default, dark, rather than the phone's system
+ * setting. The web keeps the choice per device (System, Light or Dark in its
+ * Settings), and the phone's Settings screen gets the same choice in Phase 5;
+ * until then, matching the web's default is what keeps the two apps looking
+ * like one.
  */
-export type Palette = {
+export type Palette = SchemeColors & {
+  /** The page behind everything. The web's `--mantine-color-body`. */
   background: string;
-  surface: string;
-  border: string;
-  text: string;
-  dimmed: string;
-  accent: string;
-  /** Label colour on a filled accent control; the pastel ramp needs dark text. */
-  onAccent: string;
-  danger: string;
-  /** Strip backgrounds for the sync states. */
-  offline: string;
-  syncing: string;
-  /** A set compared with last time: better, worse, level. As the web's `--delta-*`. */
-  up: string;
-  down: string;
-  same: string;
-  /** A set that needs attention: off its rep range, or missing a number. */
-  warn: string;
 };
 
-const LIGHT = {
-  background: '#ffffff',
-  surface: '#f8f9fa',
-  border: '#dee2e6',
-  text: '#212529',
-  dimmed: '#868e96',
-  danger: '#e03131',
-  offline: '#fff3bf',
-  syncing: '#e7f5ff',
-  up: '#099268',
-  down: '#e03131',
-  same: '#1c7ed6',
-  warn: '#e8590c',
-};
-
-const DARK = {
-  background: '#1a1b1e',
-  surface: '#25262b',
-  border: '#373a40',
-  text: '#c1c2c5',
-  dimmed: '#909296',
-  danger: '#ff6b6b',
-  offline: '#5c4813',
-  syncing: '#1b3a57',
-  up: '#38d9a9',
-  down: '#ff8787',
-  same: '#4dabf7',
-  warn: '#ffa94d',
-};
+const PALETTE: Palette = (() => {
+  const colors = schemeColors(DEFAULT_COLOR_SCHEME, accentById(DEFAULT_ACCENT_ID).colors);
+  return { ...colors, background: colors.body };
+})();
 
 export function usePalette(): Palette {
-  const dark = useColorScheme() === 'dark';
-  const ramp = accentById(DEFAULT_ACCENT_ID).colors;
-  return {
-    ...(dark ? DARK : LIGHT),
-    accent: dark ? ramp[PRIMARY_SHADE.dark] : ramp[PRIMARY_SHADE.light],
-    onAccent: '#1a1b1e',
-  };
+  return PALETTE;
 }

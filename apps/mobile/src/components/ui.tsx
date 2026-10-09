@@ -112,12 +112,12 @@ export function Loading() {
 const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '700' },
   body: { fontSize: 15, lineHeight: 21 },
-  card: { borderWidth: 1, borderRadius: 12, padding: 14, gap: 4 },
+  card: { borderWidth: 1, borderRadius: 8, padding: 12, gap: 4 },
   pressed: { opacity: 0.7 },
   // 48 high: the thumb-sized touch target the web theme's `md` buttons aim for.
   button: {
     minHeight: 48,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
@@ -125,6 +125,6 @@ const styles = StyleSheet.create({
   buttonLabel: { fontSize: 16, fontWeight: '600' },
   field: { gap: 4 },
   label: { fontSize: 13 },
-  input: { minHeight: 48, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 16 },
+  input: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, fontSize: 16 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

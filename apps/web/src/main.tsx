@@ -11,6 +11,7 @@ import { webPlatform } from './app/platform';
 import { Providers } from './app/providers';
 import { registerServiceWorker } from './app/pwa';
 import { router } from './app/router';
+import { DEFAULT_COLOR_SCHEME } from '@lift/ui-tokens';
 
 // Before the first render, so the session screen's hooks find it.
 setPlatform(webPlatform);
@@ -22,7 +23,7 @@ if (container === null) {
 
 createRoot(container).render(
   <StrictMode>
-    <ColorSchemeScript defaultColorScheme="dark" />
+    <ColorSchemeScript defaultColorScheme={DEFAULT_COLOR_SCHEME} />
     <Providers>
       <RouterProvider router={router} />
     </Providers>

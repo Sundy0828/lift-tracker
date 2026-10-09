@@ -10,8 +10,8 @@ import {
   volumeRows,
 } from '@lift/domain/volume';
 import { BodyPair } from './BodyFigure';
-import type { BodyRegion } from './bodyPolygons';
-import { DRAWN_MUSCLE_SET } from './bodyPolygons';
+import type { BodyRegion } from '@lift/domain/bodyMap';
+import { DRAWN_MUSCLE_SET } from '@lift/domain/bodyMap';
 import classes from './MuscleMap.module.css';
 
 /**

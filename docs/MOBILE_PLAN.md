@@ -432,8 +432,8 @@ Known gaps, by design for now:
 
 - Leaving the session screen mid-rest cancels the alarm, as on the web. Coming back rebuilds the
   rest from the set that earned it.
-- Ad-hoc sessions cannot add exercises on the phone yet; that needs the exercise picker
-  (Phase 4). Mobile only starts sessions from a workout.
+- Ad-hoc sessions cannot add exercises on the phone yet. The exercise picker exists since Phase 4,
+  but the session screen does not use it yet. Mobile only starts sessions from a workout.
 - The "load and reps look swapped" query is an in-screen notice above the rest bar, not a toast.
 - The web's initial JS grew 0.5 kB (153.7 of 155 kB) from registering the platform adapter.
 
@@ -442,13 +442,81 @@ when back online. Web unchanged.
 
 ### Phase 4: Workout editor and drag and drop
 
-- [ ] Editor screen: slots, prescription editor, exercise picker with catalog search and recent
-      searches.
-- [ ] Reorder with `react-native-reanimated` + `react-native-gesture-handler` (via
-      `react-native-draggable-flatlist` or `react-native-sortables`). Long-press to lift, haptic on
-      pick and drop.
-- [ ] Swipe to delete or duplicate, matching `SwipeRow` behavior.
-- [ ] Version history view from `workoutDiff`.
+_Second pass 2026-10-08, after the first dev-build run. That run showed the editor did not match
+the web: no drag-to-make-a-circuit, circuits not shown as cards, no insert rows, swipe actions
+showing at the row edges, and no muscle map. All five are fixed, but not yet run on a phone. It
+adds `react-native-svg`, so it needs a new dev build. 913/913 unit tests; both platforms bundle._
+
+- [x] Editor screen: slots, prescription editor, exercise picker with catalog search and recent
+      searches. _`app/(app)/workout/[workoutId].tsx` replaces the read-only detail. Name, publish
+      and discard, notes, archive, delete, and the muscle map. Every edit goes through the same
+      `@lift/domain/workouts` functions as the web. The Workouts tab has a New button._
+  - _Circuits are cards with their members inside, as on the web. The card holds the rounds and
+    the rest between rounds._
+  - _Insert rows (+ Exercise, + Rest) sit between every slot, inside cards and out, plus one
+    below each card. Each one is a `SlotPlace`: a position plus a circuit or none. `placeSlot`
+    in the domain inserts there._
+  - _Tapping a row opens `SlotSheet`. It uses steppers where the web uses sliders.
+    `stepRange` keeps the slider's push-on-overlap rule._
+  - _The picker (`ExercisePicker`) has search, body-part and equipment chips, a preview with
+    frames and instructions, and a custom exercise form, all in one modal (iOS shows one modal at
+    a time). Recent searches use AsyncStorage, with the web's key and rules
+    (`@lift/domain/recentSearches`), loaded lazily so a build without the native module only
+    loses the shortcut._
+  - _Muscle map: `components/MuscleMap.tsx` draws the web's geometry with `react-native-svg`.
+    The geometry moved from the web to `@lift/domain/bodyMap` (was `bodyPolygons.ts`)._
+- [x] Reorder with `react-native-reanimated` + `react-native-gesture-handler`. Long-press to
+      lift, haptic on pick and drop. _The first pass used `react-native-sortables`. It lays items
+      out itself as one flat list, so it cannot draw circuit cards, insert rows or a hover target.
+      `components/editor/drag.tsx` now does the drag itself:_
+  - _A row held 300 ms lifts into a floating copy. The list does not reflow; the gap the row
+    would drop into lights up instead._
+  - _Dropping in a gap runs `moveSlot`. The gap's circuit decides membership: drop inside a card
+    to join it, or just outside it to leave (the hint says "Release to leave the circuit")._
+  - _Holding over the middle of another row for 420 ms arms "make a circuit", the web's
+    hold-to-group, and a drop runs `groupWithSlot`._
+  - _The list scrolls near its edges. Positions are measured once, at lift._
+  - _Haptics: medium on lift, a tick per gap, light when a circuit arms and on drop._
+  - _Versions follow Expo SDK 58: reanimated 4.7.0, worklets 0.13.0, gesture-handler 3.2.1,
+    react-native-svg 15.15.5._
+- [x] Swipe to delete or duplicate, matching `SwipeRow` behavior. _`ReanimatedSwipeable`, as a
+      backup to the drag. Swipe left: Delete. Swipe right: Duplicate (`duplicateSlot`), plus
+      "Circuit with above" (`linkToPrevious`) or "Leave circuit" (`leaveGroup`). The actions
+      fade in with the swipe, so their edges no longer show behind the row's rounded corners. The
+      web has no Duplicate yet._
+- [x] Version history view from `workoutDiff`. _Each version opens to show its changes from the
+      version before (`diffWorkout` + `describeChange`) and the snapshot's own slots._
+
+Colours and density (2026-10-08, third pass):
+
+- Colours are tokens in `@lift/ui-tokens` (`colors.ts`): Mantine's gray, dark and status ramps,
+  and `schemeColors()`, which resolves body, surface, border, dimmed and the rest the way
+  Mantine resolves its CSS variables. The web theme registers the same ramps, and the phone's
+  palette is `schemeColors()`. The muscle-map stops live there too. The web CSS can't import
+  TypeScript, so `heatColors.test.ts` checks the CSS still matches.
+- The phone was on Mantine 6's neutrals (`#1a1b1e`); the web is on Mantine 9's (`#242424`).
+- The phone now defaults to dark, the web's default, instead of following the system.
+  `app.json`'s `userInterfaceStyle` changes with the next native build. Phase 5's Settings
+  gets the web's System, Light and Dark choice, and the accent presets.
+- The editor uses the web's density: 48 px rows with 14/12 px text, faint ＋ and ⏱ insert
+  buttons, 1 px circuit cards with an uppercase label, and the 8 px radius.
+
+Left for Phase 5, as planned: the Share panel on the editor.
+
+To check on the next dev build:
+
+- Hold a row: it lifts with a buzz and the list stops scrolling under the finger. Move it: the gap
+  it would land in lights up, with a tick per gap. Near the bottom edge the list scrolls.
+- Hold the lifted row over the middle of another: "Hold to make a circuit", then "Release to make
+  a circuit". Drop: the two become a card.
+- Drag a card member above or below its card: "Release to leave the circuit". Drop: it is out, and
+  a circuit left with one member dissolves.
+- A quick sideways swipe opens the actions and does not lift the row. No action colour shows at
+  the row edges at rest. A tap opens the sheet; releasing a drag does not.
+- The card's rounds and rest steppers change every member. The muscle map shades as exercises are
+  added.
+- Add an exercise offline, then make a custom one from the picker. Publish. Back online, the web
+  shows the new version with the same change summary.
 
 **Exit:** create and edit a workout on the phone; web sees the new version.
 
@@ -457,8 +525,9 @@ when back online. Web unchanged.
 - [ ] History timeline, session detail, trend line, calendar.
 - [ ] Sharing: universal links / app links so share URLs open the app; import and merge through the
       shared importer.
-- [ ] Schedule, library browse, friends and QR, settings, export.
-- [ ] Muscle map: port `bodyPolygons` to `react-native-svg`.
+- [ ] Schedule, library browse, friends and QR, settings (including the colour scheme and accent
+      preset, per device as on the web), export.
+- [x] Muscle map: port `bodyPolygons` to `react-native-svg`. _Done in Phase 4, on the editor. History still needs it._
 
 **Exit:** every scenario in `e2e/*.spec.ts` has a mobile equivalent (Maestro or Detox).
 
