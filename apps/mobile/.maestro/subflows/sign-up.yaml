@@ -1,0 +1,38 @@
+# Creates an account and gets it through the email gate. Leaves the app on
+# Today with the walkthrough open (see dismiss-tour.yaml).
+# Sets output.email and output.password.
+appId: com.sundy0828.lifttracker
+---
+- launchApp:
+    clearState: true
+- runScript:
+    file: ../scripts/new-account.js
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 20000
+- tapOn: 'New here\? Create an account'
+- tapOn:
+    id: 'first-name'
+- inputText: 'Test'
+- tapOn:
+    id: 'last-name'
+- inputText: 'Lifter'
+- tapOn:
+    id: 'email'
+- inputText: ${output.email}
+- tapOn:
+    id: 'password'
+- inputText: ${output.password}
+- hideKeyboard
+- tapOn: 'Create account'
+- extendedWaitUntil:
+    visible: 'Confirm your email'
+    timeout: 20000
+- runScript:
+    file: ../scripts/confirm-email.js
+    env:
+      EMAIL: ${output.email}
+- tapOn: 'I have confirmed it'
+- extendedWaitUntil:
+    visible: 'HOW THIS WORKS'
+    timeout: 20000

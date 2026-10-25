@@ -1,7 +1,9 @@
+import type { Measure } from '@lift/domain/measure';
+import { MAX_LOAD } from '@lift/domain/sessions';
 import type { SetAssessment } from '@lift/domain/sessions';
 import type { Direction } from '@lift/domain/strength';
 import type { Unit } from '@lift/domain/types';
-import { MAX_REPS } from '@lift/domain/workouts';
+import { stepFor } from '@lift/domain/units';
 import * as Haptics from 'expo-haptics';
 import { memo, useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -23,7 +25,8 @@ import { NumberField } from './NumberField';
 
 export type SetHandlers = {
   onWeight: (entryKey: string, setIndex: number, value: number | null, unit: Unit) => void;
-  onReps: (entryKey: string, setIndex: number, value: number | null) => void;
+  /** The set's reps, seconds or distance, by the row's measure. */
+  onAmount: (entryKey: string, setIndex: number, value: number | null) => void;
   onRir: (entryKey: string, setIndex: number, value: number | null) => void;
   onToggleComplete: (entryKey: string, setIndex: number) => void;
   onToggleSkipped: (entryKey: string, setIndex: number) => void;
@@ -36,7 +39,14 @@ type Props = SetHandlers & {
   ordinal: string;
   weight: number | null;
   weightUnit: Unit;
-  reps: number | null;
+  /** What the second box holds: reps, seconds or a distance. */
+  measure: Measure;
+  /** The set's reps, seconds or distance (in the row's unit). */
+  amount: number | null;
+  amountPlaceholder: string;
+  amountStep: number;
+  amountMax: number;
+  amountDecimal: boolean;
   rir: number | null;
   rirTarget: { min: number; max: number } | null;
   isWarmup: boolean;
@@ -44,10 +54,12 @@ type Props = SetHandlers & {
   isComplete: boolean;
   displayUnit: Unit;
   assessment: SetAssessment;
-  repRangeLabel: string | null;
+  targetLabel: string | null;
   previousLabel: string | null;
   deltaLabel: string | null;
   deltaDirection: Direction | null;
+  /** What the delta adds up to, shown when the chip is tapped (the web's tooltip). */
+  deltaDetail: string | null;
 };
 
 function deltaColor(direction: Direction, palette: Palette): string {
@@ -61,20 +73,23 @@ function deltaColor(direction: Direction, palette: Palette): string {
  */
 function assessmentNote(
   assessment: SetAssessment,
-  repRangeLabel: string | null,
-  missing: 'weight' | 'reps' | null,
+  targetLabel: string | null,
+  missing: string | null,
 ): string | null {
   if (assessment === 'incomplete') return `no ${missing ?? 'entry'} — will not be saved`;
-  if (repRangeLabel === null) return null;
-  if (assessment === 'under') return `under ${repRangeLabel}`;
-  if (assessment === 'over') return `over ${repRangeLabel}`;
+  if (targetLabel === null) return null;
+  if (assessment === 'under') return `under ${targetLabel}`;
+  if (assessment === 'over') return `over ${targetLabel}`;
   return null;
 }
+
+/** What the second box is called, for its label and the missing-number note. */
+const AMOUNT_NAMES: Record<Measure, string> = { reps: 'reps', time: 'time', distance: 'distance' };
 
 /** The missing-number verdict from what is typed; the rep range from what is committed. */
 function liveAssessment(
   assessment: SetAssessment,
-  missing: 'weight' | 'reps' | null,
+  missing: string | null,
   isWarmup: boolean,
   skipped: boolean,
 ): SetAssessment {
@@ -89,7 +104,12 @@ function SetRowBase({
   ordinal,
   weight,
   weightUnit,
-  reps,
+  measure,
+  amount,
+  amountPlaceholder,
+  amountStep,
+  amountMax,
+  amountDecimal,
   rir,
   rirTarget,
   isWarmup,
@@ -97,12 +117,13 @@ function SetRowBase({
   isComplete,
   displayUnit,
   assessment,
-  repRangeLabel,
+  targetLabel,
   previousLabel,
   deltaLabel,
   deltaDirection,
+  deltaDetail,
   onWeight,
-  onReps,
+  onAmount,
   onRir,
   onToggleComplete,
   onToggleSkipped,
@@ -114,7 +135,7 @@ function SetRowBase({
   const showUnit = weight !== null && weightUnit !== displayUnit;
 
   const [hasWeight, setHasWeight] = useState(weight !== null);
-  const [hasReps, setHasReps] = useState(reps !== null);
+  const [hasReps, setHasReps] = useState(amount !== null);
   const onWeightFilled = useCallback((filled: boolean) => {
     setHasWeight(filled);
   }, []);
@@ -122,9 +143,23 @@ function SetRowBase({
     setHasReps(filled);
   }, []);
 
-  const missing = hasWeight === hasReps ? null : hasWeight ? 'reps' : 'weight';
+  const [explained, setExplained] = useState(false);
+
+  // A reps set needs both numbers. A time or distance needs only itself, so
+  // the only half-entry there is a load with nothing beside it.
+  const amountName = AMOUNT_NAMES[measure];
+  const missing =
+    measure === 'reps'
+      ? hasWeight === hasReps
+        ? null
+        : hasWeight
+          ? 'reps'
+          : 'weight'
+      : hasWeight && !hasReps
+        ? amountName
+        : null;
   const live = liveAssessment(assessment, missing, isWarmup, skipped);
-  const note = assessmentNote(live, repRangeLabel, missing);
+  const note = assessmentNote(live, targetLabel, missing);
   const flagged = live === 'under' || live === 'over' || live === 'incomplete';
 
   return (
@@ -153,10 +188,14 @@ function SetRowBase({
         <NumberField
           label={`Set ${ordinal} weight`}
           value={weight}
-          min={0}
-          max={2000}
+          step={stepFor(entryUnit)}
+          // Below zero is assistance: an assisted pull-up or dip machine.
+          min={-MAX_LOAD}
+          max={MAX_LOAD}
+          start={0}
           placeholder={displayUnit}
           decimal
+          signed
           disabled={skipped}
           onFilled={onWeightFilled}
           onCommit={(value) => {
@@ -164,16 +203,17 @@ function SetRowBase({
           }}
         />
         <NumberField
-          label={`Set ${ordinal} reps`}
-          value={reps}
+          label={`Set ${ordinal} ${measure === 'time' ? 'seconds' : amountName}`}
+          value={amount}
+          step={amountStep}
           min={0}
-          max={MAX_REPS}
-          placeholder="reps"
-          decimal={false}
+          max={amountMax}
+          placeholder={amountPlaceholder}
+          decimal={amountDecimal}
           disabled={skipped}
           onFilled={onRepsFilled}
           onCommit={(value) => {
-            onReps(entryKey, setIndex, value);
+            onAmount(entryKey, setIndex, value);
           }}
         />
 
@@ -227,18 +267,40 @@ function SetRowBase({
         </Pressable>
       </View>
 
-      {previousLabel === null && note === null && !showUnit ? null : (
+      {previousLabel === null && note === null && !showUnit && !isWarmup ? null : (
         <View style={[styles.meta, styles.info]}>
           {previousLabel === null ? null : (
             <Text style={[styles.small, { color: palette.dimmed }]}>last {previousLabel}</Text>
           )}
           {deltaLabel === null || deltaDirection === null ? null : (
-            <Text
-              style={[styles.small, styles.strong, { color: deltaColor(deltaDirection, palette) }]}
+            // Tap for what it adds up to: a load-for-reps trade-off cannot be
+            // judged from either number on its own.
+            <Pressable
+              testID="set-delta"
+              accessibilityRole="button"
+              accessibilityHint="Explains the comparison"
+              disabled={deltaDetail === null}
+              hitSlop={8}
+              onPress={() => {
+                setExplained((current) => !current);
+              }}
             >
-              {deltaLabel}
-            </Text>
+              <Text
+                style={[
+                  styles.small,
+                  styles.strong,
+                  { color: deltaColor(deltaDirection, palette) },
+                ]}
+              >
+                {deltaLabel}
+              </Text>
+            </Pressable>
           )}
+          {isWarmup ? (
+            <Text style={[styles.small, { color: palette.dimmed }]}>
+              warmup · not in history or PRs
+            </Text>
+          ) : null}
           {note === null ? null : (
             <Text style={[styles.small, { color: palette.warn }]}>{note}</Text>
           )}
@@ -247,6 +309,9 @@ function SetRowBase({
           ) : null}
         </View>
       )}
+      {explained && deltaDetail !== null ? (
+        <Text style={[styles.small, styles.detail, { color: palette.dimmed }]}>{deltaDetail}</Text>
+      ) : null}
     </View>
   );
 }
@@ -254,28 +319,28 @@ function SetRowBase({
 export const SetRow = memo(SetRowBase);
 
 const styles = StyleSheet.create({
-  row: { gap: 6, paddingVertical: 8, paddingLeft: 6, borderLeftWidth: 3 },
+  row: { gap: 4, paddingVertical: 6, paddingLeft: 6, borderLeftWidth: 3 },
   skipped: { opacity: 0.55 },
   main: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ordinal: {
-    width: 36,
-    height: 48,
+    width: 32,
+    height: 44,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ordinalText: { fontSize: 16, fontWeight: '700' },
-  // 52 wide: the most-pressed control on the screen gets the biggest target.
+  ordinalText: { fontSize: 15, fontWeight: '700' },
+  // 48 wide: the most-pressed control on the screen gets the biggest target.
   tick: {
-    width: 52,
-    height: 48,
+    width: 48,
+    height: 44,
     borderWidth: 1,
-    borderRadius: 24,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tickText: { fontSize: 20, fontWeight: '700' },
+  tickText: { fontSize: 18, fontWeight: '700' },
   disabled: { opacity: 0.4 },
   meta: {
     flexDirection: 'row',
@@ -283,9 +348,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
-    paddingLeft: 44,
+    paddingLeft: 40,
   },
   info: { justifyContent: 'flex-start' },
-  small: { fontSize: 13 },
+  small: { fontSize: 12 },
   strong: { fontWeight: '700' },
+  detail: { paddingLeft: 40 },
 });

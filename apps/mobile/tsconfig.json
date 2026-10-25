@@ -43,6 +43,7 @@
     "../../packages/data/src/firestore.ts",
     "../../packages/data/src/sdk/auth.ts",
     "../../packages/data/src/sdk/firestore.ts",
+    "../../packages/data/src/sdk/random.ts",
     "../../packages/catalog/src/source.ts"
   ],
   "references": [

@@ -9,7 +9,7 @@ import type { LoggedSet, Session, SessionEntry } from '@lift/domain/sessions';
 import { emptySet, newSession } from '@lift/domain/sessions';
 import type { Handedness } from '@lift/domain/types';
 import type { ExerciseSlot } from '@lift/domain/workouts';
-import { DEFAULT_PRESCRIPTION } from '@lift/domain/workouts';
+import { DEFAULT_PRESCRIPTION, withMeasure } from '@lift/domain/workouts';
 import { EntryCard } from './EntryCard';
 import { SessionClock } from './SessionClock';
 
@@ -81,7 +81,7 @@ const handlers = () => ({
   onNotes: vi.fn(),
   onRemoveEntry: null,
   onWeight: vi.fn(),
-  onReps: vi.fn(),
+  onAmount: vi.fn(),
   onRir: vi.fn(),
   onToggleComplete: vi.fn(),
   onToggleSkipped: vi.fn(),
@@ -265,10 +265,10 @@ describe('the inputs', () => {
     const reps = screen.getByRole('spinbutton', { name: 'Set 1 reps' });
 
     fireEvent.change(reps, { target: { value: '9' } });
-    expect(props.onReps).not.toHaveBeenCalled();
+    expect(props.onAmount).not.toHaveBeenCalled();
 
     fireEvent.blur(reps);
-    expect(props.onReps).toHaveBeenCalledWith('slot-bench', 0, 9);
+    expect(props.onAmount).toHaveBeenCalledWith('slot-bench', 0, 9);
   });
 
   it('commit immediately on a stepper press', () => {
@@ -285,7 +285,7 @@ describe('the inputs', () => {
 
     fireEvent.change(reps, { target: { value: '' } });
     fireEvent.blur(reps);
-    expect(props.onReps).toHaveBeenCalledWith('slot-bench', 0, null);
+    expect(props.onAmount).toHaveBeenCalledWith('slot-bench', 0, null);
   });
 });
 
@@ -540,5 +540,30 @@ describe('the session clock', () => {
       </MantineProvider>,
     );
     expect(screen.getByTestId('session-clock')).toHaveTextContent('1 h 12 total');
+  });
+});
+
+describe('a timed row', () => {
+  it('asks for seconds instead of reps, and judges against a time target', () => {
+    const entry: SessionEntry = {
+      ...todaysEntry(null),
+      prescription: withMeasure(DEFAULT_PRESCRIPTION, 'time'),
+    };
+    const props = setup(entry, null, null);
+    const seconds = screen.getByRole('spinbutton', { name: 'Set 1 seconds' });
+
+    fireEvent.change(seconds, { target: { value: '45' } });
+    fireEvent.blur(seconds);
+    expect(props.onAmount).toHaveBeenCalledWith('slot-bench', 0, 45);
+    expect(screen.getByText('3 x 30s-1:00 @ 1-2 RIR')).toBeInTheDocument();
+  });
+});
+
+describe('an assisted load', () => {
+  it('steps below zero, for an assisted machine', () => {
+    const props = setup(todaysEntry(null), null, null);
+    fireEvent.click(screen.getByRole('button', { name: 'Set 1 weight down' }));
+    // From empty, the first step lands on zero, the next below it.
+    expect(props.onWeight).toHaveBeenCalledWith('slot-bench', 0, 0, 'lb');
   });
 });

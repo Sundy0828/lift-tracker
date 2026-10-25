@@ -42,6 +42,7 @@ import { PasswordRequirements } from '@/features/auth/PasswordRequirements';
 import { isAcceptable, problem as passwordProblem, SUMMARY } from '@lift/domain/password';
 import { AppearanceCard } from './AppearanceCard';
 import { ExportCard } from './ExportCard';
+import { NameCard } from './NameCard';
 import { SignInMethods } from './SignInMethods';
 import { SyncCard } from './SyncCard';
 
@@ -190,6 +191,8 @@ export default function SettingsScreen() {
   return (
     <Stack>
       <Title order={2}>Settings</Title>
+
+      <NameCard />
 
       <Card withBorder>
         <Stack gap="sm">

@@ -11,5 +11,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["vite.config.ts", "scripts", "src/app/manifest.ts"]
+  "include": ["vite.config.ts", "scripts", "src/app/manifest.ts", "src/app/appStores.ts"]
 }

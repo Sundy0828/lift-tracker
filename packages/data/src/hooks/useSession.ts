@@ -1,10 +1,11 @@
 import { onSnapshot, query, where } from '../sdk/firestore';
-import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import type { Session } from '@lift/domain/sessions';
 import { toSession } from '../converters/session';
 import { paths } from '../paths';
 import { releaseSync, reportSync } from '../sync';
 import { useAuth } from './useAuth';
+import { useSharedSubscription } from './useShared';
 
 export type SessionState = {
   session: Session | null;
@@ -21,53 +22,53 @@ const PENDING: SessionState = {
   notFound: false,
 };
 
-type Snapshot = SessionState & { key: string };
-
-/** One session, live. The active-session screen's single source of truth. */
+/**
+ * One session, live. The active-session screen's single source of truth.
+ *
+ * Shared by id (see `useShared`), so coming back to a session from Today, or
+ * from the notification, opens on the sets as they stand rather than a spinner.
+ */
 export function useSession(sessionId: string | null): SessionState {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
-  const key = uid === null || sessionId === null ? null : `${uid}/${sessionId}`;
+  const key = uid === null || sessionId === null ? null : `session:${uid}/${sessionId}`;
 
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const start = useCallback(
+    (emit: (value: SessionState) => void) => {
+      if (uid === null || sessionId === null) return () => undefined;
+      const syncKey = `session:${uid}/${sessionId}`;
 
-  useEffect(() => {
-    if (uid === null || sessionId === null || key === null) return;
+      const unsubscribe = onSnapshot(
+        paths.session(uid, sessionId),
+        { includeMetadataChanges: true },
+        (next) => {
+          // The session document is the whole logged workout (§2.8), so this is
+          // the reading the chip is really about: every set typed offline is a
+          // pending write on this one document.
+          reportSync(syncKey, {
+            pending: next.metadata.hasPendingWrites,
+            fromCache: next.metadata.fromCache,
+          });
+          emit({
+            session: next.exists() ? toSession(next.id, next.data()) : null,
+            isPending: false,
+            hasPendingWrites: next.metadata.hasPendingWrites,
+            // A miss from the cache alone is not a miss: a session started on
+            // another device is absent locally until the first server snapshot.
+            notFound: !next.exists() && !next.metadata.fromCache,
+          });
+        },
+      );
 
-    const syncKey = `session:${key}`;
+      return () => {
+        unsubscribe();
+        releaseSync(syncKey);
+      };
+    },
+    [uid, sessionId],
+  );
 
-    const unsubscribe = onSnapshot(
-      paths.session(uid, sessionId),
-      { includeMetadataChanges: true },
-      (next) => {
-        // The session document is the whole logged workout (§2.8), so this is
-        // the reading the chip is really about: every set typed offline is a
-        // pending write on this one document.
-        reportSync(syncKey, {
-          pending: next.metadata.hasPendingWrites,
-          fromCache: next.metadata.fromCache,
-        });
-
-        setSnapshot({
-          key,
-          session: next.exists() ? toSession(next.id, next.data()) : null,
-          isPending: false,
-          hasPendingWrites: next.metadata.hasPendingWrites,
-          // A miss from the cache alone is not a miss: a session started on
-          // another device is absent locally until the first server snapshot.
-          notFound: !next.exists() && !next.metadata.fromCache,
-        });
-      },
-    );
-
-    return () => {
-      unsubscribe();
-      releaseSync(syncKey);
-    };
-  }, [uid, sessionId, key]);
-
-  if (key === null || snapshot?.key !== key) return PENDING;
-  return snapshot;
+  return useSharedSubscription(key, start) ?? PENDING;
 }
 
 export type ActiveSessionState = {
@@ -80,24 +81,24 @@ export type ActiveSessionState = {
 
 const ACTIVE_PENDING: ActiveSessionState = { sessions: [], session: null, isPending: true };
 
-type ActiveSnapshot = ActiveSessionState & { uid: string };
-
-/** Every session still in progress, newest first. */
+/** Every session still in progress, newest first. One listener for the whole app. */
 export function useActiveSession(): ActiveSessionState {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
-  const [snapshot, setSnapshot] = useState<ActiveSnapshot | null>(null);
 
-  useEffect(() => {
-    if (uid === null) return;
+  const start = useCallback(
+    (emit: (value: ActiveSessionState) => void) => {
+      if (uid === null) return () => undefined;
+      return onSnapshot(query(paths.sessions(uid), where('status', '==', 'active')), (next) => {
+        const sessions = next.docs.map((document) => toSession(document.id, document.data()));
+        sessions.sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
+        emit({ sessions, session: sessions[0] ?? null, isPending: false });
+      });
+    },
+    [uid],
+  );
 
-    return onSnapshot(query(paths.sessions(uid), where('status', '==', 'active')), (next) => {
-      const sessions = next.docs.map((document) => toSession(document.id, document.data()));
-      sessions.sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
-      setSnapshot({ uid, sessions, session: sessions[0] ?? null, isPending: false });
-    });
-  }, [uid]);
-
-  if (uid === null || snapshot?.uid !== uid) return ACTIVE_PENDING;
-  return snapshot;
+  return (
+    useSharedSubscription(uid === null ? null : `active-sessions:${uid}`, start) ?? ACTIVE_PENDING
+  );
 }

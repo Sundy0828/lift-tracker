@@ -79,7 +79,7 @@ export function OverlayLine({ overlay, workoutName }: { overlay: Overlay; workou
 
 const styles = StyleSheet.create({
   line: { flexDirection: 'row', alignItems: 'center' },
-  text: { fontSize: 13 },
+  text: { fontSize: 12 },
   name: { flexShrink: 1 },
   tag: {
     fontSize: 11,

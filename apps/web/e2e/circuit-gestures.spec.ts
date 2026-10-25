@@ -705,7 +705,7 @@ test.describe('leaving a circuit', () => {
   );
 
   test(
-    'a row outside a circuit has nothing to reveal on the right',
+    'a row outside a circuit duplicates on the right, as on the phone',
     { tag: '@flaky-drag' },
     async ({ page }) => {
       await signIn(page);
@@ -713,9 +713,10 @@ test.describe('leaving a circuit', () => {
 
       await swipeRow(page, 'Pushups', 140);
       await expect(page.getByText('Leave circuit', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('Duplicate Pushups', { exact: true })).toBeVisible();
       await page.mouse.up();
 
-      await expect(page.getByText('4 exercises', { exact: true })).toBeVisible();
+      await expect(page.getByText('5 exercises', { exact: true })).toBeVisible();
     },
   );
 });

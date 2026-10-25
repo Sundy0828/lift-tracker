@@ -1,0 +1,46 @@
+# today-resume.spec.ts: two unfinished sessions are both listed; either can be
+# resumed or discarded on its own without touching the other.
+appId: com.sundy0828.lifttracker
+---
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+- runFlow:
+    file: ../subflows/new-workout.yaml
+    env:
+      NAME: 'RESUME'
+      FIRST: 'Pushups'
+- tapOn: 'Start this workout'
+- extendedWaitUntil:
+    visible: 'Session details'
+    timeout: 15000
+- tapOn: '‹ Back'
+- tapOn: 'Today'
+
+# A second one, ad-hoc, with an exercise added mid-session.
+- tapOn: 'Start an ad-hoc session'
+- extendedWaitUntil:
+    visible: 'ad-hoc'
+    timeout: 15000
+- tapOn: '\+ Add exercise'
+- inputText: 'crunches'
+- tapOn:
+    text: 'Crunches'
+    below:
+      id: 'result-count'
+- tapOn: 'Add to session'
+- assertVisible: 'Crunches'
+- tapOn: '‹ Back'
+
+- assertVisible: '2 sessions were never finished\..*'
+- assertVisible: 'Session in progress'
+- assertVisible: 'Unfinished session'
+
+# Discard the older; the newer stays resumable.
+- tapOn:
+    text: 'Discard'
+    index: 1
+- tapOn: 'Discard for good'
+- assertNotVisible: 'Unfinished session'
+- assertVisible: 'Session in progress'
+- tapOn: 'Resume'
+- assertVisible: 'Ad-hoc session'

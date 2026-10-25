@@ -3,7 +3,8 @@ import { useProfile } from '@lift/data/hooks/useProfile';
 import { useSchedule } from '@lift/data/hooks/useSchedule';
 import { useActiveSession } from '@lift/data/hooks/useSession';
 import { useWorkouts } from '@lift/data/hooks/useWorkouts';
-import { Redirect, Stack } from 'expo-router';
+import { Redirect, Stack, usePathname } from 'expo-router';
+import { NamePrompt } from '../../components/NamePrompt';
 import { Loading } from '../../components/ui';
 import { VerifyEmail } from '../../components/VerifyEmail';
 
@@ -30,15 +31,24 @@ function PrimeCache() {
  */
 export default function AppLayout() {
   const { status, isEmailVerified } = useAuth();
+  const pathname = usePathname();
 
   if (status === 'loading') return <Loading />;
-  if (status === 'signed-out') return <Redirect href="/sign-in" />;
+  // The path goes along, so a friend link opened while signed out lands where
+  // it was going once you are in (see `returnPath`).
+  if (status === 'signed-out') {
+    return <Redirect href={{ pathname: '/sign-in', params: { from: pathname } }} />;
+  }
   if (!isEmailVerified) return <VerifyEmail />;
 
   return (
     <>
       <PrimeCache />
+      <NamePrompt />
       <Stack screenOptions={{ headerShown: false }} />
     </>
   );
 }
+
+/** A screen that throws is replaced by this, not the whole app (see RouteError). */
+export { RouteError as ErrorBoundary } from '../../components/RouteError';

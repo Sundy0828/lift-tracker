@@ -33,7 +33,12 @@ export type AuthValue = {
   isEmailVerified: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
-  registerWithEmail: (email: string, password: string) => Promise<void>;
+  /** Creates the account and stores its first and last name on the profile. */
+  registerWithEmail: (
+    email: string,
+    password: string,
+    name: { firstName: string; lastName: string },
+  ) => Promise<void>;
   signOutUser: () => Promise<void>;
   /** Sends (or resends) the confirmation link to the signed-in address. */
   sendVerification: () => Promise<void>;
@@ -87,8 +92,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithEmail: async (email, password) => {
         await signInWithEmailAndPassword(auth, email, password);
       },
-      registerWithEmail: async (email, password) => {
+      registerWithEmail: async (email, password, name) => {
         const credential = await createUserWithEmailAndPassword(auth, email, password);
+        // Not awaited: the local cache has it at once, and the profile listener
+        // seeds the rest of the document around it. Imported here, not at the
+        // top: this module is on the web's first paint, and Firestore must not
+        // be (§3).
+        void import('../mutations/profile')
+          .then(({ setName }) => setName(credential.user.uid, name.firstName, name.lastName))
+          .catch(() => undefined);
         // Sent here rather than from the gate screen, so the link is already
         // in flight by the time the new account lands on it.
         // A failed send is recorded, not thrown: the account already exists.

@@ -1,5 +1,5 @@
 import type { ExerciseSlot, Prescription, WorkoutBody } from './workouts';
-import { exerciseSlots, formatRange } from './workouts';
+import { exerciseSlots, formatPrescriptionTarget, formatRange, measureOf } from './workouts';
 
 /**
  * Compares two snapshots of one workout and produces both a structured diff
@@ -13,7 +13,7 @@ import { exerciseSlots, formatRange } from './workouts';
  * on publish, and previewing a merge on import (§2.9).
  */
 
-export type PrescriptionField = 'sets' | 'reps' | 'rir' | 'rest' | 'loadHint';
+export type PrescriptionField = 'sets' | 'reps' | 'target' | 'rir' | 'rest' | 'loadHint';
 
 export type PrescriptionChange = {
   field: PrescriptionField;
@@ -59,10 +59,13 @@ export function diffPrescriptions(before: Prescription, after: Prescription): Pr
     changes.push({ field: 'sets', before: String(before.sets), after: String(after.sets) });
   }
 
-  const beforeReps = formatRange(before.repRange);
-  const afterReps = formatRange(after.repRange);
-  if (beforeReps !== afterReps) {
-    changes.push({ field: 'reps', before: beforeReps, after: afterReps });
+  // Reps keep their old wording. A time or distance target, or a switch
+  // between measures, is a "target": "8-12→30s-1:00 reps" would misname it.
+  const beforeTarget = formatPrescriptionTarget(before);
+  const afterTarget = formatPrescriptionTarget(after);
+  if (beforeTarget !== afterTarget) {
+    const bothReps = measureOf(before) === 'reps' && measureOf(after) === 'reps';
+    changes.push({ field: bothReps ? 'reps' : 'target', before: beforeTarget, after: afterTarget });
   }
 
   const beforeRir = formatRange(before.rirRange);
@@ -185,6 +188,7 @@ export function diffWorkout(before: WorkoutBody | null, after: WorkoutBody): Wor
 const FIELD_NOUNS: Record<PrescriptionField, string> = {
   sets: 'sets',
   reps: 'reps',
+  target: 'target',
   rir: 'RIR',
   rest: 'rest',
   loadHint: 'load note',

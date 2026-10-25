@@ -1,3 +1,13 @@
+import type { DistanceUnit, Measure } from './measure';
+import {
+  DEFAULT_DISTANCE_UNIT,
+  DEFAULT_MEASURE,
+  TARGET_BOUNDS,
+  formatTarget,
+  isDistanceUnit,
+  isMeasure,
+  toMetres,
+} from './measure';
 import type { MuscleGroup } from './muscles';
 
 /**
@@ -25,6 +35,11 @@ export type RepRange = { min: number; max: number };
 
 export type Prescription = {
   sets: number;
+  /**
+   * The target per set, in the measure's own terms: reps, seconds, or
+   * `distanceUnit`. Named for the common case, and kept under this name so
+   * every workout stored before time and distance existed reads unchanged.
+   */
   repRange: RepRange;
   /** Reps in reserve, as a target range. */
   rirRange: RepRange;
@@ -32,7 +47,50 @@ export type Prescription = {
   restSeconds: number | null;
   /** Free text, e.g. "same as last + 5". */
   loadHint: string | null;
+  /** What a set is counted in. Absent means reps (see `measureOf`). */
+  measure?: Measure;
+  /** The unit a distance target and its sets are entered in. Distance only. */
+  distanceUnit?: DistanceUnit;
 };
+
+/** A prescription's measure: reps unless it says otherwise. */
+export function measureOf(prescription: Prescription | null): Measure {
+  return prescription?.measure ?? DEFAULT_MEASURE;
+}
+
+/** A prescription's distance unit, for a distance target. */
+export function distanceUnitOf(prescription: Prescription | null): DistanceUnit {
+  return prescription?.distanceUnit ?? DEFAULT_DISTANCE_UNIT;
+}
+
+/**
+ * The same prescription counted in another measure. The target resets to
+ * that measure's defaults: twelve reps mean nothing as twelve seconds.
+ */
+export function withMeasure(
+  prescription: Prescription,
+  measure: Measure,
+  distanceUnit: DistanceUnit = distanceUnitOf(prescription),
+): Prescription {
+  if (measure === measureOf(prescription) && distanceUnit === distanceUnitOf(prescription)) {
+    return prescription;
+  }
+  const rest: Prescription = { ...prescription };
+  delete rest.measure;
+  delete rest.distanceUnit;
+  const target = defaultTarget(measure, distanceUnit);
+  if (measure === 'reps') return { ...rest, repRange: target };
+  if (measure === 'time') return { ...rest, repRange: target, measure };
+  return { ...rest, repRange: target, measure, distanceUnit };
+}
+
+/** A sensible starting target: 8-12 reps, 30-60 s, 20-40 m or 1-2 km. */
+export function defaultTarget(measure: Measure, distanceUnit: DistanceUnit): RepRange {
+  if (measure === 'distance' && (distanceUnit === 'km' || distanceUnit === 'mi')) {
+    return { min: 1, max: 2 };
+  }
+  return { ...TARGET_BOUNDS[measure].defaults };
+}
 
 /**
  * What a row in a workout is.
@@ -386,34 +444,55 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-/** Coerces a prescription into a self-consistent, in-range shape. */
+/**
+ * Coerces a prescription into a self-consistent, in-range shape.
+ *
+ * The measure is only written when it is not reps, and the distance unit only
+ * for a distance, so a reps prescription keeps exactly the shape it has
+ * always had.
+ */
 export function normalizePrescription(prescription: Prescription): Prescription {
+  const measure = measureOf(prescription);
+  const { floor, ceiling } = TARGET_BOUNDS[measure];
   const sets = clamp(Math.round(prescription.sets), 1, MAX_SETS);
-  const repMin = clamp(Math.round(prescription.repRange.min), 1, MAX_REPS);
-  const repMax = clamp(Math.round(prescription.repRange.max), repMin, MAX_REPS);
+  // Distances keep a decimal (1.5 km); reps and seconds are whole.
+  const whole = (value: number): number =>
+    measure === 'distance' ? Math.round(value * 100) / 100 : Math.round(value);
+  const repMin = clamp(whole(prescription.repRange.min), floor, ceiling);
+  const repMax = clamp(whole(prescription.repRange.max), repMin, ceiling);
   const rirMin = clamp(Math.round(prescription.rirRange.min), 0, MAX_RIR);
   const rirMax = clamp(Math.round(prescription.rirRange.max), rirMin, MAX_RIR);
   const rest =
     prescription.restSeconds === null ? null : clamp(Math.round(prescription.restSeconds), 0, 3600);
   const hint = prescription.loadHint === null ? null : prescription.loadHint.trim();
 
-  return {
+  const normalized: Prescription = {
     sets,
     repRange: { min: repMin, max: repMax },
     rirRange: { min: rirMin, max: rirMax },
     restSeconds: rest,
     loadHint: hint === '' ? null : hint,
   };
+  if (measure === 'time') return { ...normalized, measure };
+  if (measure === 'distance') {
+    return { ...normalized, measure, distanceUnit: distanceUnitOf(prescription) };
+  }
+  return normalized;
 }
 
 export function formatRange(range: RepRange): string {
   return range.min === range.max ? String(range.min) : `${String(range.min)}-${String(range.max)}`;
 }
 
-/** e.g. `4 x 12-20 @ 1-2 RIR` */
+/** The target alone, in its measure: `8-12`, `30s-1:00`, `20-40 m`. */
+export function formatPrescriptionTarget(prescription: Prescription): string {
+  return formatTarget(prescription.repRange, measureOf(prescription), distanceUnitOf(prescription));
+}
+
+/** e.g. `4 x 12-20 @ 1-2 RIR`, `3 x 30s-1:00 @ 1-2 RIR` */
 export function formatPrescription(prescription: Prescription): string {
   return (
-    `${String(prescription.sets)} x ${formatRange(prescription.repRange)}` +
+    `${String(prescription.sets)} x ${formatPrescriptionTarget(prescription)}` +
     ` @ ${formatRange(prescription.rirRange)} RIR`
   );
 }
@@ -429,10 +508,19 @@ export function formatPrescription(prescription: Prescription): string {
 export const SET_OVERHEAD_SECONDS = 12;
 export const SECONDS_PER_REP = 3;
 
+/** A loaded carry or a sled, at a walk. Only for the estimate. */
+export const SECONDS_PER_METRE = 0.5;
+
 /** Working time for one set of this prescription, excluding rest. */
 export function estimateSetSeconds(prescription: Prescription): number {
-  const midReps = (prescription.repRange.min + prescription.repRange.max) / 2;
-  return SET_OVERHEAD_SECONDS + midReps * SECONDS_PER_REP;
+  const mid = (prescription.repRange.min + prescription.repRange.max) / 2;
+  const measure = measureOf(prescription);
+  if (measure === 'time') return SET_OVERHEAD_SECONDS + mid;
+  if (measure === 'distance') {
+    const metres = toMetres({ value: mid, unit: distanceUnitOf(prescription) });
+    return SET_OVERHEAD_SECONDS + metres * SECONDS_PER_METRE;
+  }
+  return SET_OVERHEAD_SECONDS + mid * SECONDS_PER_REP;
 }
 
 /**
@@ -909,6 +997,8 @@ export function parsePrescription(value: unknown): Prescription {
   const record = value as Record<string, unknown>;
   const rest: unknown = record['restSeconds'];
   const hint: unknown = record['loadHint'];
+  const measure: unknown = record['measure'];
+  const unit: unknown = record['distanceUnit'];
 
   return normalizePrescription({
     sets: asNumber(record['sets'], DEFAULT_PRESCRIPTION.sets),
@@ -916,6 +1006,8 @@ export function parsePrescription(value: unknown): Prescription {
     rirRange: asRange(record['rirRange'], DEFAULT_PRESCRIPTION.rirRange),
     restSeconds: typeof rest === 'number' && Number.isFinite(rest) ? rest : null,
     loadHint: typeof hint === 'string' && hint.trim() !== '' ? hint : null,
+    ...(isMeasure(measure) ? { measure } : {}),
+    ...(isDistanceUnit(unit) ? { distanceUnit: unit } : {}),
   });
 }
 

@@ -1,5 +1,6 @@
 import type { Session } from '@lift/domain/sessions';
-import { isDateKey, localDateKey } from '@lift/domain/sessions';
+import { addDays, formatDayLabel } from '@lift/domain/history';
+import { localDateKey } from '@lift/domain/sessions';
 import type { Unit, Weight } from '@lift/domain/types';
 import { convertForInput, formatNumber } from '@lift/domain/units';
 import { useState } from 'react';
@@ -13,6 +14,10 @@ import { Field } from '../ui';
  * Folded away, as on the web: `performedOn` is stamped automatically and
  * nobody should answer a question before they can start lifting. Each field
  * writes when editing ends.
+ *
+ * The day is a stepper rather than a typed date: a session is filed under
+ * today or a day or two back, never next week, and a picker would be one more
+ * native module for that.
  */
 
 type Props = {
@@ -30,10 +35,22 @@ export function SessionMeta({ session, displayUnit, onPerformedOn, onBodyweight,
   // Shown in the display unit, stored as entered (§2.7).
   const shown =
     session.bodyweight === null ? null : convertForInput(session.bodyweight, displayUnit);
-  const [bodyweight, setBodyweight] = useState(shown === null ? '' : formatNumber(shown.value));
-  const [date, setDate] = useState(session.performedOn);
+  const storedBodyweight = shown === null ? '' : formatNumber(shown.value);
+  const [bodyweight, setBodyweight] = useState(storedBodyweight);
   const [notes, setNotes] = useState(session.notes);
-  const [dateError, setDateError] = useState(false);
+
+  // A change from another device (or a unit switch) replaces the text, as
+  // React's "adjust state while rendering" pattern: no effect, no extra pass.
+  const [seen, setSeen] = useState({ bodyweight: storedBodyweight, notes: session.notes });
+  if (seen.bodyweight !== storedBodyweight || seen.notes !== session.notes) {
+    if (seen.bodyweight !== storedBodyweight) setBodyweight(storedBodyweight);
+    if (seen.notes !== session.notes) setNotes(session.notes);
+    setSeen({ bodyweight: storedBodyweight, notes: session.notes });
+  }
+
+  const today = localDateKey();
+  const earlier = addDays(session.performedOn, -1);
+  const later = addDays(session.performedOn, 1);
 
   return (
     <View style={[styles.card, { borderColor: palette.border, backgroundColor: palette.surface }]}>
@@ -70,25 +87,31 @@ export function SessionMeta({ session, displayUnit, onPerformedOn, onBodyweight,
               if (Number.isFinite(value) && value > 0) onBodyweight({ value, unit: displayUnit });
             }}
           />
-          <Field
-            label="Performed on (YYYY-MM-DD)"
-            value={date}
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={setDate}
-            onEndEditing={() => {
-              // Only a real calendar date: a half-typed one would file the
-              // session under a day that does not exist.
-              const ok = isDateKey(date);
-              setDateError(!ok);
-              if (ok && date !== session.performedOn) onPerformedOn(date);
-            }}
-          />
-          {dateError ? (
-            <Text style={[styles.summary, { color: palette.warn }]}>
-              Not a date. Use the form 2026-10-06.
-            </Text>
-          ) : null}
+          <View style={styles.dateRow}>
+            <Text style={[styles.summary, { color: palette.dimmed }]}>Performed on</Text>
+            <View style={styles.stepper}>
+              <DayStep
+                label="A day earlier"
+                glyph="‹"
+                disabled={earlier === null}
+                onPress={() => {
+                  if (earlier !== null) onPerformedOn(earlier);
+                }}
+              />
+              <Text style={[styles.date, { color: palette.text }]}>
+                {formatDayLabel(session.performedOn)}
+              </Text>
+              {/* Never past today: a session cannot have happened tomorrow. */}
+              <DayStep
+                label="A day later"
+                glyph="›"
+                disabled={later === null || later > today}
+                onPress={() => {
+                  if (later !== null && later <= today) onPerformedOn(later);
+                }}
+              />
+            </View>
+          </View>
           <Field
             label="Session notes"
             multiline
@@ -106,17 +129,58 @@ export function SessionMeta({ session, displayUnit, onPerformedOn, onBodyweight,
   );
 }
 
+function DayStep({
+  label,
+  glyph,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  glyph: string;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const palette = usePalette();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      hitSlop={6}
+      onPress={onPress}
+      style={[styles.dayStep, { borderColor: palette.border }, disabled && styles.disabled]}
+    >
+      <Text style={[styles.dayGlyph, { color: palette.text }]}>{glyph}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 12 },
+  card: { borderWidth: 1, borderRadius: 8 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
-    minHeight: 48,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 44,
   },
   title: { fontSize: 15, fontWeight: '600' },
-  summary: { fontSize: 13 },
+  summary: { fontSize: 12 },
   body: { paddingHorizontal: 12, paddingBottom: 12, gap: 10 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  date: { fontSize: 14, fontWeight: '600', minWidth: 96, textAlign: 'center' },
+  dayStep: {
+    width: 36,
+    height: 36,
+    borderWidth: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayGlyph: { fontSize: 20, lineHeight: 22 },
+  disabled: { opacity: 0.35 },
   notes: { minHeight: 72, paddingTop: 10, textAlignVertical: 'top' },
 });

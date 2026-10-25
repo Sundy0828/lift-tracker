@@ -1,6 +1,7 @@
 import type { BodyRegion, BodyView } from '@lift/domain/bodyMap';
 import { DRAWN_MUSCLE_SET, VIEW_BOX, inertFor, regionsFor } from '@lift/domain/bodyMap';
-import { muscleLabel } from '@lift/domain/muscles';
+import type { MuscleGroup } from '@lift/domain/muscles';
+import { baseMuscleOf, muscleLabel } from '@lift/domain/muscles';
 import type { VolumeByMuscle } from '@lift/domain/volume';
 import {
   formatSetEquivalents,
@@ -32,10 +33,18 @@ type Props = {
   basis: 'planned' | 'logged';
 };
 
-function Figure({ view, fillFor }: { view: BodyView; fillFor: (region: BodyRegion) => string }) {
+function Figure({
+  view,
+  fillFor,
+  narrow = false,
+}: {
+  view: BodyView;
+  fillFor: (region: BodyRegion) => string;
+  narrow?: boolean;
+}) {
   const palette = usePalette();
   return (
-    <View style={styles.figure}>
+    <View style={[styles.figure, narrow && styles.figureNarrow]}>
       <Svg viewBox={VIEW_BOX} style={styles.svg}>
         {inertFor(view).map((points) => (
           <Polygon
@@ -132,10 +141,87 @@ export function MuscleMap({ volume, stops, scopeLabel, basis }: Props) {
   );
 }
 
+/**
+ * Front and back diagram of the muscles one exercise works: the web's
+ * `MuscleFocus`. It reads on the heat map's own scale, primary at the top stop
+ * and secondary in the middle, and the key below names the same muscles.
+ */
+export function MuscleFocus({
+  primary,
+  secondary,
+}: {
+  primary: readonly MuscleGroup[];
+  secondary: readonly MuscleGroup[];
+}) {
+  const palette = usePalette();
+  const primarySet = withBaseGroups(primary);
+  const secondarySet = withBaseGroups(secondary);
+  const primaryColor = palette.heat[4];
+  const secondaryColor = palette.heat[2];
+
+  const fillFor = (region: BodyRegion): string =>
+    region.sources.some((muscle) => primarySet.has(muscle))
+      ? primaryColor
+      : region.sources.some((muscle) => secondarySet.has(muscle))
+        ? secondaryColor
+        : palette.heat[0];
+
+  return (
+    <View style={styles.root}>
+      <View
+        style={styles.pair}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <Figure view="front" fillFor={fillFor} narrow />
+        <Figure view="back" fillFor={fillFor} narrow />
+      </View>
+      <FocusKey label="Primary" color={primaryColor} muscles={primary} />
+      <FocusKey label="Secondary" color={secondaryColor} muscles={secondary} />
+    </View>
+  );
+}
+
+/** One band of the key: swatch, name, and the muscles it covers. */
+function FocusKey({
+  label,
+  color,
+  muscles,
+}: {
+  label: string;
+  color: string;
+  muscles: readonly MuscleGroup[];
+}) {
+  const palette = usePalette();
+  return (
+    <View style={styles.keyRow}>
+      <View style={[styles.swatch, { backgroundColor: color, borderColor: palette.bodyStroke }]} />
+      <Text style={[styles.body, styles.keyLabel, { color: palette.text }]}>{label}</Text>
+      <Text style={[styles.body, styles.grow, { color: palette.dimmed }]}>
+        {muscles.map(muscleLabel).join(', ') || '—'}
+      </Text>
+    </View>
+  );
+}
+
+/** The muscles plus the base group each one paints, so undrawn muscles still shade. */
+function withBaseGroups(muscles: readonly MuscleGroup[]): ReadonlySet<MuscleGroup> {
+  const found = new Set<MuscleGroup>();
+  for (const muscle of muscles) {
+    found.add(muscle);
+    found.add(baseMuscleOf(muscle));
+  }
+  return found;
+}
+
 const styles = StyleSheet.create({
   root: { gap: 10 },
   pair: { flexDirection: 'row', justifyContent: 'center', gap: 16 },
   figure: { flex: 1, maxWidth: 152, alignItems: 'center', gap: 2 },
+  // Narrower than the heat map: this sits in a detail view.
+  figureNarrow: { maxWidth: 120 },
+  keyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  keyLabel: { fontWeight: '600' },
   // The artwork is 100 x 220.
   svg: { width: '100%', aspectRatio: 100 / 220 },
   caption: { fontSize: 11, letterSpacing: 0.5 },

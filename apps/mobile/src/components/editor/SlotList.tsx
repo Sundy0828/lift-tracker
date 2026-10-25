@@ -1,10 +1,12 @@
 import type { ExerciseSlot, SlotPlace } from '@lift/domain/workouts';
 import {
-  MAX_SETS,
   formatPrescription,
+  formatPrescriptionTarget,
   formatRange,
   formatRestSeconds,
   groupRounds,
+  MAX_SETS,
+  measureOf,
   restSlotSeconds,
 } from '@lift/domain/workouts';
 import type { ReactNode } from 'react';
@@ -15,8 +17,11 @@ import ReanimatedSwipeable, {
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import { usePalette } from '../../theme';
-import { Stepper } from './controls';
+import { InlineNumber } from './controls';
 import { LIFT_MS, useDragHandlers, useDragView, useGapRef, useRowRef } from './drag';
+
+/** The web's limit on a rest, in seconds. */
+const MAX_REST_SECONDS = 3600;
 
 /**
  * The workout's slots: the web's `SlotList`, for a thumb.
@@ -27,10 +32,13 @@ import { LIFT_MS, useDragHandlers, useDragView, useGapRef, useRowRef } from './d
  * out, as on the web, plus one below each card that adds after it rather
  * than into it.
  *
- * Moving things is the drag (see ./drag): hold a row to lift it, drop it in a
- * gap to move it, hold it over another row to make a circuit, drop it outside
- * its card to leave. Swiping is the backup for the same things: left deletes,
- * right duplicates or joins or leaves a circuit.
+ * Every row carries the web's controls: the ⠿ handle, ↑ and ↓, and ✕. A rest
+ * row's length and a circuit's rounds and round rest are typed in place.
+ *
+ * On top of those, the phone's own gestures: hold a row to lift it, drop it in
+ * a gap to move it, hold it over another row to make a circuit, drop it
+ * outside its card to leave (see ./drag). Swiping left deletes, right
+ * duplicates or joins or leaves a circuit.
  *
  * Nothing here may change size during a drag, because every position is
  * measured once, when the row lifts. Highlights and hints are therefore drawn
@@ -42,6 +50,9 @@ type Props = {
   groupRest: Readonly<Record<string, number | null>>;
   defaultRestSeconds: number;
   onEditSlot: (slot: ExerciseSlot) => void;
+  /** Moves the slot at `from` to `to`, both indexes into `slots`. */
+  onMove: (from: number, to: number) => void;
+  onRestSeconds: (slotId: string, seconds: number) => void;
   onAdd: (place: SlotPlace) => void;
   onAddRest: (place: SlotPlace) => void;
   onRemoveSlot: (slotId: string) => void;
@@ -54,7 +65,13 @@ type Props = {
 
 type RowActions = Pick<
   Props,
-  'onEditSlot' | 'onRemoveSlot' | 'onDuplicateSlot' | 'onJoinAbove' | 'onLeaveCircuit'
+  | 'onEditSlot'
+  | 'onMove'
+  | 'onRestSeconds'
+  | 'onRemoveSlot'
+  | 'onDuplicateSlot'
+  | 'onJoinAbove'
+  | 'onLeaveCircuit'
 >;
 
 /** Consecutive runs of slots, split by circuit. A circuit of one is just a slot. */
@@ -90,9 +107,53 @@ function firstSlotId(item: Segment | undefined): string | null {
   return item.kind === 'single' ? item.slot.slotId : (item.members[0]?.slotId ?? null);
 }
 
-/** What a row shows: the name and its prescription, or a rest's length. Also the dragged copy. */
-export function SlotFace({ slot, inCircuit }: { slot: ExerciseSlot; inCircuit: boolean }) {
+/** The second line under a name: the prescription, or inside a circuit only the reps. */
+function prescriptionLine(slot: ExerciseSlot, inCircuit: boolean): string {
+  if (slot.kind === 'rest') return '';
+  // Inside a circuit the set count belongs to the card.
+  if (!inCircuit) return formatPrescription(slot.prescription);
+  return measureOf(slot.prescription) === 'reps'
+    ? `${formatRange(slot.prescription.repRange)} reps`
+    : formatPrescriptionTarget(slot.prescription);
+}
+
+/**
+ * What a row shows: the ⠿ handle, then the name over its prescription, or a
+ * rest's length. Alone, it is the dragged copy; in the list, `body` makes the
+ * middle tappable or typeable and `controls` adds ↑ ↓ ✕ at the end.
+ */
+export function SlotFace({
+  slot,
+  inCircuit,
+  body,
+  controls,
+}: {
+  slot: ExerciseSlot;
+  inCircuit: boolean;
+  /** Replaces the middle: the Pressable that opens the sheet, or the rest's box. */
+  body?: (content: ReactNode) => ReactNode;
+  controls?: ReactNode;
+}) {
   const palette = usePalette();
+  const content =
+    slot.kind === 'rest' ? (
+      <Text style={[styles.name, styles.restName, { color: palette.dimmed }]}>
+        Rest {formatRestSeconds(restSlotSeconds(slot))}
+      </Text>
+    ) : (
+      <>
+        <Text style={[styles.name, { color: palette.text }]} numberOfLines={1}>
+          {slot.exerciseName}
+          {slot.occurrenceIndex > 0 ? (
+            <Text style={[styles.small, { color: palette.dimmed }]}> (again)</Text>
+          ) : null}
+        </Text>
+        <Text style={[styles.small, { color: palette.dimmed }]}>
+          {prescriptionLine(slot, inCircuit)}
+        </Text>
+      </>
+    );
+
   return (
     <View
       style={[
@@ -106,32 +167,50 @@ export function SlotFace({ slot, inCircuit }: { slot: ExerciseSlot; inCircuit: b
           : { borderColor: palette.border, backgroundColor: palette.surface },
       ]}
     >
-      <View style={styles.text}>
-        {slot.kind === 'rest' ? (
-          <Text style={[styles.name, styles.restName, { color: palette.dimmed }]}>
-            Rest {formatRestSeconds(restSlotSeconds(slot))}
-          </Text>
-        ) : (
-          <>
-            <Text style={[styles.name, { color: palette.text }]} numberOfLines={1}>
-              {slot.exerciseName}
-              {slot.occurrenceIndex > 0 ? (
-                <Text style={[styles.small, { color: palette.dimmed }]}> (again)</Text>
-              ) : null}
-            </Text>
-            <Text style={[styles.small, { color: palette.dimmed }]} numberOfLines={1}>
-              {/* Inside a circuit the set count belongs to the card. */}
-              {inCircuit
-                ? `${formatRange(slot.prescription.repRange)} reps`
-                : formatPrescription(slot.prescription)}
-            </Text>
-          </>
-        )}
-      </View>
       <Text style={[styles.grip, { color: palette.dimmed }]} accessibilityElementsHidden>
-        ≡
+        ⠿
       </Text>
+      {body === undefined ? <View style={styles.text}>{content}</View> : body(content)}
+      {controls}
     </View>
+  );
+}
+
+/** ↑, ↓ or ✕ at the end of a row. */
+function RowButton({
+  glyph,
+  label,
+  disabled = false,
+  danger = false,
+  onPress,
+}: {
+  glyph: string;
+  label: string;
+  disabled?: boolean;
+  danger?: boolean;
+  onPress: () => void;
+}) {
+  const palette = usePalette();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      hitSlop={4}
+      onPress={onPress}
+      style={({ pressed }) => [styles.rowButton, pressed && styles.pressed]}
+    >
+      <Text
+        style={[
+          styles.rowGlyph,
+          { color: danger ? palette.danger : palette.dimmed },
+          disabled && styles.disabled,
+        ]}
+      >
+        {glyph}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -181,15 +260,22 @@ function SwipeButton({
 
 function SlotRow({
   slot,
+  index,
+  count,
   circuit,
   canJoinAbove,
   onEditSlot,
+  onMove,
+  onRestSeconds,
   onRemoveSlot,
   onDuplicateSlot,
   onJoinAbove,
   onLeaveCircuit,
 }: {
   slot: ExerciseSlot;
+  /** Its place in the whole list, for ↑ and ↓. */
+  index: number;
+  count: number;
   /** Set for a circuit member: whether it is the first, which decides where leaving puts it. */
   circuit: { first: boolean } | null;
   canJoinAbove: boolean;
@@ -289,16 +375,70 @@ function SlotRow({
     >
       <GestureDetector gesture={pan}>
         <View ref={rowRef} collapsable={false} style={lifted ? styles.lifted : null}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Edit ${label}`}
-            accessibilityHint="Hold to drag it. Swipe left to delete, right for more."
-            onPress={() => {
-              onEditSlot(slot);
-            }}
-          >
-            <SlotFace slot={slot} inCircuit={circuit !== null} />
-          </Pressable>
+          <SlotFace
+            slot={slot}
+            inCircuit={circuit !== null}
+            body={(content) =>
+              slot.kind === 'rest' ? (
+                <View style={[styles.text, styles.restBody]}>
+                  <Text style={[styles.name, styles.restName, { color: palette.dimmed }]}>
+                    Rest
+                  </Text>
+                  <InlineNumber
+                    label="Rest length"
+                    value={restSlotSeconds(slot)}
+                    suffix="s"
+                    min={0}
+                    max={MAX_REST_SECONDS}
+                    width={76}
+                    onCommit={(seconds) => {
+                      if (seconds !== null) onRestSeconds(slot.slotId, seconds);
+                    }}
+                  />
+                </View>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit ${label}`}
+                  accessibilityHint="Hold to drag it. Swipe left to delete, right for more."
+                  onPress={() => {
+                    onEditSlot(slot);
+                  }}
+                  style={({ pressed }) => [styles.text, pressed && styles.pressed]}
+                >
+                  {content}
+                </Pressable>
+              )
+            }
+            controls={
+              <>
+                <RowButton
+                  glyph="↑"
+                  label={`Move ${label} up`}
+                  disabled={index === 0}
+                  onPress={() => {
+                    onMove(index, index - 1);
+                  }}
+                />
+                <RowButton
+                  glyph="↓"
+                  label={`Move ${label} down`}
+                  disabled={index === count - 1}
+                  onPress={() => {
+                    onMove(index, index + 1);
+                  }}
+                />
+                <RowButton
+                  glyph="✕"
+                  label={`Delete ${label}`}
+                  danger
+                  onPress={() => {
+                    onRemoveSlot(slot.slotId);
+                  }}
+                />
+              </>
+            }
+          />
           {grouping === null ? null : (
             // Over the row, not around it: a border would change its size.
             <View
@@ -422,6 +562,8 @@ export function SlotList(props: Props) {
 
   const rowActions: RowActions = {
     onEditSlot: props.onEditSlot,
+    onMove: props.onMove,
+    onRestSeconds: props.onRestSeconds,
     onRemoveSlot: props.onRemoveSlot,
     onDuplicateSlot: props.onDuplicateSlot,
     onJoinAbove: props.onJoinAbove,
@@ -430,6 +572,7 @@ export function SlotList(props: Props) {
   const gapProps = { draggedGroup, onAdd, onAddRest };
   const nameOf = (slot: ExerciseSlot): string =>
     slot.kind === 'rest' ? 'rest' : slot.exerciseName;
+  const placeOf = (slot: ExerciseSlot) => ({ index: slots.indexOf(slot), count: slots.length });
 
   return (
     <View>
@@ -449,6 +592,7 @@ export function SlotList(props: Props) {
             <View key={slot.slotId}>
               <SlotRow
                 slot={slot}
+                {...placeOf(slot)}
                 circuit={null}
                 // A rest row joining would lose its length to linkToPrevious.
                 canJoinAbove={index > 0 && slot.kind === 'exercise'}
@@ -468,6 +612,7 @@ export function SlotList(props: Props) {
         const rounds = groupRounds(members);
         const roundRest = groupRest[groupId] ?? null;
         const exerciseCount = members.filter((slot) => slot.kind === 'exercise').length;
+        const lead = members[0] === undefined ? 'nothing' : nameOf(members[0]);
 
         return (
           <View key={groupId}>
@@ -481,30 +626,33 @@ export function SlotList(props: Props) {
                   it, and the rest between rounds at the far end. */}
               <View style={styles.cardHeader}>
                 <Text style={[styles.cardLabel, { color: palette.circuitLabel }]}>Circuit</Text>
-                <Stepper
-                  label="Rounds"
-                  size="compact"
-                  value={rounds === null ? 'mixed' : `${String(rounds)}x`}
-                  canDecrement={(rounds ?? 2) > 1}
-                  canIncrement={(rounds ?? 0) < MAX_SETS}
-                  onDecrement={() => {
-                    onRounds(groupId, (rounds ?? 2) - 1);
-                  }}
-                  onIncrement={() => {
-                    onRounds(groupId, (rounds ?? 0) + 1);
+                <InlineNumber
+                  label={`Rounds for the circuit starting with ${lead}`}
+                  value={rounds}
+                  suffix="x"
+                  placeholder="mixed"
+                  min={1}
+                  max={MAX_SETS}
+                  width={66}
+                  onCommit={(next) => {
+                    if (next !== null) onRounds(groupId, next);
                   }}
                 />
                 <View style={styles.grow} />
-                <Stepper
-                  label="Rest between rounds"
-                  size="compact"
-                  value={`${formatRestSeconds(roundRest ?? defaultRestSeconds)} rest`}
-                  canDecrement={(roundRest ?? defaultRestSeconds) > 0}
-                  onDecrement={() => {
-                    onGroupRest(groupId, Math.max(0, (roundRest ?? defaultRestSeconds) - 15));
-                  }}
-                  onIncrement={() => {
-                    onGroupRest(groupId, Math.min(3600, (roundRest ?? defaultRestSeconds) + 15));
+                {/* Pause after a whole round, on top of any rest rows. Empty is
+                    "my default", shown as the placeholder. */}
+                <Text style={[styles.small, { color: palette.dimmed }]}>round rest</Text>
+                <InlineNumber
+                  label={`Rest between rounds of the circuit starting with ${lead}`}
+                  value={roundRest}
+                  suffix="s"
+                  placeholder={formatRestSeconds(defaultRestSeconds)}
+                  min={0}
+                  max={MAX_REST_SECONDS}
+                  nullable
+                  width={76}
+                  onCommit={(seconds) => {
+                    onGroupRest(groupId, seconds);
                   }}
                 />
               </View>
@@ -520,6 +668,7 @@ export function SlotList(props: Props) {
                 <View key={slot.slotId}>
                   <SlotRow
                     slot={slot}
+                    {...placeOf(slot)}
                     circuit={{ first: memberIndex === 0 }}
                     canJoinAbove={false}
                     {...rowActions}
@@ -535,7 +684,7 @@ export function SlotList(props: Props) {
 
               <Text style={[styles.small, { color: palette.dimmed }]}>
                 {rounds === null
-                  ? 'Members have different set counts. Set the rounds to line them up.'
+                  ? 'Members have different set counts — set the rounds to line them up.'
                   : `${String(rounds)} rounds of these ${String(exerciseCount)}, in order.`}
               </Text>
             </View>
@@ -562,9 +711,10 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
     minHeight: 48,
-    paddingHorizontal: 10,
+    paddingLeft: 8,
+    paddingRight: 2,
     paddingVertical: 6,
     borderWidth: 1,
     borderRadius: 8,
@@ -575,7 +725,11 @@ const styles = StyleSheet.create({
   restName: { fontWeight: '500' },
   small: { fontSize: 12 },
   grow: { flex: 1 },
-  grip: { fontSize: 18, paddingLeft: 2 },
+  grip: { fontSize: 16, paddingRight: 2 },
+  restBody: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rowButton: { width: 28, height: 32, alignItems: 'center', justifyContent: 'center' },
+  rowGlyph: { fontSize: 15, fontWeight: '600' },
+  disabled: { opacity: 0.3 },
   outline: {
     ...StyleSheet.absoluteFill,
     borderWidth: 2,

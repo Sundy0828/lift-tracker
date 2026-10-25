@@ -82,7 +82,7 @@ function Harness() {
     [],
   );
 
-  const onReps = useCallback((key: string, setIndex: number, value: number | null) => {
+  const onAmount = useCallback((key: string, setIndex: number, value: number | null) => {
     setEntry((previous) => {
       const [updated] = updateSet([previous], key, setIndex, { reps: value });
       return updated ?? previous;
@@ -101,7 +101,7 @@ function Harness() {
       workoutName="PUSH"
       overlayScope="same-workout"
       onWeight={onWeight}
-      onReps={onReps}
+      onAmount={onAmount}
       onRir={noop}
       onToggleComplete={noop}
       onToggleSkipped={noop}

@@ -29,7 +29,7 @@
     "@tanstack/react-virtual": "^3.14.13",
     "dayjs": "^1.11.23",
     "firebase": "catalog:",
-    "qrcode-generator": "^2.0.4",
+    "qrcode-generator": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-router": "^8.4.0"

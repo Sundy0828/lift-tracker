@@ -1,10 +1,12 @@
 import { ActionIcon, Group, NumberInput, Text, Tooltip } from '@mantine/core';
 import type { ExerciseSlot, WorkoutBody } from '@lift/domain/workouts';
 import {
-  MAX_SETS,
   formatPrescription,
+  formatPrescriptionTarget,
   formatRestSeconds,
   groupRounds,
+  MAX_SETS,
+  measureOf,
   restSlotSeconds,
 } from '@lift/domain/workouts';
 import { SortableList, SortableRow } from './SortableList';
@@ -37,6 +39,8 @@ type Props = {
   onReorder: (from: number, to: number) => void;
   onEditSlot: (slot: ExerciseSlot) => void;
   onRemoveSlot: (slotId: string) => void;
+  /** Inserts a copy of the slot right after it. */
+  onDuplicateSlot: (slotId: string) => void;
   onGroup: (activeSlotId: string, targetSlotId: string) => void;
   /**
    * Takes one slot out of its circuit and places it just outside the block;
@@ -90,8 +94,12 @@ function segment(slots: readonly ExerciseSlot[]): Segment[] {
   );
 }
 
-/** Reps only — inside a circuit the set count belongs to the block. */
+/**
+ * The target only — inside a circuit the set count belongs to the block.
+ * Reps say so; a time or distance carries its own unit.
+ */
 function formatReps(slot: ExerciseSlot): string {
+  if (measureOf(slot.prescription) !== 'reps') return formatPrescriptionTarget(slot.prescription);
   const { min, max } = slot.prescription.repRange;
   return min === max ? `${String(min)} reps` : `${String(min)}-${String(max)} reps`;
 }
@@ -247,6 +255,7 @@ export function SlotList({
   onReorder,
   onEditSlot,
   onRemoveSlot,
+  onDuplicateSlot,
   onGroup,
   onLeaveCircuit,
   onAddAfter,
@@ -262,7 +271,9 @@ export function SlotList({
     slot.kind === 'rest' ? 'rest' : slot.exerciseName;
 
   /**
-   * Swipe left deletes; swipe right leaves the circuit, when in one.
+   * Swipe left deletes; swipe right leaves the circuit when in one, and
+   * otherwise duplicates the row (the phone's swipe does the same). A circuit
+   * member is duplicated from its editor instead.
    *
    * A swipe carries no vertical hint, so the row leaves on the side it already
    * reads as: the first member goes out above the block, any other below.
@@ -275,7 +286,18 @@ export function SlotList({
         onRemoveSlot(slot.slotId);
       },
     };
-    if (leavesBefore === null) return { left };
+    if (leavesBefore === null) {
+      return {
+        left,
+        right: {
+          label: `Duplicate ${nameOf(slot)}`,
+          tone: 'neutral',
+          onCommit: () => {
+            onDuplicateSlot(slot.slotId);
+          },
+        } satisfies SwipeAction,
+      };
+    }
     return {
       left,
       right: {

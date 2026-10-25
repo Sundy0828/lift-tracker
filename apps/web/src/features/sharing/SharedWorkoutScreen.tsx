@@ -2,6 +2,7 @@ import { Alert, Badge, Button, Card, Group, Skeleton, Stack, Text, Title } from 
 import { Link, useLocation, useParams } from 'react-router';
 import { useAuth } from '@lift/data/hooks/useAuth';
 import { useSharedWorkout } from '@lift/data/hooks/useSharedWorkout';
+import { AppBanner } from '@/app/AppBanner';
 import { ImportPanel } from './ImportPanel';
 import { WorkoutPreview } from './WorkoutPreview';
 
@@ -124,6 +125,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <Stack maw={720} mx="auto" p="md" gap="md">
       {children}
+      {/* Where a phone visitor following a link most often lands. */}
+      <AppBanner />
     </Stack>
   );
 }

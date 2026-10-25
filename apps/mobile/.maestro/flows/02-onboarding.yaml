@@ -1,0 +1,34 @@
+# onboarding.spec.ts: the walkthrough opens on a new account, steps through,
+# does not come back, and can be asked for again from Settings.
+appId: com.sundy0828.lifttracker
+---
+- runFlow: ../subflows/sign-up.yaml
+- assertVisible: 'A workout is a list you reuse'
+- tapOn: 'Next'
+- assertVisible: 'Publish a version before you use it'
+- tapOn: 'Back'
+- assertVisible: 'A workout is a list you reuse'
+- repeat:
+    times: 5
+    commands:
+      - tapOn: 'Next'
+- assertVisible: 'Circuits are made by dragging'
+- tapOn: 'Start lifting'
+- assertNotVisible: 'HOW THIS WORKS'
+
+# Seen once, on the account: a restart does not bring it back.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: 'Today'
+    timeout: 20000
+- assertNotVisible: 'HOW THIS WORKS'
+
+# And it can be asked for again.
+- tapOn: 'Settings'
+- scrollUntilVisible:
+    element: 'Show the walkthrough'
+- tapOn: 'Show the walkthrough'
+- assertVisible: 'A workout is a list you reuse'
+- tapOn: 'Skip'
+- assertNotVisible: 'HOW THIS WORKS'

@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { usePalette } from '../../theme';
 
 /**
@@ -46,6 +46,10 @@ export function EffortField({ setLabel, value, target, disabled, onChange }: Pro
             accessibilityState={{ selected, disabled }}
             onPress={() => {
               void Haptics.selectionAsync();
+              // Ends typing in the load or reps box, which is what saves it: the
+              // keyboard stays up through a tap here, so otherwise the row reads
+              // as half-entered and never ticks itself (the web blurs on click).
+              Keyboard.dismiss();
               // Tapping the chosen one again clears it; a mis-tap is undoable.
               onChange(selected ? null : step);
             }}
@@ -70,13 +74,13 @@ const styles = StyleSheet.create({
   group: { flexDirection: 'row', gap: 6 },
   step: {
     minWidth: 44,
-    minHeight: 36,
+    minHeight: 34,
     borderWidth: 1,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
   },
-  label: { fontSize: 14, fontWeight: '600' },
+  label: { fontSize: 13, fontWeight: '600' },
   disabled: { opacity: 0.4 },
 });

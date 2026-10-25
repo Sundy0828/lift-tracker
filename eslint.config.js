@@ -8,6 +8,8 @@ export default tseslint.config(
   {
     ignores: [
       '**/dist',
+      // Maestro scripts run in Maestro's own JS engine, with its globals.
+      '**/.maestro',
       '**/dev-dist',
       '**/coverage',
       '**/playwright-report',

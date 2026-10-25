@@ -71,7 +71,11 @@ export type ExerciseStats = {
   lastWorkoutName: string;
   lastPrescription: Prescription | null;
   lastSets: LoggedSet[];
-  /** Best adjusted e1RM ever, in kilograms — the single internal unit. */
+  /**
+   * Best adjusted e1RM ever, in kilograms — the single internal unit. Can be
+   * negative for an assisted lift (see `BODYWEIGHT_REFERENCE_KG`); `bestSet`
+   * being null, not this being 0, is what says there is no record.
+   */
   bestE1rm: number;
   bestE1rmAt: string | null;
   bestE1rmSessionId: string | null;
@@ -180,6 +184,8 @@ export type PersonalRecord = {
   e1rmKg: number;
   /** The record it beat; 0 when there was none. */
   previousE1rmKg: number;
+  /** The first scored set of this exercise ever: a record with nothing beaten. */
+  isFirst: boolean;
 };
 
 export type StatsUpdate = {
@@ -233,15 +239,19 @@ export function buildStatsUpdate(
     const performance = toPerformance(session, entry);
     byOccurrence[occurrenceKey(entry.exerciseId, entry.occurrenceIndex)] = performance;
 
+    // Null for a timed or distance row: only reps are scored.
     const best = bestSet(entry.sets);
-    const bestScore = best === null ? 0 : (adjustedE1rm(best) ?? 0);
+    const bestScore = best === null ? null : adjustedE1rm(best);
 
     // An exercise can appear twice in one workout, so the tier-2 document may
     // be touched twice in this loop. The in-progress value wins over the
     // stored one, which keeps the two occurrences' bests accumulating.
     const before = exerciseStats.get(entry.exerciseId) ?? previous(entry.exerciseId);
+    // No record yet is no best set, not a best of 0: an assisted lift scores
+    // below zero, and its first set is still its first record.
+    const hasRecord = before !== null && before.bestSet !== null;
     const previousBest = before?.bestE1rm ?? 0;
-    const isRecord = beatsRecord(bestScore, previousBest);
+    const isRecord = bestScore !== null && (!hasRecord || beatsRecord(bestScore, previousBest));
 
     if (isRecord && best !== null) {
       prs.push({
@@ -249,7 +259,8 @@ export function buildStatsUpdate(
         exerciseName: entry.exerciseName,
         set: best,
         e1rmKg: bestScore,
-        previousE1rmKg: previousBest,
+        previousE1rmKg: hasRecord ? previousBest : 0,
+        isFirst: !hasRecord,
       });
     }
 
@@ -362,7 +373,7 @@ export function parseExerciseStats(id: string, record: Record<string, unknown>):
     lastPrescription:
       prescription === null || prescription === undefined ? null : parsePrescription(prescription),
     lastSets: parseLoggedSets(record['lastSets']),
-    bestE1rm: Math.max(0, asNumber(record['bestE1rm'], 0)),
+    bestE1rm: asNumber(record['bestE1rm'], 0),
     bestE1rmAt: isDateKey(bestAt) ? bestAt : null,
     bestE1rmSessionId: asIdOrNull(record['bestE1rmSessionId']),
     bestSet:

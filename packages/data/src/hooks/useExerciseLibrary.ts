@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { loadCatalog } from '@lift/catalog';
-import type { CatalogExercise, ExerciseResolver } from '@lift/domain/exercises';
+import type { CatalogExercise, CustomExercise, ExerciseResolver } from '@lift/domain/exercises';
 import { createExerciseResolver } from '@lift/domain/exercises';
 import type { SearchIndex } from '@lift/domain/search';
 import { buildSearchIndex } from '@lift/domain/search';
@@ -19,23 +19,57 @@ export type ExerciseLibrary = {
 const EMPTY_CATALOG: readonly CatalogExercise[] = [];
 
 /**
+ * The catalog once loaded, so every screen after the first starts with it
+ * rather than a pending render while the (memoised) promise resolves.
+ */
+let loadedCatalog: readonly CatalogExercise[] | null = null;
+
+/**
+ * The resolver and search index for the last catalog and custom list seen.
+ *
+ * Every screen with a picker, a How to or a record used to build its own index
+ * of ~900 exercises; on a phone in particular that was work on every mount.
+ * The custom list is shared (one listener, one array: see `useCustomExercises`),
+ * so its identity is a sound cache key, and one build serves every screen.
+ */
+let built: {
+  catalog: readonly CatalogExercise[];
+  custom: readonly CustomExercise[];
+  resolver: ExerciseResolver;
+  index: SearchIndex;
+} | null = null;
+
+function libraryFor(
+  catalog: readonly CatalogExercise[],
+  custom: readonly CustomExercise[],
+): { resolver: ExerciseResolver; index: SearchIndex } {
+  if (built?.catalog !== catalog || built.custom !== custom) {
+    const resolver = createExerciseResolver(catalog, custom);
+    built = { catalog, custom, resolver, index: buildSearchIndex(resolver.all()) };
+  }
+  return built;
+}
+
+/**
  * The app's single entry point for exercise data: the bundled catalog merged
  * with the user's custom exercises (§2.2).
  *
- * The index is rebuilt when either source changes. That costs a couple of
- * milliseconds for ~900 entries, which is cheap enough to not warrant
- * incremental updates.
+ * The index is rebuilt when either source changes, once for the whole app
+ * (see `libraryFor`), rather than incrementally: ~900 entries is cheap to
+ * build once, and it was only the building of it on every screen that cost.
  */
 export function useExerciseLibrary(): ExerciseLibrary {
   const { exercises: custom, isPending: customPending } = useCustomExercises();
-  const [catalog, setCatalog] = useState<readonly CatalogExercise[] | null>(null);
+  const [catalog, setCatalog] = useState<readonly CatalogExercise[] | null>(loadedCatalog);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (catalog !== null) return;
     let cancelled = false;
 
     loadCatalog().then(
       (loaded) => {
+        loadedCatalog = loaded;
         if (!cancelled) setCatalog(loaded);
       },
       (cause: unknown) => {
@@ -48,14 +82,12 @@ export function useExerciseLibrary(): ExerciseLibrary {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [catalog]);
 
-  const resolver = useMemo(
-    () => createExerciseResolver(catalog ?? EMPTY_CATALOG, custom),
+  const { resolver, index } = useMemo(
+    () => libraryFor(catalog ?? EMPTY_CATALOG, custom),
     [catalog, custom],
   );
-
-  const index = useMemo(() => buildSearchIndex(resolver.all()), [resolver]);
 
   return {
     resolver,

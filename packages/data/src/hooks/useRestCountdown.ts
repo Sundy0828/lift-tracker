@@ -47,6 +47,9 @@ export function useRestCountdown(rest: Rest | null): RestCountdown {
 
   if (rest === null) return STOPPED;
 
-  const left = Math.ceil((rest.endsAt - now) / 1000);
+  // `now` stops while no rest runs, so on a new rest's first frame it can be
+  // long stale: a 10 s rest once read 24 s for a frame. No rest is seen before
+  // its `startedAt`, so that is the earliest `now` can be.
+  const left = Math.ceil((rest.endsAt - Math.max(now, rest.startedAt)) / 1000);
   return { left, isOver: left <= 0 };
 }

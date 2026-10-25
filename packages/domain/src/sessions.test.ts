@@ -23,6 +23,7 @@ import {
   lastCompletedSet,
   missingField,
   outstandingSets,
+  setsMissingNumbers,
   restAfter,
   sessionProgress,
   sessionSeconds,
@@ -219,8 +220,13 @@ describe('editing sets', () => {
     expect(updateSet(entries, 'a', 0, { reps: 8.6 })[0]?.sets[0]?.reps).toBe(9);
   });
 
-  it('drops a negative load rather than storing it', () => {
+  it('keeps a negative load: it is assistance, from an assisted machine', () => {
     const next = updateSet(entries, 'a', 0, { weight: { value: -10, unit: 'lb' } });
+    expect(next[0]?.sets[0]?.weight).toEqual({ value: -10, unit: 'lb' });
+  });
+
+  it('drops a load past the machine limit either way', () => {
+    const next = updateSet(entries, 'a', 0, { weight: { value: -5000, unit: 'lb' } });
     expect(next[0]?.sets[0]?.weight).toBeNull();
   });
 
@@ -550,6 +556,30 @@ describe('finishing early', () => {
   function withReps(entries: readonly SessionEntry[], key: string, index: number) {
     return updateSet(entries, key, index, { weight: { value: 185, unit: 'lb' }, reps: 8 });
   }
+
+  it('holds a ticked set with nothing in it, and one with reps but no load', () => {
+    let entries = toggleSetComplete(session.entries, 'a', 0, 'now');
+    entries = updateSet(entries, 'b', 1, { reps: 8 });
+
+    expect(setsMissingNumbers(entries)).toEqual([
+      { exerciseName: 'bench', count: 1, first: { entryKey: 'a', setIndex: 0 } },
+      { exerciseName: 'row', count: 1, first: { entryKey: 'b', setIndex: 1 } },
+    ]);
+  });
+
+  it('asks for RIR on a prescribed row, and passes a set that has everything', () => {
+    let entries = toggleSetComplete(withReps(session.entries, 'a', 0), 'a', 0, 'now');
+    expect(setsMissingNumbers(entries)).toHaveLength(1);
+
+    entries = updateSet(entries, 'a', 0, { rir: 2 });
+    expect(setsMissingNumbers(entries)).toEqual([]);
+  });
+
+  it('leaves skipped and untouched sets alone', () => {
+    const entries = toggleSetSkipped(toggleSetComplete(session.entries, 'a', 0, 'now'), 'a', 0);
+    expect(setsMissingNumbers(entries)).toEqual([]);
+    expect(setsMissingNumbers(session.entries)).toEqual([]);
+  });
 
   it('splits what is outstanding into what was done and what was not', () => {
     // Set 1 ticked, set 2 filled in but never ticked, set 3 untouched.

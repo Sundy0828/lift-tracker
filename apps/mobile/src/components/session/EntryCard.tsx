@@ -1,14 +1,29 @@
 import type { ExerciseStats, Overlay, OverlayScope, WorkoutStats } from '@lift/domain/overlay';
 import { isComparable, previousSetAt, resolveOverlay, workedPosition } from '@lift/domain/overlay';
 import type { LoggedSet, SessionEntry } from '@lift/domain/sessions';
-import { assessSet, entryKey as keyOf, isRestEntry } from '@lift/domain/sessions';
+import type { DistanceUnit, Measure } from '@lift/domain/measure';
+import { DISTANCE_UNITS, MEASURES, MEASURE_LABELS, amountInput } from '@lift/domain/measure';
+import {
+  assessSet,
+  entryDistanceUnit,
+  entryMeasure,
+  hasEnteredSets,
+  entryKey as keyOf,
+  isRestEntry,
+  setAmountIn,
+} from '@lift/domain/sessions';
 import type { DeltaChip } from '@lift/domain/strength';
 import { describeComparison, formatSet } from '@lift/domain/strength';
-import type { Unit } from '@lift/domain/types';
-import { formatPrescription, formatRange, formatRestSeconds } from '@lift/domain/workouts';
+import type { Handedness, Unit } from '@lift/domain/types';
+import {
+  formatPrescription,
+  formatPrescriptionTarget,
+  formatRestSeconds,
+} from '@lift/domain/workouts';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { usePalette } from '../../theme';
+import { Segmented } from '../ui';
 import { OverlayLine } from './OverlayLine';
 import type { SetHandlers } from './SetRow';
 import { SetRow } from './SetRow';
@@ -28,6 +43,12 @@ type Props = SetHandlers & {
   onNotes: (entryKey: string, notes: string) => void;
   /** Only for ad-hoc rows: a prescribed row belongs to the workout. */
   onRemoveEntry: ((entryKey: string) => void) | null;
+  /** Opens the exercise's instructions over the session; the rest keeps running. */
+  onShowExercise: ((exerciseId: string) => void) | null;
+  /** Which side the card's controls sit on: under the thumb that logs. */
+  handedness: Handedness;
+  /** Counts an ad-hoc row in another measure, before anything is logged on it. */
+  onMeasure: ((entryKey: string, measure: Measure, unit: DistanceUnit) => void) | null;
 };
 
 /** Warmups are lettered so the working sets keep 1, 2, 3 whatever precedes them. */
@@ -70,6 +91,9 @@ export function EntryCard({
   overlayScope,
   onNotes,
   onRemoveEntry,
+  onShowExercise,
+  handedness,
+  onMeasure,
   ...handlers
 }: Props) {
   const palette = usePalette();
@@ -87,8 +111,15 @@ export function EntryCard({
   }
 
   const overlay = resolveOverlay(entry, workoutStats, exerciseStats, overlayScope);
-  const repRangeLabel =
-    entry.prescription === null ? null : formatRange(entry.prescription.repRange);
+  const measure = entryMeasure(entry);
+  const distanceUnit = entryDistanceUnit(entry);
+  const input = amountInput(measure, distanceUnit);
+  // Named in the off-target note, so "under 8-12" or "under 30s-1:00" reads on its own.
+  const targetLabel =
+    entry.prescription === null ? null : formatPrescriptionTarget(entry.prescription);
+  // Only an ad-hoc row picks its measure, and only before it holds a number.
+  const choosingMeasure =
+    onMeasure !== null && entry.prescription === null && !hasEnteredSets(entry);
 
   return (
     <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
@@ -115,6 +146,29 @@ export function EntryCard({
 
       <OverlayLine overlay={overlay} workoutName={workoutName} />
 
+      {choosingMeasure ? (
+        <View style={styles.measure}>
+          <Segmented<Measure>
+            label={`Count ${entry.exerciseName} in`}
+            options={MEASURES.map((value) => ({ value, label: MEASURE_LABELS[value] }))}
+            value={measure}
+            onChange={(next) => {
+              onMeasure(key, next, distanceUnit);
+            }}
+          />
+          {measure === 'distance' ? (
+            <Segmented<DistanceUnit>
+              label="Distance unit"
+              options={DISTANCE_UNITS.map((value) => ({ value, label: value }))}
+              value={distanceUnit}
+              onChange={(next) => {
+                onMeasure(key, 'distance', next);
+              }}
+            />
+          ) : null}
+        </View>
+      ) : null}
+
       {entry.sets.map((set) => {
         const { previousLabel, delta } = rowOverlay(overlay, entry, set, displayUnit);
         return (
@@ -125,24 +179,44 @@ export function EntryCard({
             ordinal={ordinalFor(entry.sets, set)}
             weight={set.weight?.value ?? null}
             weightUnit={set.weight?.unit ?? displayUnit}
-            reps={set.reps}
+            measure={measure}
+            amount={setAmountIn(set, measure, distanceUnit)}
+            amountPlaceholder={input.placeholder}
+            amountStep={input.step}
+            amountMax={input.max}
+            amountDecimal={input.decimal}
             rir={set.rir}
             rirTarget={entry.prescription?.rirRange ?? null}
             isWarmup={set.isWarmup}
             skipped={set.skipped}
             isComplete={set.completedAt !== null}
             displayUnit={displayUnit}
-            assessment={assessSet(set, entry.prescription)}
-            repRangeLabel={repRangeLabel}
+            assessment={assessSet(set, entry.prescription, measure)}
+            targetLabel={targetLabel}
             previousLabel={previousLabel}
             deltaLabel={delta?.label ?? null}
             deltaDirection={delta?.direction ?? null}
+            deltaDetail={delta?.detail ?? null}
             {...handlers}
           />
         );
       })}
 
-      <View style={styles.controls}>
+      {/* Mirrored for a right hand, as on the web: How to lands under the
+          thumb and Remove furthest from it. */}
+      <View style={[styles.controls, handedness === 'right' ? styles.right : styles.left]}>
+        {onShowExercise === null ? null : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`How to do ${entry.exerciseName}`}
+            hitSlop={8}
+            onPress={() => {
+              onShowExercise(entry.exerciseId);
+            }}
+          >
+            <Text style={[styles.link, { color: palette.dimmed }]}>How to</Text>
+          </Pressable>
+        )}
         <Pressable
           accessibilityRole="button"
           hitSlop={8}
@@ -193,12 +267,13 @@ export function EntryCard({
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
-  rest: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, padding: 10 },
+  measure: { gap: 6, paddingVertical: 4 },
+  card: { borderWidth: 1, borderRadius: 8, padding: 10, gap: 4 },
+  rest: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, padding: 8 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   titleBlock: { flexShrink: 1, gap: 2 },
-  name: { fontSize: 17, fontWeight: '700' },
-  small: { fontSize: 13 },
+  name: { fontSize: 15, fontWeight: '700' },
+  small: { fontSize: 12 },
   badge: {
     fontSize: 11,
     fontWeight: '700',
@@ -207,7 +282,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  controls: { flexDirection: 'row', gap: 20, justifyContent: 'flex-end', paddingTop: 4 },
-  link: { fontSize: 14, fontWeight: '600' },
-  notes: { minHeight: 64, borderWidth: 1, borderRadius: 10, padding: 10, fontSize: 15 },
+  controls: { flexDirection: 'row', gap: 20, paddingTop: 4 },
+  // Reversed, so the first control (How to) sits at the right edge.
+  right: { flexDirection: 'row-reverse' },
+  left: { justifyContent: 'flex-start' },
+  link: { fontSize: 13, fontWeight: '600' },
+  notes: { minHeight: 56, borderWidth: 1, borderRadius: 8, padding: 8, fontSize: 14 },
 });

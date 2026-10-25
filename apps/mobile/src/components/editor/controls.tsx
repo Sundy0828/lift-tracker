@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -166,15 +167,21 @@ export function Section({
   title,
   summary,
   initiallyOpen = false,
+  open: openProp,
+  onToggle,
   children,
 }: {
   title: string;
   summary?: string;
   initiallyOpen?: boolean;
+  /** Set with `onToggle` to hold the state outside: one open at a time, as the web's Accordion. */
+  open?: boolean;
+  onToggle?: () => void;
   children: ReactNode;
 }) {
   const palette = usePalette();
-  const [open, setOpen] = useState(initiallyOpen);
+  const [openHere, setOpen] = useState(initiallyOpen);
+  const open = openProp ?? openHere;
   return (
     <View
       style={[styles.section, { borderColor: palette.border, backgroundColor: palette.surface }]}
@@ -183,7 +190,8 @@ export function Section({
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         onPress={() => {
-          setOpen((current) => !current);
+          if (onToggle === undefined) setOpen((current) => !current);
+          else onToggle();
         }}
         style={styles.sectionHeader}
       >
@@ -266,6 +274,80 @@ export function Sheet({
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
+  );
+}
+
+/**
+ * A small typed number in a row: a rest's seconds, a circuit's rounds. The
+ * web's `NumberInput size="xs"` with a suffix.
+ *
+ * Commits when typing ends, clamped. Empty commits null where `nullable` (a
+ * round rest left empty means "use my default", shown as the placeholder),
+ * and otherwise puts the old value back.
+ */
+export function InlineNumber({
+  value,
+  label,
+  suffix,
+  placeholder = '',
+  min,
+  max,
+  nullable = false,
+  width = 64,
+  onCommit,
+}: {
+  value: number | null;
+  /** For screen readers: "Rest length", "Rounds for the circuit…". */
+  label: string;
+  suffix: string;
+  placeholder?: string;
+  min: number;
+  max: number;
+  nullable?: boolean;
+  width?: number;
+  onCommit: (value: number | null) => void;
+}) {
+  const palette = usePalette();
+  const [text, setText] = useState<string | null>(null);
+  const shown = text ?? (value === null ? '' : String(value));
+
+  const commit = (): void => {
+    const raw = (text ?? '').trim();
+    setText(null);
+    if (text === null) return;
+    if (raw === '') {
+      if (nullable && value !== null) onCommit(null);
+      return;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) return;
+    const next = Math.min(max, Math.max(min, parsed));
+    if (next !== value) onCommit(next);
+  };
+
+  return (
+    <View
+      style={[
+        styles.inline,
+        { borderColor: palette.border, backgroundColor: palette.background, width },
+      ]}
+    >
+      <TextInput
+        accessibilityLabel={label}
+        keyboardType="number-pad"
+        returnKeyType="done"
+        selectTextOnFocus
+        value={shown}
+        placeholder={placeholder}
+        placeholderTextColor={palette.placeholder}
+        onChangeText={setText}
+        onEndEditing={commit}
+        style={[styles.inlineInput, { color: palette.text }]}
+      />
+      {shown === '' ? null : (
+        <Text style={[styles.inlineSuffix, { color: palette.dimmed }]}>{suffix}</Text>
+      )}
+    </View>
   );
 }
 
@@ -359,4 +441,14 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   link: { fontSize: 15, fontWeight: '600' },
+  inline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 30,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+  },
+  inlineInput: { flex: 1, fontSize: 13, paddingVertical: 0, textAlign: 'right' },
+  inlineSuffix: { fontSize: 13, marginLeft: 1 },
 });

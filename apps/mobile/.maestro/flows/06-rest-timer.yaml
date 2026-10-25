@@ -1,0 +1,62 @@
+# rest-timer.spec.ts: a set holding every number ticks itself and starts its
+# rest; the instructions open over the session with the countdown; the timer
+# can be turned off and started by hand; a swapped load and reps is queried.
+appId: com.sundy0828.lifttracker
+---
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+- runFlow:
+    file: ../subflows/new-workout.yaml
+    env:
+      NAME: 'REST'
+      FIRST: 'Pushups'
+- tapOn: 'Start this workout'
+- extendedWaitUntil:
+    visible: 'Session details'
+    timeout: 15000
+
+# Weight, reps and effort: the set ticks itself and the rest starts.
+- tapOn: 'Set 1 weight'
+- inputText: '135'
+- tapOn: 'Set 1 reps'
+- inputText: '10'
+- hideKeyboard
+- tapOn: 'Set 1: 1 rep left'
+- assertVisible: 'Rest remaining'
+- assertVisible: 'Set 1 done, undo'
+
+# The steps: one tap adds the unit's step to the next set.
+- tapOn: 'Set 2 weight up'
+- assertVisible: 'Set 2 weight down'
+
+# How to opens over the session, and the countdown comes with it.
+- tapOn: 'How to do Pushups'
+- assertVisible:
+    id: 'rest-pill'
+- tapOn: 'Close'
+- tapOn: 'Add 15 seconds to the rest'
+- tapOn: 'Skip the rest'
+- assertNotVisible: 'Rest remaining'
+
+# Swapped numbers are queried.
+- tapOn: 'Set 2 weight'
+- eraseText: 10
+- inputText: '10'
+- tapOn: 'Set 2 reps'
+- inputText: '45'
+- hideKeyboard
+- tapOn: 'Set 2: 1 rep left'
+- assertVisible: 'Double-check .*'
+
+# With the timer off, the bar offers a manual start instead.
+- tapOn: '‹ Back'
+- tapOn: 'Settings'
+- scrollUntilVisible:
+    element: 'Start the rest timer on its own'
+- tapOn: 'Start the rest timer on its own'
+- tapOn: 'Today'
+- tapOn: 'Resume'
+- tapOn: 'Complete set 3'
+- assertVisible: 'Start rest'
+- tapOn: 'Start rest'
+- assertVisible: 'Rest remaining'

@@ -77,12 +77,16 @@ export function weeksBetween(from: string, to: string): number | null {
  * contribute, so a bodyweight row with reps and no load adds nothing here.
  * That is why tonnage is shown *alongside* the set count rather than instead
  * of it: the set count is the honest number on a bodyweight day.
+ *
+ * An assisted set (a negative load) adds nothing either: the machine is
+ * taking weight off, not putting it on, and subtracting it would make an
+ * assisted day lighter than resting.
  */
 export function volumeLoadKg(sets: readonly LoggedSet[]): number {
   let total = 0;
   for (const set of performedSets(sets)) {
     const kilograms = loadKg(set);
-    if (kilograms === null || set.reps === null) continue;
+    if (kilograms === null || kilograms <= 0 || set.reps === null) continue;
     total += kilograms * set.reps;
   }
   return total;
@@ -399,6 +403,8 @@ export type RecordMilestone = {
   e1rmKg: number;
   /** The record it beat; 0 for the first, which is a baseline not a PR. */
   previousE1rmKg: number;
+  /** The first scored performance: the baseline. */
+  isFirst: boolean;
 };
 
 /**
@@ -414,13 +420,21 @@ export type RecordMilestone = {
  */
 export function recordMilestones(performances: readonly ExercisePerformance[]): RecordMilestone[] {
   const milestones: RecordMilestone[] = [];
-  let record = 0;
+  // Null until the first scored set: an assisted lift scores below zero, and
+  // its first set is still where its record starts.
+  let record: number | null = null;
 
   for (const performance of performances) {
     const { best, e1rmKg } = performance;
     if (best === null || e1rmKg === null) continue;
-    if (!beatsRecord(e1rmKg, record)) continue;
-    milestones.push({ performance, set: best, e1rmKg, previousE1rmKg: record });
+    if (record !== null && !beatsRecord(e1rmKg, record)) continue;
+    milestones.push({
+      performance,
+      set: best,
+      e1rmKg,
+      previousE1rmKg: record ?? 0,
+      isFirst: record === null,
+    });
     record = e1rmKg;
   }
 

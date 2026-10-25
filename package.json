@@ -28,7 +28,9 @@
     "seed": "node --import ./scripts/ts-resolve.mjs scripts/seed-history.ts",
     "seed:library": "node --import ./scripts/ts-resolve.mjs scripts/seed-library.ts",
     "prune-users": "node --import ./scripts/ts-resolve.mjs scripts/prune-users.ts",
-    "verify-user": "node --import ./scripts/ts-resolve.mjs scripts/verify-user.ts"
+    "verify-user": "node --import ./scripts/ts-resolve.mjs scripts/verify-user.ts",
+    "negate-assisted": "node --import ./scripts/ts-resolve.mjs scripts/negate-assisted.ts",
+    "set-name": "node --import ./scripts/ts-resolve.mjs scripts/set-name.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

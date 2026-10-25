@@ -32,6 +32,7 @@ import {
   placeSlot,
   pruneGroupRest,
   reconcileGroups,
+  reorder,
   totalSets,
   withGroupRounds,
 } from '@lift/domain/workouts';
@@ -49,18 +50,32 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DragScrollView } from '../../../components/editor/drag';
 import { ExercisePicker } from '../../../components/editor/ExercisePicker';
-import { LinkButton, Section } from '../../../components/editor/controls';
+import { Section } from '../../../components/editor/controls';
 import { SlotFace, SlotList } from '../../../components/editor/SlotList';
 import { SlotSheet, type SlotEdit } from '../../../components/editor/SlotSheet';
 import { VersionHistory } from '../../../components/editor/VersionHistory';
 import { MuscleMap } from '../../../components/MuscleMap';
+import { SharePanel } from '../../../components/sharing/SharePanel';
 import { SyncStrip } from '../../../components/SyncStrip';
-import { Body, Button, Field, Loading, Title } from '../../../components/ui';
-import { startWorkout } from '../../../components/WorkoutRow';
+import {
+  BackArrow,
+  Badge,
+  Body,
+  Button,
+  Field,
+  Loading,
+  Notice,
+  Row,
+  Title,
+} from '../../../components/ui';
+import { useStartWorkout } from '../../../components/WorkoutRow';
 import { usePalette } from '../../../theme';
 
 /** How long a notice stays up. */
 const NOTICE_MS = 5000;
+
+/** The folds under the list. One open at a time, as the web's Accordion. */
+type Fold = 'muscles' | 'notes' | 'versions' | 'share';
 
 function back(): void {
   if (router.canGoBack()) router.back();
@@ -78,11 +93,11 @@ function back(): void {
  * Every slot change goes through the same `@lift/domain/workouts` functions
  * the web uses, and is pruned the same way, so a workout edited on either app
  * reads identically on the other. Publishing snapshots the working copy as
- * the next version, which is what the web (and every session) reads.
- *
- * Not here yet: sharing (Phase 5).
+ * the next version, which is what the web (and every session) reads, and
+ * what a share link carries.
  */
 export default function WorkoutEditor() {
+  const startWorkout = useStartWorkout();
   const palette = usePalette();
   const { workoutId } = useLocalSearchParams<{ workoutId: string }>();
   const { user } = useAuth();
@@ -98,6 +113,7 @@ export default function WorkoutEditor() {
   const [name, setName] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
   const [armedToDelete, setArmedToDelete] = useState(false);
+  const [fold, setFold] = useState<Fold | null>('muscles');
   /** A one-line notice under the header; the phone's stand-in for the web's toasts. */
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -119,7 +135,7 @@ export default function WorkoutEditor() {
         <View style={styles.content}>
           <Title>Workout not found</Title>
           <Body dimmed>It may have been deleted on another device.</Body>
-          <Button variant="subtle" label="Back" onPress={back} />
+          <Button variant="subtle" label="Back to workouts" onPress={back} />
         </View>
       </SafeAreaView>
     );
@@ -166,13 +182,26 @@ export default function WorkoutEditor() {
         place,
       ),
     );
-    setNotice(`Added ${exercise.name}`);
   };
 
   const removeSlot = (slotId: string): void => {
     // Reconciled: deleting a member can leave a circuit of one, which is just
     // an exercise.
     mapSlots((slots) => reconcileGroups(slots.filter((slot) => slot.slotId !== slotId)));
+  };
+
+  const setSlotRest = (slotId: string, seconds: number): void => {
+    mapSlots((slots) =>
+      slots.map((slot) =>
+        slot.slotId === slotId
+          ? { ...slot, prescription: { ...slot.prescription, restSeconds: seconds } }
+          : slot,
+      ),
+    );
+  };
+
+  const duplicate = (slotId: string): void => {
+    mapSlots((slots) => duplicateSlot(slots, slotId, newId()));
   };
 
   const saveSlot = (slotId: string, edit: SlotEdit): void => {
@@ -185,7 +214,7 @@ export default function WorkoutEditor() {
     if (uid === null || !hasChanges) return;
     const { promise, result } = publishWorkoutVersion(uid, workout, body, published);
     void promise;
-    setNotice(`Published v${String(result.versionNumber)}: ${result.changeSummary}`);
+    setNotice(`Published v${String(result.versionNumber)} — ${result.changeSummary}`);
   };
 
   /**
@@ -243,35 +272,44 @@ export default function WorkoutEditor() {
             );
           }}
         >
-          <Pressable accessibilityRole="button" hitSlop={8} onPress={back}>
-            <Text style={[styles.link, { color: palette.dimmed }]}>‹ Workouts</Text>
-          </Pressable>
+          <View style={styles.titleRow}>
+            <BackArrow fallback="/workouts" label="Back to workouts" />
+            <TextInput
+              accessibilityLabel="Workout name"
+              value={name ?? workout.name}
+              onChangeText={setName}
+              onEndEditing={() => {
+                const trimmed = (name ?? workout.name).trim();
+                if (trimmed !== '' && trimmed !== workout.name) commit({ ...body, name: trimmed });
+                setName(null);
+              }}
+              returnKeyType="done"
+              style={[styles.name, { color: palette.text }]}
+            />
+          </View>
 
-          <TextInput
-            accessibilityLabel="Workout name"
-            value={name ?? workout.name}
-            onChangeText={setName}
-            onEndEditing={() => {
-              const trimmed = (name ?? workout.name).trim();
-              if (trimmed !== '' && trimmed !== workout.name) commit({ ...body, name: trimmed });
-              setName(null);
-            }}
-            returnKeyType="done"
-            style={[styles.name, { color: palette.text }]}
-          />
-
-          <Text style={[styles.small, { color: palette.dimmed }]}>
-            {exerciseCount === 1 ? '1 exercise' : `${String(exerciseCount)} exercises`} ·{' '}
-            {String(totalSets(body))} sets
-            {workout.slots.length === 0
-              ? ''
-              : ` · ~${formatEstimate(estimateWorkoutSeconds(body, profile.defaultRestSeconds))}`}{' '}
-            · {workout.currentVersion === 0 ? 'unpublished' : `v${String(workout.currentVersion)}`}
+          <Row>
+            {/* Exercises, not rows: a rest row is a pause, not an exercise. */}
+            <Badge
+              label={exerciseCount === 1 ? '1 exercise' : `${String(exerciseCount)} exercises`}
+            />
+            <Badge label={`${String(totalSets(body))} sets`} />
+            {workout.slots.length === 0 ? null : (
+              <Badge
+                label={`~${formatEstimate(estimateWorkoutSeconds(body, profile.defaultRestSeconds))}`}
+              />
+            )}
+            <Badge
+              tone={workout.currentVersion === 0 ? 'gray' : 'accent'}
+              label={
+                workout.currentVersion === 0 ? 'unpublished' : `v${String(workout.currentVersion)}`
+              }
+            />
             {/* Every edit lands in the local cache at once, so "saved here"
                 and "saved everywhere" would look the same without this. */}
-            {hasPendingWrites ? ' · saving…' : ' · saved'}
-            {archived ? ' · archived' : ''}
-          </Text>
+            <Badge label={hasPendingWrites ? 'saving…' : 'saved'} />
+            {archived ? <Badge tone="orange" label="archived" /> : null}
+          </Row>
 
           {notice === null ? null : (
             <Pressable
@@ -295,44 +333,29 @@ export default function WorkoutEditor() {
           ) : null}
 
           {hasChanges ? (
-            <View
-              style={[
-                styles.changes,
-                { borderColor: palette.accent, backgroundColor: palette.surface },
-              ]}
-            >
-              <Text style={[styles.changesTitle, { color: palette.text }]}>
-                Unpublished changes
-              </Text>
-              <Text style={[styles.small, { color: palette.text }]}>{pendingDiff.summary}</Text>
-              <Text style={[styles.small, { color: palette.dimmed }]}>
-                Every edit is already saved, here and on the web. Publishing snapshots it as v
-                {String(workout.currentVersion + 1)}: history reads sessions against their version,
-                and share links send one. Starting the workout publishes it for you.
-              </Text>
-              <View style={styles.row}>
-                <View style={styles.grow}>
+            <Notice title="Unpublished changes">
+              <View style={styles.changes}>
+                <Text style={[styles.body, { color: palette.text }]}>{pendingDiff.summary}</Text>
+                <Row gap={8}>
                   <Button
+                    size="compact"
                     label={`Publish v${String(workout.currentVersion + 1)}`}
                     onPress={publish}
                   />
-                </View>
-                {published === null ? null : (
-                  <View style={styles.grow}>
+                  {published === null ? null : (
                     <Button
+                      size="compact"
                       variant="subtle"
-                      label={`Back to v${String(published.versionNumber)}`}
+                      label={`Discard, back to v${String(published.versionNumber)}`}
                       onPress={discard}
                     />
-                  </View>
-                )}
+                  )}
+                </Row>
               </View>
-            </View>
+            </Notice>
           ) : null}
 
-          {workout.slots.length === 0 ? (
-            <Body dimmed>No exercises yet. Add the first one below.</Body>
-          ) : null}
+          {workout.slots.length === 0 ? <Body dimmed>No exercises yet.</Body> : null}
 
           {/* Rendered even when empty: its top insert row adds the first exercise. */}
           <SlotList
@@ -340,14 +363,18 @@ export default function WorkoutEditor() {
             groupRest={workout.groupRest}
             defaultRestSeconds={profile.defaultRestSeconds}
             onEditSlot={setEditingSlot}
+            onMove={(from, to) => {
+              // Reconciled after the move, which is what lets ↑ and ↓ carry a
+              // member out of a circuit, as on the web.
+              mapSlots((slots) => reconcileGroups(reorder(slots, from, to)));
+            }}
+            onRestSeconds={setSlotRest}
             onAdd={setPicking}
             onAddRest={(place) => {
               mapSlots((slots) => placeSlot(slots, createRestSlot(newId()), place));
             }}
             onRemoveSlot={removeSlot}
-            onDuplicateSlot={(slotId) => {
-              mapSlots((slots) => duplicateSlot(slots, slotId, newId()));
-            }}
+            onDuplicateSlot={duplicate}
             onJoinAbove={(slotId) => {
               mapSlots((slots) => reconcileGroups(linkToPrevious(slots, slotId, newId())));
             }}
@@ -365,16 +392,23 @@ export default function WorkoutEditor() {
           {/* One hint, and each half only once it applies, as on the web. */}
           {workout.slots.length === 0 ? null : (
             <Text style={[styles.small, { color: palette.dimmed }]}>
-              Tap a row to edit it. Hold a row to drag it.
+              Swipe a row left to delete it.
               {exerciseCount > 1
-                ? ' Drag it onto another and hold for a moment to make them a circuit.'
+                ? ' Hold a row to drag it. Drag an exercise onto another and hold for a moment to make them a circuit.'
                 : ''}
-              {hasCircuit ? ' To leave a circuit, drag the row out of its card.' : ''} Swiping a row
-              does the same things.
+              {hasCircuit
+                ? ' To leave a circuit, drag a member out of the block in any direction — or swipe the row right.'
+                : ''}
             </Text>
           )}
 
-          <Section title="Muscle map" initiallyOpen>
+          <Section
+            title="Muscle map"
+            open={fold === 'muscles'}
+            onToggle={() => {
+              setFold((current) => (current === 'muscles' ? null : 'muscles'));
+            }}
+          >
             {/* Session bands, not weekly: one workout is one session's work. */}
             <MuscleMap
               volume={workoutVolume(body, lookup)}
@@ -384,7 +418,13 @@ export default function WorkoutEditor() {
             />
           </Section>
 
-          <Section title="Notes" summary={workout.notes === '' ? 'none' : 'saved'}>
+          <Section
+            title="Notes"
+            open={fold === 'notes'}
+            onToggle={() => {
+              setFold((current) => (current === 'notes' ? null : 'notes'));
+            }}
+          >
             <Field
               label="Workout notes"
               multiline
@@ -402,9 +442,24 @@ export default function WorkoutEditor() {
 
           <Section
             title="Version history"
-            summary={versions.length === 0 ? 'none' : `${String(versions.length)} published`}
+            open={fold === 'versions'}
+            onToggle={() => {
+              setFold((current) => (current === 'versions' ? null : 'versions'));
+            }}
           >
             <VersionHistory versions={versions} currentVersion={workout.currentVersion} />
+          </Section>
+
+          <Section
+            title="Share"
+            open={fold === 'share'}
+            onToggle={() => {
+              setFold((current) => (current === 'share' ? null : 'share'));
+            }}
+          >
+            {/* The published version, not the working copy: a link carries a
+                snapshot that cannot move under the recipient. */}
+            <SharePanel workout={workout} version={published} />
           </Section>
 
           {/* A plain card, not a fold, as on the web: it is the last thing on the
@@ -420,19 +475,22 @@ export default function WorkoutEditor() {
               onPress={toggleArchived}
             />
             {armedToDelete ? (
-              <View style={styles.row}>
-                <LinkButton label="Delete for good" tone="danger" onPress={remove} />
-                <LinkButton
+              <Row gap={8}>
+                <Button size="compact" variant="danger" label="Delete for good" onPress={remove} />
+                <Button
+                  size="compact"
+                  variant="subtle"
                   label="Keep it"
                   onPress={() => {
                     setArmedToDelete(false);
                   }}
                 />
-              </View>
+              </Row>
             ) : (
-              <LinkButton
+              <Button
+                size="compact"
+                variant="danger-subtle"
                 label="Delete workout"
-                tone="danger"
                 onPress={() => {
                   setArmedToDelete(true);
                 }}
@@ -451,6 +509,7 @@ export default function WorkoutEditor() {
         }}
         onSave={saveSlot}
         onRemove={removeSlot}
+        onDuplicate={duplicate}
       />
 
       <ExercisePicker
@@ -470,15 +529,13 @@ export default function WorkoutEditor() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { padding: 16, gap: 10, paddingBottom: 48 },
-  link: { fontSize: 15, fontWeight: '600' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   // The web's name field: size lg, weight 650.
-  name: { fontSize: 20, fontWeight: '700', paddingVertical: 2 },
+  name: { flex: 1, minWidth: 0, fontSize: 20, fontWeight: '700', paddingVertical: 2 },
+  body: { fontSize: 14, lineHeight: 20 },
   small: { fontSize: 12, lineHeight: 17 },
   notice: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  changes: { borderWidth: 1, borderRadius: 8, padding: 12, gap: 6 },
-  changesTitle: { fontSize: 15, fontWeight: '700' },
-  row: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  grow: { flex: 1 },
+  changes: { gap: 8 },
   danger: { borderWidth: 1, borderRadius: 8, padding: 12, gap: 8, alignItems: 'flex-start' },
   notes: { minHeight: 96, paddingTop: 10, textAlignVertical: 'top' },
 });

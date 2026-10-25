@@ -1,4 +1,12 @@
 import { useExerciseLibrary } from '@lift/data/hooks/useExerciseLibrary';
+import type { DistanceUnit, Measure } from '@lift/domain/measure';
+import {
+  DISTANCE_UNITS,
+  MEASURES,
+  MEASURE_LABELS,
+  TARGET_BOUNDS,
+  formatTarget,
+} from '@lift/domain/measure';
 import type { ExerciseSlot, Prescription, RepRange } from '@lift/domain/workouts';
 import {
   MAX_REPS,
@@ -9,12 +17,15 @@ import {
   formatRange,
   formatRestSeconds,
   normalizePrescription,
+  distanceUnitOf,
+  measureOf,
   stepRange,
+  withMeasure,
 } from '@lift/domain/workouts';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { usePalette } from '../../theme';
-import { Button, Field } from '../ui';
+import { Button, Field, Segmented } from '../ui';
 import { Chip, FieldRow, LinkButton, Sheet, Stepper } from './controls';
 import { ExerciseDetail } from './ExerciseDetail';
 
@@ -29,6 +40,8 @@ type Props = {
   onClose: () => void;
   onSave: (slotId: string, edit: SlotEdit) => void;
   onRemove: (slotId: string) => void;
+  /** Adds a copy right after it, in the same circuit. Unsaved edits are not copied. */
+  onDuplicate: (slotId: string) => void;
 };
 
 const REST_PRESETS = [60, 90, 120, 180, 240];
@@ -38,6 +51,34 @@ const REST_MAX = 3600;
 
 function clampRest(seconds: number): number {
   return Math.min(REST_MAX, Math.max(0, seconds));
+}
+
+/**
+ * The rest as an exact number of seconds, as the web's editor takes it, for
+ * the odd length the steps and presets do not reach. Commits when typing ends.
+ */
+function ExactRest({
+  seconds,
+  onChange,
+}: {
+  seconds: number;
+  onChange: (seconds: number) => void;
+}) {
+  const [text, setText] = useState<string | null>(null);
+  return (
+    <Field
+      label="Exact, in seconds"
+      keyboardType="number-pad"
+      returnKeyType="done"
+      value={text ?? String(seconds)}
+      onChangeText={setText}
+      onEndEditing={() => {
+        const parsed = Number.parseInt(text ?? '', 10);
+        if (Number.isFinite(parsed)) onChange(clampRest(parsed));
+        setText(null);
+      }}
+    />
+  );
 }
 
 /**
@@ -85,7 +126,9 @@ function SlotForm({
   onClose,
   onSave,
   onRemove,
+  onDuplicate,
 }: Props & { slot: ExerciseSlot }) {
+  const palette = usePalette();
   const { resolver } = useExerciseLibrary();
   const [prescription, setPrescription] = useState(slot.prescription);
   const [notes, setNotes] = useState(slot.notes);
@@ -99,12 +142,28 @@ function SlotForm({
     setPrescription((current) => ({ ...current, ...change }));
   };
 
+  const measure: Measure = measureOf(prescription);
+  const distanceUnit: DistanceUnit = distanceUnitOf(prescription);
+  /**
+   * One tap's worth of target: a rep, 15 seconds, or 5 m (half a km or mile).
+   * A step that small keeps a hold or a carry to a few taps either way.
+   */
+  const targetStep =
+    measure === 'time'
+      ? 15
+      : measure === 'distance'
+        ? distanceUnit === 'km' || distanceUnit === 'mi'
+          ? 0.5
+          : 5
+        : 1;
+
   const stepReps = (edge: 'min' | 'max', delta: number): void => {
+    const bounds = TARGET_BOUNDS[measure];
     patch({
-      repRange: stepRange(prescription.repRange, edge, delta, {
-        floor: 1,
-        ceiling: MAX_REPS,
-        minGap: REPS_MIN_GAP,
+      repRange: stepRange(prescription.repRange, edge, delta * targetStep, {
+        floor: measure === 'reps' ? 1 : bounds.floor,
+        ceiling: measure === 'reps' ? MAX_REPS : bounds.ceiling,
+        minGap: measure === 'reps' ? REPS_MIN_GAP : Math.min(bounds.minGap, targetStep),
       }),
     });
   };
@@ -175,6 +234,12 @@ function SlotForm({
               />
             ))}
           </View>
+          <ExactRest
+            seconds={rest ?? 0}
+            onChange={(seconds) => {
+              patch({ restSeconds: seconds });
+            }}
+          />
         </View>
       ) : (
         <>
@@ -195,7 +260,37 @@ function SlotForm({
             </FieldRow>
           )}
 
-          <RangeField label="Reps" range={prescription.repRange} onStep={stepReps} />
+          {/* Reps for a lift, time for a hold, distance for a carry or a sled.
+              Switching resets the target: 12 reps are not 12 seconds. */}
+          <View style={styles.group}>
+            <Text style={[styles.label, { color: palette.text }]}>Counted in</Text>
+            <Segmented<Measure>
+              label="Counted in"
+              options={MEASURES.map((value) => ({ value, label: MEASURE_LABELS[value] }))}
+              value={measure}
+              onChange={(next) => {
+                setPrescription((current) => withMeasure(current, next, distanceUnitOf(current)));
+              }}
+            />
+            {measure === 'distance' ? (
+              <Segmented<DistanceUnit>
+                label="Distance unit"
+                options={DISTANCE_UNITS.map((value) => ({ value, label: value }))}
+                value={distanceUnit}
+                onChange={(next) => {
+                  setPrescription((current) => withMeasure(current, 'distance', next));
+                }}
+              />
+            ) : null}
+          </View>
+
+          <RangeField
+            label={measure === 'reps' ? 'Reps' : measure === 'time' ? 'Time' : 'Distance'}
+            range={prescription.repRange}
+            format={(range) => formatTarget(range, measure, distanceUnit)}
+            formatEnd={(value) => formatTarget({ min: value, max: value }, measure, distanceUnit)}
+            onStep={stepReps}
+          />
           <RangeField
             label="RIR"
             hint="Reps in reserve: how many you could still have done. 0 is failure."
@@ -243,6 +338,12 @@ function SlotForm({
                 />
               )}
             </View>
+            <ExactRest
+              seconds={rest ?? defaultRestSeconds}
+              onChange={(seconds) => {
+                patch({ restSeconds: seconds });
+              }}
+            />
           </View>
 
           <Field
@@ -263,6 +364,37 @@ function SlotForm({
         </>
       )}
 
+      {inCircuit && !isRest ? (
+        <Text style={[styles.small, { color: palette.dimmed }]}>
+          This exercise is part of a circuit. Its rounds and the pause between rounds are set on the
+          circuit itself; the rest above is the pause before the next exercise in the round.
+        </Text>
+      ) : null}
+
+      {/* The web's footer, in two rows for a phone's width: what changes the
+          list on the first, what closes the sheet on the second. */}
+      <View style={styles.actions}>
+        <View style={styles.grow}>
+          <Button
+            variant="danger-subtle"
+            label="Remove"
+            onPress={() => {
+              onClose();
+              onRemove(slot.slotId);
+            }}
+          />
+        </View>
+        <View style={styles.grow}>
+          <Button
+            variant="subtle"
+            label="Duplicate"
+            onPress={() => {
+              onClose();
+              onDuplicate(slot.slotId);
+            }}
+          />
+        </View>
+      </View>
       <View style={styles.actions}>
         <View style={styles.grow}>
           <Button variant="subtle" label="Cancel" onPress={onClose} />
@@ -270,17 +402,6 @@ function SlotForm({
         <View style={styles.grow}>
           <Button label="Save" onPress={save} />
         </View>
-      </View>
-
-      <View style={styles.links}>
-        <LinkButton
-          label={isRest ? 'Remove this rest' : `Remove ${slot.exerciseName}`}
-          tone="danger"
-          onPress={() => {
-            onClose();
-            onRemove(slot.slotId);
-          }}
-        />
       </View>
     </View>
   );
@@ -291,11 +412,17 @@ function RangeField({
   label,
   hint,
   range,
+  format = formatRange,
+  formatEnd = String,
   onStep,
 }: {
   label: string;
   hint?: string;
   range: RepRange;
+  /** The readout: `8-12` by default, `30s-1:00` for a time. */
+  format?: (range: RepRange) => string;
+  /** One end, in the stepper. */
+  formatEnd?: (value: number) => string;
   onStep: (edge: 'min' | 'max', delta: number) => void;
 }) {
   const palette = usePalette();
@@ -303,7 +430,7 @@ function RangeField({
     <View style={styles.group}>
       <View style={styles.rangeHeader}>
         <Text style={[styles.label, { color: palette.text }]}>{label}</Text>
-        <Text style={[styles.readout, { color: palette.text }]}>{formatRange(range)}</Text>
+        <Text style={[styles.readout, { color: palette.text }]}>{format(range)}</Text>
       </View>
       {hint === undefined ? null : (
         <Text style={[styles.small, { color: palette.dimmed }]}>{hint}</Text>
@@ -311,7 +438,7 @@ function RangeField({
       <FieldRow label="From">
         <Stepper
           label={`Lowest ${label}`}
-          value={String(range.min)}
+          value={formatEnd(range.min)}
           onDecrement={() => {
             onStep('min', -1);
           }}
@@ -323,7 +450,7 @@ function RangeField({
       <FieldRow label="To">
         <Stepper
           label={`Highest ${label}`}
-          value={String(range.max)}
+          value={formatEnd(range.max)}
           onDecrement={() => {
             onStep('max', -1);
           }}
@@ -347,5 +474,4 @@ const styles = StyleSheet.create({
   notes: { minHeight: 72, paddingTop: 10, textAlignVertical: 'top' },
   actions: { flexDirection: 'row', gap: 12 },
   grow: { flex: 1 },
-  links: { gap: 16, alignItems: 'flex-start' },
 });

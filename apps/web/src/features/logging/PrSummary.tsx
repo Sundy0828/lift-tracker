@@ -6,7 +6,7 @@ import type { Unit } from '@lift/domain/types';
 
 /** The set that did it and the estimate it set. */
 function detail(pr: PersonalRecord, unit: Unit): string {
-  const first = pr.previousE1rmKg === 0 ? ' (first time)' : '';
+  const first = pr.isFirst ? ' (first time)' : '';
   return `${formatSet(pr.set, unit)} · est. 1RM ${formatE1rm(pr.e1rmKg, unit)}${first}`;
 }
 

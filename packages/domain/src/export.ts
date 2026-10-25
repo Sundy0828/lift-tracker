@@ -35,6 +35,9 @@ const COLUMNS = [
   'weight',
   'weight_unit',
   'reps',
+  'seconds',
+  'distance',
+  'distance_unit',
   'rir',
   'rest_taken_seconds',
   'e1rm',
@@ -55,7 +58,9 @@ function cell(value: string | number | boolean | null): string {
   if (value === null) return '';
 
   const text = typeof value === 'boolean' ? (value ? 'yes' : 'no') : String(value);
-  const defused = /^[=+\-@\t\r]/u.test(text) ? `'${text}` : text;
+  // Only text is defused. A number is written by this file, never by a user,
+  // and an assisted load of -20 has to stay a number a column can sum.
+  const defused = typeof value === 'string' && /^[=+\-@\t\r]/u.test(text) ? `'${text}` : text;
   return /["\n\r,]/u.test(defused) ? `"${defused.replaceAll('"', '""')}"` : defused;
 }
 
@@ -117,6 +122,9 @@ export function sessionsToCsv(sessions: readonly Session[], displayUnit: Unit): 
             kilograms === null ? null : round(fromKg(kilograms, displayUnit)),
             set.weight?.unit ?? null,
             set.reps,
+            set.seconds,
+            set.distance?.value ?? null,
+            set.distance?.unit ?? null,
             set.rir,
             set.restTakenSeconds,
             round(adjustedE1rm(set) === null ? null : fromKg(adjustedE1rm(set) ?? 0, displayUnit)),

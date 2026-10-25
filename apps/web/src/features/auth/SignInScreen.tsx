@@ -16,6 +16,7 @@ import { useAuth } from '@lift/data/hooks/useAuth';
 import { useEmulators } from '@lift/data/firebase';
 import { PasswordRequirements } from './PasswordRequirements';
 import { isAcceptable, problem as passwordProblem, SUMMARY } from '@lift/domain/password';
+import { nameProblem } from '@lift/domain/person';
 
 type Mode = 'sign-in' | 'register' | 'reset';
 
@@ -59,6 +60,8 @@ export default function SignInScreen() {
   const [mode, setMode] = useState<Mode>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
@@ -125,10 +128,16 @@ export default function SignInScreen() {
               setError(passwordProblem(password));
               return;
             }
+            // Both names are required: the avatar and Settings are built on them.
+            const missingName = mode === 'register' ? nameProblem(firstName, lastName) : null;
+            if (missingName !== null) {
+              setError(missingName);
+              return;
+            }
             void run(() =>
               mode === 'sign-in'
                 ? signInWithEmail(email, password)
-                : registerWithEmail(email, password),
+                : registerWithEmail(email, password, { firstName, lastName }),
             );
           }}
         >
@@ -137,6 +146,29 @@ export default function SignInScreen() {
               <Text size="sm" c="dimmed">
                 Enter the address you signed up with and we will send a link to set a new password.
               </Text>
+            ) : null}
+
+            {mode === 'register' ? (
+              <Group grow align="flex-start">
+                <TextInput
+                  label="First name"
+                  autoComplete="given-name"
+                  required
+                  value={firstName}
+                  onChange={(event) => {
+                    setFirstName(event.currentTarget.value);
+                  }}
+                />
+                <TextInput
+                  label="Last name"
+                  autoComplete="family-name"
+                  required
+                  value={lastName}
+                  onChange={(event) => {
+                    setLastName(event.currentTarget.value);
+                  }}
+                />
+              </Group>
             ) : null}
 
             <TextInput
@@ -190,7 +222,10 @@ export default function SignInScreen() {
             <Button
               type="submit"
               loading={busy}
-              disabled={mode === 'register' && !isAcceptable(password)}
+              disabled={
+                mode === 'register' &&
+                (!isAcceptable(password) || nameProblem(firstName, lastName) !== null)
+              }
               fullWidth
             >
               {TITLES[mode]}

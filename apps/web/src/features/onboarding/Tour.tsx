@@ -1,6 +1,6 @@
 import { Button, Group, List, Modal, Progress, Stack, Text } from '@mantine/core';
 import { useState } from 'react';
-import { TOUR_STEPS } from './tourSteps';
+import { TOUR_STEPS } from '@lift/domain/tour';
 
 /**
  * The first-run walkthrough.

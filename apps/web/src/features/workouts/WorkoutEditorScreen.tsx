@@ -36,6 +36,7 @@ import {
   activeGroupIds,
   createRestSlot,
   createSlot,
+  duplicateSlot,
   estimateWorkoutSeconds,
   exerciseSlots,
   formatEstimate,
@@ -166,6 +167,11 @@ export default function WorkoutEditorScreen() {
     // Reconciled: deleting a circuit member can leave the group with one
     // member, which is just an exercise.
     mapSlots((slots) => reconcileGroups(slots.filter((slot) => slot.slotId !== slotId)));
+  };
+
+  /** A copy right after it, in the same circuit, as the phone's swipe makes. */
+  const duplicate = (slotId: string): void => {
+    mapSlots((slots) => duplicateSlot(slots, slotId, newId()));
   };
 
   /**
@@ -311,6 +317,7 @@ export default function WorkoutEditorScreen() {
         }}
         onEditSlot={setEditingSlot}
         onRemoveSlot={removeSlot}
+        onDuplicateSlot={duplicate}
         onGroup={(activeSlotId, targetSlotId) => {
           mapSlots((slots) => groupWithSlot(slots, activeSlotId, targetSlotId, newId()));
         }}
@@ -449,6 +456,7 @@ export default function WorkoutEditorScreen() {
         }}
         onSave={saveSlot}
         onRemove={removeSlot}
+        onDuplicate={duplicate}
       />
 
       <ExercisePicker

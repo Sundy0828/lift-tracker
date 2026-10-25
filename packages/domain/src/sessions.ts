@@ -1,3 +1,13 @@
+import type { Distance, DistanceUnit, Measure } from './measure';
+import {
+  DEFAULT_DISTANCE_UNIT,
+  MAX_DISTANCE,
+  MAX_SET_SECONDS,
+  fromMetres,
+  isDistanceUnit,
+  isMeasure,
+  toMetres,
+} from './measure';
 import type { Unit, Weight } from './types';
 import type { Prescription, SlotKind, WorkoutBody } from './workouts';
 import {
@@ -5,6 +15,8 @@ import {
   MAX_RIR,
   MAX_SETS,
   clamp,
+  distanceUnitOf,
+  measureOf,
   occurrenceKey,
   parseGroupRest,
   parsePrescription,
@@ -38,8 +50,16 @@ import {
 export type LoggedSet = {
   /** Position within the entry. Also the key the overlay lines up on. */
   setIndex: number;
+  /**
+   * The load. Negative is assistance: -20 on an assisted pull-up machine is
+   * 20 taken off your bodyweight, so less assistance is a bigger number.
+   */
   weight: Weight | null;
   reps: number | null;
+  /** How long the set lasted, for a timed set (see `measure`). */
+  seconds: number | null;
+  /** How far it went, as entered, for a distance set. */
+  distance: Distance | null;
   /** Reps in reserve, as actually judged. */
   rir: number | null;
   /**
@@ -78,6 +98,13 @@ export type SessionEntry = {
   occurrenceIndex: number;
   /** Null for an ad-hoc row, which has no prescription to work to. */
   prescription: Prescription | null;
+  /**
+   * What an ad-hoc row is counted in. A prescribed row reads its measure from
+   * its prescription instead (see `entryMeasure`), so this is only written
+   * for a row that has none.
+   */
+  measure?: Measure;
+  distanceUnit?: DistanceUnit;
   sets: LoggedSet[];
   supersetGroup: string | null;
   notes: string;
@@ -104,6 +131,54 @@ export type Session = {
   bodyweight: Weight | null;
   notes: string;
 };
+
+/** What a row's sets are counted in: its prescription's, or its own for an ad-hoc row. */
+export function entryMeasure(entry: Pick<SessionEntry, 'prescription' | 'measure'>): Measure {
+  return entry.prescription === null ? (entry.measure ?? 'reps') : measureOf(entry.prescription);
+}
+
+export function entryDistanceUnit(
+  entry: Pick<SessionEntry, 'prescription' | 'distanceUnit'>,
+): DistanceUnit {
+  return entry.prescription === null
+    ? (entry.distanceUnit ?? DEFAULT_DISTANCE_UNIT)
+    : distanceUnitOf(entry.prescription);
+}
+
+/**
+ * The set's number in its measure, comparable across sets: reps, seconds, or
+ * metres. Null when it was not entered.
+ */
+export function setAmount(set: LoggedSet, measure: Measure): number | null {
+  if (measure === 'time') return set.seconds;
+  if (measure === 'distance') return set.distance === null ? null : toMetres(set.distance);
+  return set.reps;
+}
+
+/** The set's number in the measure's *entry* unit: reps, seconds, or `unit`. */
+export function setAmountIn(set: LoggedSet, measure: Measure, unit: DistanceUnit): number | null {
+  if (measure === 'distance') {
+    return set.distance === null ? null : fromMetres(toMetres(set.distance), unit);
+  }
+  return setAmount(set, measure);
+}
+
+/**
+ * The change that records a typed amount on a set of this row: `reps`,
+ * `seconds`, or a distance in the row's unit. Both set-row screens write
+ * through this, so neither has to know which field a measure lives in.
+ */
+export function amountPatch(
+  entry: Pick<SessionEntry, 'prescription' | 'measure' | 'distanceUnit'>,
+  value: number | null,
+): SetPatch {
+  const measure = entryMeasure(entry);
+  if (measure === 'time') return { seconds: value };
+  if (measure === 'distance') {
+    return { distance: value === null ? null : { value, unit: entryDistanceUnit(entry) } };
+  }
+  return { reps: value };
+}
 
 export function isRestEntry(entry: SessionEntry): boolean {
   return entry.kind === 'rest';
@@ -178,6 +253,8 @@ export function emptySet(setIndex: number, isWarmup = false): LoggedSet {
     setIndex,
     weight: null,
     reps: null,
+    seconds: null,
+    distance: null,
     rir: null,
     isWarmup,
     skipped: false,
@@ -264,6 +341,8 @@ function mapEntry(
 export type SetPatch = {
   weight?: Weight | null;
   reps?: number | null;
+  seconds?: number | null;
+  distance?: Distance | null;
   rir?: number | null;
   isWarmup?: boolean;
   skipped?: boolean;
@@ -274,16 +353,33 @@ export type SetPatch = {
 /** Upper bound on a recorded rest, so a forgotten timer stays out of range. */
 const MAX_REST_TAKEN_SECONDS = 7200;
 
+/** The heaviest load, either way: a plate stack, or the most assistance a machine gives. */
+export const MAX_LOAD = 2000;
+
 /** Clamps entered numbers, so a fat-fingered 999 cannot poison the stats. */
 function normalizeSet(set: LoggedSet): LoggedSet {
   const weight =
-    set.weight === null || !Number.isFinite(set.weight.value) || set.weight.value < 0
+    set.weight === null ||
+    !Number.isFinite(set.weight.value) ||
+    Math.abs(set.weight.value) > MAX_LOAD
       ? null
       : set.weight;
+  const distance =
+    set.distance === null ||
+    !Number.isFinite(set.distance.value) ||
+    set.distance.value < 0 ||
+    set.distance.value > MAX_DISTANCE
+      ? null
+      : set.distance;
   return {
     ...set,
     weight,
     reps: set.reps === null ? null : clamp(Math.round(set.reps), 0, MAX_REPS),
+    seconds:
+      set.seconds === null || !Number.isFinite(set.seconds)
+        ? null
+        : clamp(Math.round(set.seconds), 0, MAX_SET_SECONDS),
+    distance,
     rir: set.rir === null ? null : clamp(Math.round(set.rir), 0, MAX_RIR),
     restTakenSeconds:
       set.restTakenSeconds === null || !Number.isFinite(set.restTakenSeconds)
@@ -406,6 +502,36 @@ export function addAdHocEntry(
   ];
 }
 
+/**
+ * Counts an ad-hoc row in another measure. Only before anything is entered on
+ * it: switching under logged numbers would leave them in a field nothing reads.
+ * A prescribed row's measure is the workout's, changed in the editor.
+ */
+export function setEntryMeasure(
+  entries: readonly SessionEntry[],
+  key: string,
+  measure: Measure,
+  distanceUnit: DistanceUnit = DEFAULT_DISTANCE_UNIT,
+): SessionEntry[] {
+  return mapEntry(entries, key, (entry) => {
+    if (entry.prescription !== null) return entry;
+    const rest: SessionEntry = { ...entry };
+    delete rest.measure;
+    delete rest.distanceUnit;
+    if (measure === 'reps') return rest;
+    if (measure === 'time') return { ...rest, measure };
+    return { ...rest, measure, distanceUnit };
+  });
+}
+
+/** True once any set of a row holds a number, so its measure is settled. */
+export function hasEnteredSets(entry: SessionEntry): boolean {
+  return entry.sets.some(
+    (set) =>
+      set.weight !== null || set.reps !== null || set.seconds !== null || set.distance !== null,
+  );
+}
+
 /** Removes a row entirely. How an ad-hoc addition is backed out. */
 export function removeEntry(entries: readonly SessionEntry[], key: string): SessionEntry[] {
   return entries.filter((entry) => entryKey(entry) !== key);
@@ -418,9 +544,15 @@ export function workingSets(sets: readonly LoggedSet[]): LoggedSet[] {
   return sets.filter((set) => !set.isWarmup && !set.skipped);
 }
 
-/** A set is *performed* once it has both a load and a rep count. */
+/**
+ * A set is *performed* once it holds what its measure needs: a load and a rep
+ * count, or a time, or a distance (a load being optional for those two).
+ * The fields say which measure a set was logged in, so this needs no row.
+ */
 export function isPerformed(set: LoggedSet): boolean {
-  return !set.skipped && set.weight !== null && set.reps !== null;
+  if (set.skipped) return false;
+  if (set.seconds !== null || set.distance !== null) return true;
+  return set.weight !== null && set.reps !== null;
 }
 
 /** Sets that can be compared, ranked, or turned into a PR. */
@@ -438,7 +570,13 @@ export function performedSets(sets: readonly LoggedSet[]): LoggedSet[] {
  * a muscle for having been trained, only need to know the set happened.
  */
 export function workedSets(sets: readonly LoggedSet[]): LoggedSet[] {
-  return workingSets(sets).filter((set) => set.reps !== null || set.completedAt !== null);
+  return workingSets(sets).filter(
+    (set) =>
+      set.reps !== null ||
+      set.seconds !== null ||
+      set.distance !== null ||
+      set.completedAt !== null,
+  );
 }
 
 /**
@@ -479,10 +617,27 @@ export function sessionExerciseIds(entries: readonly SessionEntry[]): string[] {
  */
 export type SetAssessment = 'unassessed' | 'incomplete' | 'under' | 'on-target' | 'over';
 
-export function assessSet(set: LoggedSet, prescription: Prescription | null): SetAssessment {
+export function assessSet(
+  set: LoggedSet,
+  prescription: Prescription | null,
+  measure: Measure = measureOf(prescription),
+): SetAssessment {
   // A warmup and a skipped set are both excluded from history by design, so
   // neither a missing number nor a missed rep range means anything for them.
   if (set.isWarmup || set.skipped) return 'unassessed';
+
+  // A time or a distance needs only itself; a load beside it is optional. A
+  // load with no time or distance is half-entered, as a load with no reps is.
+  if (measure !== 'reps') {
+    const unit = prescription === null ? DEFAULT_DISTANCE_UNIT : distanceUnitOf(prescription);
+    const amount = setAmountIn(set, measure, unit);
+    if (amount === null) return set.weight === null ? 'unassessed' : 'incomplete';
+    if (prescription === null) return 'unassessed';
+    const { min, max } = prescription.repRange;
+    if (amount < min) return 'under';
+    if (amount > max) return 'over';
+    return 'on-target';
+  }
 
   // Untouched. Not a problem, just not started.
   if (set.weight === null && set.reps === null) return 'unassessed';
@@ -504,9 +659,17 @@ export function assessSet(set: LoggedSet, prescription: Prescription | null): Se
  * A prescribed row asks for RIR as well as load and reps. A warmup and a
  * skipped set never qualify.
  */
-export function isFullyEntered(set: LoggedSet, prescription: Prescription | null): boolean {
+export function isFullyEntered(
+  set: LoggedSet,
+  prescription: Prescription | null,
+  measure: Measure = measureOf(prescription),
+): boolean {
   if (set.isWarmup || set.skipped) return false;
-  if (set.weight === null || set.reps === null) return false;
+  if (measure === 'reps') {
+    if (set.weight === null || set.reps === null) return false;
+  } else if (setAmount(set, measure) === null) {
+    return false;
+  }
   return prescription === null || set.rir !== null;
 }
 
@@ -524,7 +687,8 @@ export const IMPLAUSIBLE_REP_FACTOR = 3;
  *
  * Both halves have to be wrong at once: a load too small to be one *and* more
  * reps than the absolute threshold or than the prescription can explain. A
- * load of zero is bodyweight, which is entered on purpose.
+ * load of zero is bodyweight and a negative one is assistance, both entered
+ * on purpose. A time or distance set has no reps to swap.
  */
 export function looksTransposed(set: LoggedSet, prescription: Prescription | null = null): boolean {
   const { weight, reps } = set;
@@ -534,8 +698,12 @@ export function looksTransposed(set: LoggedSet, prescription: Prescription | nul
   return prescription !== null && reps > prescription.repRange.max * IMPLAUSIBLE_REP_FACTOR;
 }
 
-/** The number a half-entered set is missing, for the on-screen note. */
-export function missingField(set: LoggedSet): 'weight' | 'reps' | null {
+/**
+ * The number a half-entered set is missing, for the on-screen note. Only a
+ * reps set can miss its load: a time or distance stands on its own.
+ */
+export function missingField(set: LoggedSet, measure: Measure = 'reps'): 'weight' | 'reps' | null {
+  if (measure !== 'reps') return null;
   if (set.weight === null && set.reps !== null) return 'weight';
   if (set.reps === null && set.weight !== null) return 'reps';
   return null;
@@ -635,13 +803,13 @@ export function sessionSeconds(session: Session, now: Date = new Date()): number
 /**
  * Enough to say the set happened.
  *
- * A rep count, and only a rep count. Reps are the irreducible fact of a
- * performed set — a load without them says the bar was loaded, not that
+ * A rep count (or a time, or a distance), and nothing less. Reps are the
+ * irreducible fact of a performed set — a load without them says the bar was loaded, not that
  * anything was lifted — so a row with reps in it was done, whatever else is
  * missing, and a row without them was not.
  */
 function wasPerformed(set: LoggedSet): boolean {
-  return set.reps !== null;
+  return set.reps !== null || set.seconds !== null || set.distance !== null;
 }
 
 function isOutstanding(set: LoggedSet): boolean {
@@ -676,6 +844,50 @@ export function outstandingSets(entries: readonly SessionEntry[]): Outstanding[]
     }
   }
   return outstanding;
+}
+
+export type MissingNumbers = {
+  exerciseName: string;
+  /** How many of its sets are short of a number. */
+  count: number;
+  /** The first of them, to scroll to. */
+  first: { entryKey: string; setIndex: number };
+};
+
+/**
+ * Sets that count as done but are short of a number their row asks for:
+ * ticked with nothing in them, or with reps and no load, or no RIR on a
+ * prescribed row. The same rule that ticks a set by itself
+ * (`isFullyEntered`).
+ *
+ * A set counts as done when it is ticked, or when it has reps in it and
+ * finishing would tick it (see `settleOutstandingSets`). Finishing is held
+ * until these are filled in or skipped, so nothing half-entered reaches your
+ * history. Skipped sets, warmups and untouched unticked sets (which finishing
+ * skips) are left alone.
+ */
+export function setsMissingNumbers(entries: readonly SessionEntry[]): MissingNumbers[] {
+  const missing: MissingNumbers[] = [];
+
+  for (const entry of exerciseEntries(entries)) {
+    const measure = entryMeasure(entry);
+    const short = entry.sets.filter(
+      (set) =>
+        !set.skipped &&
+        !set.isWarmup &&
+        (set.completedAt !== null || wasPerformed(set)) &&
+        !isFullyEntered(set, entry.prescription, measure),
+    );
+    const [first] = short;
+    if (first !== undefined) {
+      missing.push({
+        exerciseName: entry.exerciseName,
+        count: short.length,
+        first: { entryKey: entryKey(entry), setIndex: first.setIndex },
+      });
+    }
+  }
+  return missing;
 }
 
 export type Settlement = {
@@ -795,22 +1007,41 @@ export function isSessionStatus(value: unknown): value is SessionStatus {
   return typeof value === 'string' && (SESSION_STATUSES as readonly string[]).includes(value);
 }
 
-/** A stored weight, or null when either half is unusable. */
+/**
+ * A stored weight, or null when either half is unusable. Never negative: this
+ * reads bodyweight, which has no assisted reading. A set's load is `parseLoad`.
+ */
 export function parseWeight(value: unknown): Weight | null {
+  const weight = parseLoad(value);
+  return weight === null || weight.value < 0 ? null : weight;
+}
+
+/** A set's stored load, which may be negative (assistance). */
+export function parseLoad(value: unknown): Weight | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const amount: unknown = record['value'];
+  const unit: unknown = record['unit'];
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) return null;
+  if (unit !== 'lb' && unit !== 'kg') return null;
+  const parsed: Unit = unit;
+  return { value: amount, unit: parsed };
+}
+
+function parseDistance(value: unknown): Distance | null {
   if (typeof value !== 'object' || value === null) return null;
   const record = value as Record<string, unknown>;
   const amount: unknown = record['value'];
   const unit: unknown = record['unit'];
   if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0) return null;
-  if (unit !== 'lb' && unit !== 'kg') return null;
-  const parsed: Unit = unit;
-  return { value: amount, unit: parsed };
+  return isDistanceUnit(unit) ? { value: amount, unit } : null;
 }
 
 export function parseLoggedSet(value: unknown, index: number): LoggedSet {
   if (typeof value !== 'object' || value === null) return emptySet(index);
   const record = value as Record<string, unknown>;
   const reps: unknown = record['reps'];
+  const seconds: unknown = record['seconds'];
   const rir: unknown = record['rir'];
   const restTaken: unknown = record['restTakenSeconds'];
 
@@ -818,8 +1049,10 @@ export function parseLoggedSet(value: unknown, index: number): LoggedSet {
     // Position wins over the stored index: the array order is what the user
     // sees, and a stale index would line the overlay up against the wrong set.
     setIndex: index,
-    weight: parseWeight(record['weight']),
+    weight: parseLoad(record['weight']),
     reps: typeof reps === 'number' && Number.isFinite(reps) ? reps : null,
+    seconds: typeof seconds === 'number' && Number.isFinite(seconds) ? seconds : null,
+    distance: parseDistance(record['distance']),
     rir: typeof rir === 'number' && Number.isFinite(rir) ? rir : null,
     isWarmup: record['isWarmup'] === true,
     skipped: record['skipped'] === true,
@@ -845,6 +1078,8 @@ export function parseSessionEntry(value: unknown): SessionEntry | null {
   const superset: unknown = record['supersetGroup'];
   const prescription: unknown = record['prescription'];
   const kind: SlotKind = record['kind'] === 'rest' ? 'rest' : 'exercise';
+  const measure: unknown = record['measure'];
+  const unit: unknown = record['distanceUnit'];
 
   return {
     slotId: typeof slotId === 'string' && slotId !== '' ? slotId : null,
@@ -859,6 +1094,8 @@ export function parseSessionEntry(value: unknown): SessionEntry | null {
     sets: kind === 'rest' ? [] : parseLoggedSets(record['sets']),
     supersetGroup: typeof superset === 'string' && superset !== '' ? superset : null,
     notes: asString(record['notes']),
+    ...(isMeasure(measure) && measure !== 'reps' ? { measure } : {}),
+    ...(isDistanceUnit(unit) && measure === 'distance' ? { distanceUnit: unit } : {}),
   };
 }
 

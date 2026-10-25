@@ -1,13 +1,27 @@
-import { Badge, Button, Card, Group, Stack, Text, Textarea } from '@mantine/core';
+import { Badge, Button, Card, Group, SegmentedControl, Stack, Text, Textarea } from '@mantine/core';
 import { useState } from 'react';
 import type { ExerciseStats, Overlay, OverlayScope, WorkoutStats } from '@lift/domain/overlay';
 import type { DeltaChip } from '@lift/domain/strength';
 import { isComparable, previousSetAt, resolveOverlay, workedPosition } from '@lift/domain/overlay';
 import type { LoggedSet, SessionEntry } from '@lift/domain/sessions';
-import { assessSet, entryKey as keyOf, isRestEntry } from '@lift/domain/sessions';
+import type { DistanceUnit, Measure } from '@lift/domain/measure';
+import { DISTANCE_UNITS, MEASURES, MEASURE_LABELS, amountInput } from '@lift/domain/measure';
+import {
+  assessSet,
+  entryDistanceUnit,
+  entryMeasure,
+  hasEnteredSets,
+  entryKey as keyOf,
+  isRestEntry,
+  setAmountIn,
+} from '@lift/domain/sessions';
 import { describeComparison, formatSet } from '@lift/domain/strength';
 import type { Handedness, Unit } from '@lift/domain/types';
-import { formatPrescription, formatRange, formatRestSeconds } from '@lift/domain/workouts';
+import {
+  formatPrescription,
+  formatPrescriptionTarget,
+  formatRestSeconds,
+} from '@lift/domain/workouts';
 import { OverlayLine } from './OverlayLine';
 import { SetRow } from './SetRow';
 import classes from './EntryCard.module.css';
@@ -22,7 +36,8 @@ import classes from './EntryCard.module.css';
 
 export type SetHandlers = {
   onWeight: (entryKey: string, setIndex: number, value: number | null, unit: Unit) => void;
-  onReps: (entryKey: string, setIndex: number, value: number | null) => void;
+  /** The set's reps, seconds or distance, by the row's measure. */
+  onAmount: (entryKey: string, setIndex: number, value: number | null) => void;
   onRir: (entryKey: string, setIndex: number, value: number | null) => void;
   onToggleComplete: (entryKey: string, setIndex: number) => void;
   onToggleSkipped: (entryKey: string, setIndex: number) => void;
@@ -45,7 +60,17 @@ type Props = SetHandlers & {
   onRemoveEntry: ((entryKey: string) => void) | null;
   /** Opens the exercise's instructions over the session. */
   onShowExercise?: ((exerciseId: string) => void) | undefined;
+  /** Counts an ad-hoc row in another measure, before anything is logged on it. */
+  onMeasure?: ((entryKey: string, measure: Measure, unit: DistanceUnit) => void) | undefined;
 };
+
+function isDistanceUnitValue(value: string): value is DistanceUnit {
+  return (DISTANCE_UNITS as readonly string[]).includes(value);
+}
+
+function isMeasureValue(value: string): value is Measure {
+  return (MEASURES as readonly string[]).includes(value);
+}
 
 /** Warmups are lettered so the working sets keep 1, 2, 3 whatever precedes them. */
 const WARMUP_LABELS = 'WXYZ';
@@ -105,14 +130,21 @@ export function EntryCard({
   onNotes,
   onRemoveEntry,
   onShowExercise,
+  onMeasure,
   ...handlers
 }: Props) {
   const key = keyOf(entry);
   const [notes, setNotes] = useState<string | null>(null);
   const overlay = resolveOverlay(entry, workoutStats, exerciseStats, overlayScope);
-  // Named in the off-target note, so "under 8-12" reads on its own.
-  const repRangeLabel =
-    entry.prescription === null ? null : formatRange(entry.prescription.repRange);
+  const measure = entryMeasure(entry);
+  const distanceUnit = entryDistanceUnit(entry);
+  const input = amountInput(measure, distanceUnit);
+  // Named in the off-target note, so "under 8-12" or "under 30s-1:00" reads on its own.
+  const targetLabel =
+    entry.prescription === null ? null : formatPrescriptionTarget(entry.prescription);
+  // Only an ad-hoc row picks its measure, and only before it holds a number.
+  const choosingMeasure =
+    onMeasure !== undefined && entry.prescription === null && !hasEnteredSets(entry);
 
   if (isRestEntry(entry)) {
     return (
@@ -164,6 +196,31 @@ export function EntryCard({
 
         <OverlayLine overlay={overlay} workoutName={workoutName} />
 
+        {choosingMeasure ? (
+          <Group gap="xs" wrap="nowrap">
+            <SegmentedControl
+              size="xs"
+              aria-label={`Count ${entry.exerciseName} in`}
+              value={measure}
+              onChange={(value) => {
+                if (isMeasureValue(value)) onMeasure(key, value, distanceUnit);
+              }}
+              data={MEASURES.map((value) => ({ value, label: MEASURE_LABELS[value] }))}
+            />
+            {measure === 'distance' ? (
+              <SegmentedControl
+                size="xs"
+                aria-label="Distance unit"
+                value={distanceUnit}
+                onChange={(value) => {
+                  if (isDistanceUnitValue(value)) onMeasure(key, 'distance', value);
+                }}
+                data={DISTANCE_UNITS.map((value) => ({ value, label: value }))}
+              />
+            ) : null}
+          </Group>
+        ) : null}
+
         <div>
           {entry.sets.map((set) => {
             const { previousLabel, delta } = rowOverlay(overlay, entry, set, displayUnit);
@@ -175,15 +232,19 @@ export function EntryCard({
                 ordinal={ordinalFor(entry.sets, set)}
                 weight={set.weight?.value ?? null}
                 weightUnit={set.weight?.unit ?? displayUnit}
-                reps={set.reps}
+                measure={measure}
+                amount={setAmountIn(set, measure, distanceUnit)}
+                amountPlaceholder={input.placeholder}
+                amountStep={input.step}
+                amountMax={input.max}
                 rir={set.rir}
                 rirTarget={entry.prescription?.rirRange ?? null}
                 isWarmup={set.isWarmup}
                 skipped={set.skipped}
                 isComplete={set.completedAt !== null}
                 displayUnit={displayUnit}
-                assessment={assessSet(set, entry.prescription)}
-                repRangeLabel={repRangeLabel}
+                assessment={assessSet(set, entry.prescription, measure)}
+                targetLabel={targetLabel}
                 previousLabel={previousLabel}
                 deltaLabel={delta?.label ?? null}
                 deltaDetail={delta?.detail ?? null}

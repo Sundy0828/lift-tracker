@@ -145,6 +145,17 @@ export type SchemeColors = {
   groupTarget: string;
   groupTargetBorder: string;
   heat: readonly [string, string, string, string, string];
+  /**
+   * The history calendar's stops 1–4, by sets logged (`ActivityCalendar.module.css`).
+   * Stop 0 is no fill and a `border` outline: an empty day is not a light one.
+   */
+  calendar: readonly [string, string, string, string];
+  /** The trend line, and the fill under it (drawn at 45% opacity). `TrendLine.module.css`. */
+  trendLine: string;
+  trendArea: string;
+  /** A record: its badge, and its marker on the trend line. */
+  record: string;
+  recordStroke: string;
   /** The body outline's head and knees, and every region's edge. */
   bodyInert: string;
   bodyStroke: string;
@@ -186,6 +197,13 @@ export function schemeColors(scheme: ColorScheme, accent: ColorRamp): SchemeColo
     groupTarget: light ? accent[0] : withAlpha(accent[6], 0.12),
     groupTargetBorder: light ? accent[6] : accent[5],
     heat: HEAT_STOPS[scheme],
+    calendar: light
+      ? [accent[2], accent[4], accent[6], accent[8]]
+      : [accent[9], accent[8], accent[6], accent[4]],
+    trendLine: light ? accent[7] : accent[4],
+    trendArea: light ? accent[1] : accent[9],
+    record: light ? ORANGE[6] : ORANGE[4],
+    recordStroke: light ? ORANGE[8] : ORANGE[3],
     bodyInert: light ? GRAY[4] : DARK[4],
     bodyStroke: light ? GRAY[5] : DARK[3],
   };

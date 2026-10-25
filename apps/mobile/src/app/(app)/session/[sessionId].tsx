@@ -1,4 +1,5 @@
 import { useAuth } from '@lift/data/hooks/useAuth';
+import { useExerciseLibrary } from '@lift/data/hooks/useExerciseLibrary';
 import { useExerciseStats, useWorkoutStats } from '@lift/data/hooks/useOverlayStats';
 import { useProfile } from '@lift/data/hooks/useProfile';
 import { useRestTimer } from '@lift/data/hooks/useRestTimer';
@@ -12,22 +13,30 @@ import {
   savePerformedOn,
   saveSessionNotes,
 } from '@lift/data/mutations/sessions';
+import type { Exercise } from '@lift/domain/exercises';
+import type { DistanceUnit, Measure } from '@lift/domain/measure';
 import type { PersonalRecord } from '@lift/domain/overlay';
 import { restOwner, restPlan, restTag, restToResume } from '@lift/domain/rest';
 import type { Session, SessionEntry } from '@lift/domain/sessions';
 import {
+  addAdHocEntry,
+  amountPatch,
   entryFor,
+  entryMeasure,
   entryKey as keyOf,
   exerciseEntries,
   isFullyEntered,
   isSessionFinished,
   lastCompletedSet,
   looksTransposed,
+  nextUnfinishedSet,
   outstandingSets,
   removeEntry,
   sessionProgress,
   sessionSeconds,
+  setEntryMeasure,
   setEntryNotes,
+  setsMissingNumbers,
   settleOutstandingSets,
   toggleSetComplete,
   toggleSetSkipped,
@@ -39,7 +48,7 @@ import type { Unit } from '@lift/domain/types';
 import { formatEstimate } from '@lift/domain/workouts';
 import { useKeepAwake } from 'expo-keep-awake';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -52,12 +61,15 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Sheet } from '../../../components/editor/controls';
+import { ExerciseDetail } from '../../../components/editor/ExerciseDetail';
+import { ExercisePicker } from '../../../components/editor/ExercisePicker';
 import { EntryCard } from '../../../components/session/EntryCard';
-import { RestTimerBar } from '../../../components/session/RestTimerBar';
+import { RestPill, RestTimerBar } from '../../../components/session/RestTimerBar';
 import { SessionClock } from '../../../components/session/SessionClock';
 import { SessionMeta } from '../../../components/session/SessionMeta';
 import { SyncStrip } from '../../../components/SyncStrip';
-import { Body, Button, Loading, Title } from '../../../components/ui';
+import { BackArrow, Badge, Body, Button, Loading, Title } from '../../../components/ui';
 import { onRestDone, scheduledRestEndsAt } from '../../../platform';
 import { usePalette } from '../../../theme';
 
@@ -76,6 +88,20 @@ function restLabel(nextExerciseName: string | null): string {
   return nextExerciseName === null ? 'Last set — session done' : `Next: ${nextExerciseName}`;
 }
 
+/**
+ * The exercise a resumed session should scroll to, or null to stay put: the
+ * web's `useResumeScroll` rule. Only once something is logged, and never
+ * when the next set is already the first row.
+ */
+function resumeTarget(entries: readonly SessionEntry[]): string | null {
+  if (sessionProgress(entries).completed === 0) return null;
+  const target = nextUnfinishedSet(entries);
+  if (target === null) return null;
+  const first = exerciseEntries(entries)[0];
+  if (first !== undefined && keyOf(first) === target.entryKey) return null;
+  return target.entryKey;
+}
+
 /** Holds the screen on while mounted. A component, so it can be switched by rendering. */
 function KeepAwake() {
   useKeepAwake();
@@ -86,7 +112,7 @@ function KeepAwake() {
 function describePrs(prs: readonly PersonalRecord[], unit: Unit): string {
   return prs
     .map((pr) => {
-      const first = pr.previousE1rmKg === 0 ? ' (first time)' : '';
+      const first = pr.isFirst ? ' (first time)' : '';
       return `${pr.exerciseName}: ${formatSet(pr.set, unit)} · est. 1RM ${formatE1rm(pr.e1rmKg, unit)}${first}`;
     })
     .join('\n');
@@ -111,11 +137,16 @@ function describePrs(prs: readonly PersonalRecord[], unit: Unit): string {
  */
 export default function ActiveSession() {
   const palette = usePalette();
-  const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
+  // `notice` comes from the start screen when starting published a version.
+  const { sessionId, notice: startNotice } = useLocalSearchParams<{
+    sessionId: string;
+    notice?: string;
+  }>();
   const { user } = useAuth();
   const uid = user?.uid ?? null;
 
   const { session, isPending, notFound } = useSession(sessionId);
+  const { resolver } = useExerciseLibrary();
   const { profile, isPending: profilePending } = useProfile();
   const draft = useSessionDraft(uid, session);
   const {
@@ -132,8 +163,10 @@ export default function ActiveSession() {
   const [finishError, setFinishError] = useState<string | null>(null);
   const [armedToDiscard, setArmedToDiscard] = useState(false);
   const [confirmingEarly, setConfirmingEarly] = useState(false);
+  /** Set when Finish is pressed with done sets still short of a number. */
+  const [showingMissing, setShowingMissing] = useState(false);
   /** A one-line notice above the rest bar; the phone's stand-in for a toast. */
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(startNotice ?? null);
 
   const { stats: workoutStats } = useWorkoutStats(session?.workoutId ?? null);
   const exerciseIds = useMemo(
@@ -158,6 +191,33 @@ export default function ActiveSession() {
       displayUnit: profile.displayUnit,
     };
   }, [session, profile.defaultRestSeconds, profile.autoStartRest, profile.displayUnit]);
+
+  /** The exercise whose instructions are open over the session. */
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+
+  /**
+   * Scrolls a resumed session to where it left off, once per session: a long
+   * workout reopened from the notification otherwise lands on sets finished
+   * forty minutes ago. Each row reports where it sits as it lays out.
+   */
+  const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
+  const scrolledFor = useRef<string | null>(null);
+  /** Where each exercise sits, for "Show me" on a set missing a number. */
+  const rowY = useRef(new Map<string, number>());
+  const onRowLayout = useCallback((key: string, y: number) => {
+    rowY.current.set(key, y);
+    const live = latest.current.session;
+    if (live === null || scrolledFor.current === live.id) return;
+    const target = resumeTarget(live.entries);
+    if (target === null) {
+      scrolledFor.current = live.id;
+      return;
+    }
+    if (key !== target) return;
+    scrolledFor.current = live.id;
+    scroller.current?.scrollTo({ y: Math.max(0, y - 120), animated: false });
+  }, []);
 
   const nudged = useRef(new Set<string>());
   const nudgedAt = useRef(0);
@@ -192,13 +252,6 @@ export default function ActiveSession() {
       );
     },
     [apply, read],
-  );
-
-  const onToggleSkipped = useCallback(
-    (key: string, setIndex: number) => {
-      apply((entries) => toggleSetSkipped(entries, key, setIndex));
-    },
-    [apply],
   );
 
   const onNotes = useCallback(
@@ -285,7 +338,7 @@ export default function ActiveSession() {
       const entry = entryFor(entries, key);
       const set = entry?.sets.find((candidate) => candidate.setIndex === setIndex);
       if (entry === null || set === undefined) return;
-      if (!isFullyEntered(set, entry.prescription)) return;
+      if (!isFullyEntered(set, entry.prescription, entryMeasure(entry))) return;
 
       nudgeTransposed(entries, key, setIndex);
 
@@ -310,12 +363,26 @@ export default function ActiveSession() {
     [apply, onSetEntered],
   );
 
-  const onReps = useCallback(
+  /** Reps, seconds or a distance, whichever the row is counted in. */
+  const onAmount = useCallback(
     (key: string, setIndex: number, value: number | null) => {
-      apply((entries) => updateSet(entries, key, setIndex, { reps: value }));
+      apply((entries) => {
+        const entry = entryFor(entries, key);
+        return entry === null
+          ? [...entries]
+          : updateSet(entries, key, setIndex, amountPatch(entry, value));
+      });
       onSetEntered(key, setIndex);
     },
     [apply, onSetEntered],
+  );
+
+  /** An ad-hoc row's measure, chosen before anything is logged on it. */
+  const onMeasure = useCallback(
+    (key: string, measure: Measure, unit: DistanceUnit) => {
+      apply((entries) => setEntryMeasure(entries, key, measure, unit));
+    },
+    [apply],
   );
 
   const onRir = useCallback(
@@ -324,6 +391,49 @@ export default function ActiveSession() {
       onSetEntered(key, setIndex);
     },
     [apply, onSetEntered],
+  );
+
+  /**
+   * Keeps the rest running only while the set that earned it still counts as
+   * done. Once that set is un-ticked or skipped, the rest falls back to the
+   * last set still ticked, resumed from when that set was finished; if that
+   * rest has already run out, or nothing is ticked any more, it ends.
+   *
+   * Un-ticking another set leaves a rest alone, so correcting a mis-tap never
+   * throws away the rest the set before it was owed. But a rest whose owner
+   * was skipped first is checked again then, so it cannot outlive every set
+   * that could have earned it.
+   */
+  const releaseRest = useCallback(
+    (entries: readonly SessionEntry[]) => {
+      const running = peekRest();
+      if (running === null) return;
+      const owner = entryFor(entries, running.owner.entryKey)?.sets.find(
+        (candidate) => candidate.setIndex === running.owner.setIndex,
+      );
+      if (owner?.skipped === false && owner.completedAt !== null) return;
+
+      const fallback = lastCompletedSet(entries);
+      const owed = fallback === null ? null : restFor(entries, fallback.entryKey);
+      if (fallback === null || owed === null) {
+        stopRest();
+        return;
+      }
+      resumeRest(fallback.completedAt, owed.seconds, owed.label, {
+        entryKey: fallback.entryKey,
+        setIndex: fallback.setIndex,
+      });
+    },
+    [peekRest, restFor, resumeRest, stopRest],
+  );
+
+  const onToggleSkipped = useCallback(
+    (key: string, setIndex: number) => {
+      const next = toggleSetSkipped(read(), key, setIndex);
+      apply(() => next);
+      releaseRest(next);
+    },
+    [apply, read, releaseRest],
   );
 
   /**
@@ -344,17 +454,7 @@ export default function ActiveSession() {
       if (!wasComplete) nudgeTransposed(next, key, setIndex);
 
       if (wasComplete) {
-        if (!restOwnedBy({ entryKey: key, setIndex })) return;
-        const fallback = lastCompletedSet(next);
-        const owed = fallback === null ? null : restFor(next, fallback.entryKey);
-        if (fallback === null || owed === null) {
-          stopRest();
-          return;
-        }
-        resumeRest(fallback.completedAt, owed.seconds, owed.label, {
-          entryKey: fallback.entryKey,
-          setIndex: fallback.setIndex,
-        });
+        releaseRest(next);
         return;
       }
 
@@ -364,18 +464,12 @@ export default function ActiveSession() {
       }
       startRestFor(next, key, setIndex);
     },
-    [
-      apply,
-      nudgeTransposed,
-      read,
-      recordRest,
-      restFor,
-      restOwnedBy,
-      resumeRest,
-      startRestFor,
-      stopRest,
-    ],
+    [apply, nudgeTransposed, read, recordRest, releaseRest, restOwnedBy, startRestFor, stopRest],
   );
+
+  const onShowExercise = useCallback((exerciseId: string) => {
+    setDetailId(exerciseId);
+  }, []);
 
   const startRestManually = useCallback(() => {
     const entries = read();
@@ -461,6 +555,7 @@ export default function ActiveSession() {
   const outstanding = outstandingSets(entries);
   const toComplete = outstanding.filter((item) => item.toComplete > 0);
   const toSkip = outstanding.filter((item) => item.toSkip > 0);
+  const missing = setsMissingNumbers(entries);
   const unit = profile.displayUnit;
 
   const complete = async (finalEntries: readonly SessionEntry[]): Promise<void> => {
@@ -504,6 +599,12 @@ export default function ActiveSession() {
 
   const finish = (): void => {
     if (uid === null || isDone) return;
+    // A set that counts as done has to hold its numbers first: otherwise it
+    // reaches history half-entered, or not at all.
+    if (missing.length > 0) {
+      setShowingMissing(true);
+      return;
+    }
     if (outstanding.length > 0) {
       setConfirmingEarly(true);
       return;
@@ -517,6 +618,14 @@ export default function ActiveSession() {
     setConfirmingEarly(false);
     void complete(settled.entries);
   };
+
+  const addExercise = (exercise: Exercise): void => {
+    apply((current) =>
+      addAdHocEntry(current, { exerciseId: exercise.id, exerciseName: exercise.name }),
+    );
+  };
+
+  const detail = detailId === null ? null : resolver.resolve(detailId);
 
   const abandon = (): void => {
     if (uid === null) return;
@@ -534,27 +643,29 @@ export default function ActiveSession() {
       <SyncStrip />
       <KeyboardAvoidingView style={styles.root} behavior={OS.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
+          ref={scroller}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
-          <Pressable
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => {
-              router.back();
-            }}
-          >
-            <Text style={[styles.link, { color: palette.dimmed }]}>‹ Back</Text>
-          </Pressable>
-
           <View style={styles.headerRow}>
+            <BackArrow fallback="/" />
             <View style={styles.headerText}>
               <Title>{session.workoutName}</Title>
+              <View style={styles.badges}>
+                <Badge
+                  label={
+                    session.workoutVersion === null
+                      ? 'ad-hoc'
+                      : `v${String(session.workoutVersion)}`
+                  }
+                />
+                {isDone ? <Badge tone="success" label={session.status} /> : null}
+              </View>
               <View style={styles.inline}>
                 <Text style={[styles.small, { color: palette.dimmed }]}>
-                  {String(progress.completed)} of {String(progress.total)} sets
-                  {session.workoutVersion === null ? '' : ` · v${String(session.workoutVersion)}`}
+                  {String(progress.completed)} of {String(progress.total)} sets ·{' '}
+                  {String(totalPerformedSets(entries))} logged
                   {draft.isDirty ? ' · saving' : ''} ·{' '}
                 </Text>
                 <SessionClock session={session} />
@@ -595,37 +706,56 @@ export default function ActiveSession() {
           />
 
           {entries.length === 0 ? (
-            <Body dimmed>
-              Nothing in this session yet. Adding exercises mid-session arrives with the editor.
-            </Body>
+            <Body dimmed>Nothing in this session yet. Add the first exercise below.</Body>
           ) : null}
 
           {entries.map((entry) => (
-            <EntryCard
+            <View
               key={keyOf(entry)}
-              entry={entry}
-              displayUnit={unit}
-              workoutStats={workoutStats}
-              exerciseStats={byExercise.get(entry.exerciseId) ?? null}
-              workoutName={session.workoutName}
-              overlayScope="same-workout"
-              onNotes={onNotes}
-              onRemoveEntry={entry.slotId === null ? onRemoveEntry : null}
-              onWeight={onWeight}
-              onReps={onReps}
-              onRir={onRir}
-              onToggleComplete={onToggleComplete}
-              onToggleSkipped={onToggleSkipped}
-              onToggleWarmup={onToggleWarmup}
-            />
+              onLayout={(event) => {
+                onRowLayout(keyOf(entry), event.nativeEvent.layout.y);
+              }}
+            >
+              <EntryCard
+                entry={entry}
+                displayUnit={unit}
+                workoutStats={workoutStats}
+                exerciseStats={byExercise.get(entry.exerciseId) ?? null}
+                workoutName={session.workoutName}
+                overlayScope="same-workout"
+                onNotes={onNotes}
+                onRemoveEntry={entry.slotId === null ? onRemoveEntry : null}
+                onWeight={onWeight}
+                onAmount={onAmount}
+                onMeasure={entry.prescription === null ? onMeasure : null}
+                onRir={onRir}
+                onToggleComplete={onToggleComplete}
+                onToggleSkipped={onToggleSkipped}
+                onToggleWarmup={onToggleWarmup}
+                onShowExercise={onShowExercise}
+                handedness={profile.handedness}
+              />
+            </View>
           ))}
+
+          {/* Only for an ad-hoc session, which starts with nothing in it. A
+              workout's plan is changed in the editor, not mid-set, as on the web. */}
+          {session.workoutId === null && !isDone ? (
+            <Button
+              variant="subtle"
+              label="+ Add exercise"
+              onPress={() => {
+                setPicking(true);
+              }}
+            />
+          ) : null}
 
           {isDone ? (
             <Button
               variant="subtle"
-              label="Back to today"
+              label="Back to history"
               onPress={() => {
-                router.replace('/');
+                router.replace('/history');
               }}
             />
           ) : (
@@ -689,6 +819,68 @@ export default function ActiveSession() {
           }
         />
       </KeyboardAvoidingView>
+
+      {/* Over the session rather than navigated to: leaving the screen mid-set
+          is what made the timer hard to trust. The countdown comes along. */}
+      <Sheet
+        visible={detailId !== null}
+        title={detail?.name ?? 'How to'}
+        onClose={() => {
+          setDetailId(null);
+        }}
+        headerAction={<RestPill rest={rest} />}
+      >
+        {detail === null ? (
+          <Body dimmed>No instructions for this exercise.</Body>
+        ) : (
+          <ExerciseDetail exercise={detail} />
+        )}
+      </Sheet>
+
+      <ExercisePicker
+        visible={picking}
+        title="Add to session"
+        actionLabel="Add to session"
+        onClose={() => {
+          setPicking(false);
+        }}
+        onPick={(exercise) => {
+          addExercise(exercise);
+          setPicking(false);
+        }}
+      />
+
+      <Modal
+        visible={showingMissing}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowingMissing(false);
+        }}
+      >
+        <View style={styles.backdrop}>
+          <View style={[styles.sheet, { backgroundColor: palette.surface }]}>
+            <Title>Some sets are missing numbers</Title>
+            <Body dimmed>Fill these in, or skip the ones you did not do, before finishing.</Body>
+            <View style={styles.group}>
+              {missing.map((item) => (
+                <Body key={item.first.entryKey}>
+                  {item.exerciseName}: {String(item.count)} {item.count === 1 ? 'set' : 'sets'}
+                </Body>
+              ))}
+            </View>
+            <Button
+              label="Show me"
+              onPress={() => {
+                setShowingMissing(false);
+                const first = missing[0];
+                const y = first === undefined ? undefined : rowY.current.get(first.first.entryKey);
+                if (y !== undefined) scroller.current?.scrollTo({ y: Math.max(0, y - 120) });
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={confirmingEarly}
@@ -782,11 +974,12 @@ function UnitToggle({ unit, onChange }: { unit: Unit; onChange: (unit: Unit) => 
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { padding: 16, gap: 12, paddingBottom: 32 },
-  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  content: { padding: 16, gap: 10, paddingBottom: 32 },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   headerText: { flex: 1, gap: 2 },
   inline: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
-  small: { fontSize: 13 },
+  badges: { flexDirection: 'row', gap: 6 },
+  small: { fontSize: 12 },
   link: { fontSize: 15, fontWeight: '600' },
   track: { height: 4, borderRadius: 2, overflow: 'hidden' },
   fill: { height: 4 },
@@ -800,7 +993,7 @@ const styles = StyleSheet.create({
   },
   sheet: { padding: 20, gap: 12, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
   group: { gap: 4 },
-  toggle: { flexDirection: 'row', borderWidth: 1, borderRadius: 10, overflow: 'hidden' },
-  toggleOption: { minWidth: 44, minHeight: 40, alignItems: 'center', justifyContent: 'center' },
-  toggleLabel: { fontSize: 15, fontWeight: '600' },
+  toggle: { flexDirection: 'row', borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
+  toggleOption: { minWidth: 44, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
+  toggleLabel: { fontSize: 14, fontWeight: '600' },
 });

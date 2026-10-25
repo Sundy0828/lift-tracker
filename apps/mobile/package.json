@@ -7,7 +7,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "doctor": "expo-doctor"
+    "doctor": "expo-doctor",
+    "e2e": "maestro test .maestro"
   },
   "dependencies": {
     "@expo/ui": "58.0.12",
@@ -24,14 +25,18 @@
     "expo-audio": "58.0.6",
     "expo-build-properties": "~58.0.9",
     "expo-constants": "~58.0.10",
+    "expo-crypto": "catalog:",
     "expo-dev-client": "~58.0.10",
+    "expo-file-system": "58.0.5",
     "expo-haptics": "58.0.4",
     "expo-keep-awake": "~58.0.3",
     "expo-linking": "~58.0.10",
     "expo-notifications": "58.1.0",
     "expo-router": "~58.0.12",
+    "expo-sharing": "58.0.13",
     "expo-status-bar": "~58.0.3",
     "expo-widgets": "58.0.12",
+    "qrcode-generator": "catalog:",
     "react": "catalog:",
     "react-native": "catalog:",
     "react-native-gesture-handler": "~3.2.1",

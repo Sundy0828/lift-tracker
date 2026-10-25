@@ -330,7 +330,11 @@ export async function deleteSession(uid: string, session: Session): Promise<void
   if (session.status === 'active') {
     throw new Error('A session in progress is discarded from Today, not deleted here.');
   }
-  if (!navigator.onLine) {
+  // Only a browser that says it is offline is refused here. React Native's
+  // `navigator` has no `onLine` at all, and reading the missing value as
+  // "offline" refused every delete on a phone. Offline there, the server
+  // reads below reject instead.
+  if (typeof navigator !== 'undefined' && 'onLine' in navigator && !navigator.onLine) {
     throw new Error('Deleting a session needs a connection, so records can be recalculated.');
   }
 

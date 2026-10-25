@@ -38,6 +38,7 @@ const handlers = () => ({
   onReorder: vi.fn(),
   onEditSlot: vi.fn(),
   onRemoveSlot: vi.fn(),
+  onDuplicateSlot: vi.fn(),
   onGroup: vi.fn(),
   onLeaveCircuit: vi.fn(),
   onAddAfter: vi.fn(),
@@ -104,7 +105,7 @@ describe('leaving a circuit by swiping right', () => {
     expect(props.onLeaveCircuit).not.toHaveBeenCalled();
   });
 
-  it('is not offered for a row outside a circuit', () => {
+  it('duplicates instead for a row outside a circuit', () => {
     const props = setup({
       name: 'PLAIN',
       slots: [slot('a', 'Pushups'), slot('b', 'Crunches')],
@@ -113,6 +114,7 @@ describe('leaving a circuit by swiping right', () => {
 
     swipe(surfaceOf('Crunches'), 140);
     expect(props.onLeaveCircuit).not.toHaveBeenCalled();
+    expect(props.onDuplicateSlot).toHaveBeenCalledWith('b');
   });
 });
 

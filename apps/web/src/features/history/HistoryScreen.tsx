@@ -562,7 +562,8 @@ function Records() {
   const feed = useMemo(
     () =>
       stats
-        .filter((entry) => entry.bestSet !== null && entry.bestE1rm > 0)
+        // A record is a best set. Its score can be below zero (an assisted lift).
+        .filter((entry) => entry.bestSet !== null)
         .sort((a, b) => (b.bestE1rmAt ?? '').localeCompare(a.bestE1rmAt ?? '')),
     [stats],
   );

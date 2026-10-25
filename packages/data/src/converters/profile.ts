@@ -17,6 +17,8 @@ export function parseProfile(data: DocumentData | undefined): UserProfile {
   const handedness: unknown = data['handedness'];
   const friendCode: unknown = data['friendCode'];
   const displayName: unknown = data['displayName'];
+  const firstName: unknown = data['firstName'];
+  const lastName: unknown = data['lastName'];
   const dayIndexVersion: unknown = data['dayIndexVersion'];
   const tourVersion: unknown = data['tourVersion'];
   const createdAt: unknown = data['createdAt'];
@@ -35,6 +37,8 @@ export function parseProfile(data: DocumentData | undefined): UserProfile {
     handedness: isHandedness(handedness) ? handedness : DEFAULT_PROFILE.handedness,
     friendCode: typeof friendCode === 'string' && friendCode !== '' ? friendCode : null,
     displayName: typeof displayName === 'string' ? displayName : DEFAULT_PROFILE.displayName,
+    firstName: typeof firstName === 'string' ? firstName : DEFAULT_PROFILE.firstName,
+    lastName: typeof lastName === 'string' ? lastName : DEFAULT_PROFILE.lastName,
     dayIndexVersion:
       typeof dayIndexVersion === 'number' && Number.isFinite(dayIndexVersion)
         ? Math.max(0, Math.round(dayIndexVersion))

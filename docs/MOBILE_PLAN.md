@@ -396,7 +396,7 @@ workouts, custom exercises) now come from `newRecordId` in `@lift/data/ids`, whi
 `Math.random` uuid: they only need to be unique within an account. Share ids still require
 `crypto` and throw on a phone, so a guessable link can never be minted; Phase 5 sharing needs
 `expo-crypto`. Phase 5 must also fix `deleteSession`'s `navigator.onLine` check, which React Native
-leaves undefined (it would always refuse as offline).
+leaves undefined (it would always refuse as offline). _Both fixed in Phase 5._
 
 From the first timer test (2026-10-07):
 
@@ -442,94 +442,307 @@ when back online. Web unchanged.
 
 ### Phase 4: Workout editor and drag and drop
 
-_Second pass 2026-10-08, after the first dev-build run. That run showed the editor did not match
-the web: no drag-to-make-a-circuit, circuits not shown as cards, no insert rows, swipe actions
-showing at the row edges, and no muscle map. All five are fixed, but not yet run on a phone. It
-adds `react-native-svg`, so it needs a new dev build. 913/913 unit tests; both platforms bundle._
+_**Done on Android, 2026-10-08.** Exit met on a real phone: workouts created and edited there,
+published, and read back on the web. It took three passes on the device: build the editor, then
+match the web's behaviour, then match its look. iOS waits on the store accounts, as for Phase 3.
+915/915 unit tests._
 
 - [x] Editor screen: slots, prescription editor, exercise picker with catalog search and recent
-      searches. _`app/(app)/workout/[workoutId].tsx` replaces the read-only detail. Name, publish
-      and discard, notes, archive, delete, and the muscle map. Every edit goes through the same
-      `@lift/domain/workouts` functions as the web. The Workouts tab has a New button._
-  - _Circuits are cards with their members inside, as on the web. The card holds the rounds and
-    the rest between rounds._
-  - _Insert rows (+ Exercise, + Rest) sit between every slot, inside cards and out, plus one
-    below each card. Each one is a `SlotPlace`: a position plus a circuit or none. `placeSlot`
-    in the domain inserts there._
-  - _Tapping a row opens `SlotSheet`. It uses steppers where the web uses sliders.
-    `stepRange` keeps the slider's push-on-overlap rule._
-  - _The picker (`ExercisePicker`) has search, body-part and equipment chips, a preview with
-    frames and instructions, and a custom exercise form, all in one modal (iOS shows one modal at
-    a time). Recent searches use AsyncStorage, with the web's key and rules
-    (`@lift/domain/recentSearches`), loaded lazily so a build without the native module only
-    loses the shortcut._
+      searches. _`app/(app)/workout/[workoutId].tsx` replaces the read-only detail. Name,
+      publish and discard, muscle map, notes, version history, archive, delete. The Workouts tab
+      has a New button. Every edit goes through the same `@lift/domain/workouts` functions as the
+      web._
+  - _Circuits are cards with their members inside, as on the web. One header line: CIRCUIT, the
+    rounds stepper beside it, the rest between rounds at the right._
+  - _Insert rows (＋ and ⏱) sit between every slot, inside cards and out, plus one below each
+    card. Each is a `SlotPlace`: a position plus a circuit or none. `placeSlot` inserts there._
+  - _Tapping a row opens `SlotSheet`. It uses steppers where the web uses sliders; `stepRange`
+    keeps the slider's push-on-overlap rule. A circuit member's sets are the card's rounds, so
+    the sheet leaves them out._
+  - _`ExercisePicker`: search, body-part and equipment chips, a preview with frames and
+    instructions, and a custom exercise form, all in one modal (iOS shows one modal at a time).
+    Recent searches use AsyncStorage, with the web's key and rules
+    (`@lift/domain/recentSearches`)._
   - _Muscle map: `components/MuscleMap.tsx` draws the web's geometry with `react-native-svg`.
     The geometry moved from the web to `@lift/domain/bodyMap` (was `bodyPolygons.ts`)._
+  - _Muscle map, notes and version history fold away. Archive and delete are a plain card, as on
+    the web._
 - [x] Reorder with `react-native-reanimated` + `react-native-gesture-handler`. Long-press to
-      lift, haptic on pick and drop. _The first pass used `react-native-sortables`. It lays items
-      out itself as one flat list, so it cannot draw circuit cards, insert rows or a hover target.
-      `components/editor/drag.tsx` now does the drag itself:_
+      lift, haptic on pick and drop. _`components/editor/drag.tsx`, written for this rather than
+      taken from a library (see below):_
   - _A row held 300 ms lifts into a floating copy. The list does not reflow; the gap the row
-    would drop into lights up instead._
-  - _Dropping in a gap runs `moveSlot`. The gap's circuit decides membership: drop inside a card
-    to join it, or just outside it to leave (the hint says "Release to leave the circuit")._
-  - _Holding over the middle of another row for 420 ms arms "make a circuit", the web's
-    hold-to-group, and a drop runs `groupWithSlot`._
-  - _The list scrolls near its edges. Positions are measured once, at lift._
-  - _Haptics: medium on lift, a tick per gap, light when a circuit arms and on drop._
+    would drop into lights up instead. The list scrolls near its edges._
+  - _Dropping in a gap runs `moveSlot`, and the gap's circuit decides membership. Drop inside a
+    card to join it, or just outside to leave ("Release to leave the circuit")._
+  - _Holding over the middle of another row for 420 ms arms "group", the web's hold-to-group. A
+    drop then runs `groupWithSlot`._
+  - _Haptics: medium on lift, a tick per gap, light when a group arms and on drop._
   - _Versions follow Expo SDK 58: reanimated 4.7.0, worklets 0.13.0, gesture-handler 3.2.1,
     react-native-svg 15.15.5._
 - [x] Swipe to delete or duplicate, matching `SwipeRow` behavior. _`ReanimatedSwipeable`, as a
       backup to the drag. Swipe left: Delete. Swipe right: Duplicate (`duplicateSlot`), plus
       "Circuit with above" (`linkToPrevious`) or "Leave circuit" (`leaveGroup`). The actions
-      fade in with the swipe, so their edges no longer show behind the row's rounded corners. The
-      web has no Duplicate yet._
+      fade in with the swipe, so they do not show behind the row's rounded corners._
 - [x] Version history view from `workoutDiff`. _Each version opens to show its changes from the
       version before (`diffWorkout` + `describeChange`) and the snapshot's own slots._
 
-Colours and density (2026-10-08, third pass):
+New shared code, each with tests: `placeSlot`, `moveSlot`, `duplicateSlot` and `stepRange` in
+`@lift/domain/workouts`; `@lift/domain/recentSearches`; `@lift/domain/bodyMap`; `musclesInRegion`
+in `@lift/domain/muscles`; and the colour tokens below. The web now uses the shared recent-search
+rules, region filter, body geometry and colour ramps, with no change in behaviour.
 
-- Colours are tokens in `@lift/ui-tokens` (`colors.ts`): Mantine's gray, dark and status ramps,
-  and `schemeColors()`, which resolves body, surface, border, dimmed and the rest the way
-  Mantine resolves its CSS variables. The web theme registers the same ramps, and the phone's
-  palette is `schemeColors()`. The muscle-map stops live there too. The web CSS can't import
-  TypeScript, so `heatColors.test.ts` checks the CSS still matches.
-- The phone was on Mantine 6's neutrals (`#1a1b1e`); the web is on Mantine 9's (`#242424`).
-- The phone now defaults to dark, the web's default, instead of following the system.
-  `app.json`'s `userInterfaceStyle` changes with the next native build. Phase 5's Settings
-  gets the web's System, Light and Dark choice, and the accent presets.
-- The editor uses the web's density: 48 px rows with 14/12 px text, faint ＋ and ⏱ insert
-  buttons, 1 px circuit cards with an uppercase label, and the 8 px radius.
+**Colours** are tokens in `@lift/ui-tokens` (`colors.ts`). It holds Mantine's gray, dark and
+status ramps, plus `schemeColors()`, which resolves body, surface, border, dimmed and the rest the
+way Mantine resolves its CSS variables.
 
-Left for Phase 5, as planned: the Share panel on the editor.
+- The web theme registers the same ramps, and the phone's palette is `schemeColors()`.
+- The muscle-map stops are tokens too. The web's CSS cannot import TypeScript, so
+  `heatColors.test.ts` checks it still matches.
+- The phone defaults to dark, the web's default, instead of following the system.
+- The editor uses the web's density: 48 px rows with 14/12 px text, faint insert buttons, 1 px
+  circuit cards, and the 8 px radius.
 
-To check on the next dev build:
+Found on the way:
 
-- Hold a row: it lifts with a buzz and the list stops scrolling under the finger. Move it: the gap
-  it would land in lights up, with a tick per gap. Near the bottom edge the list scrolls.
-- Hold the lifted row over the middle of another: "Hold to make a circuit", then "Release to make
-  a circuit". Drop: the two become a card.
-- Drag a card member above or below its card: "Release to leave the circuit". Drop: it is out, and
-  a circuit left with one member dissolves.
-- A quick sideways swipe opens the actions and does not lift the row. No action colour shows at
-  the row edges at rest. A tap opens the sheet; releasing a drag does not.
-- The card's rounds and rest steppers change every member. The muscle map shades as exercises are
-  added.
-- Add an exercise offline, then make a custom one from the picker. Publish. Back online, the web
-  shows the new version with the same change summary.
+- **The first pass used `react-native-sortables`.** It lays its items out itself as one flat
+  list, so it could not draw circuit cards or insert rows, and it has no hover target to group
+  on. The phone fell back to swipe actions and A1/A2 labels, which did not match the web. It was
+  removed for `drag.tsx`.
+- **New native modules need a new dev build, every time.** The new JS on the old build failed
+  with "AsyncStorage is null" and "RNSVGPath not in the view manager registry". AsyncStorage is
+  now imported lazily, so a missing module costs only the recent searches, not the editor
+  route.
+- **gesture-handler 3 prints Reanimated warnings.** "Dependencies should only be used on the
+  web" and the `DrawerLayoutAndroid` deprecation both come from library code, and are harmless.
+  Most of the first went away with sortables.
+- **The phone's neutrals were Mantine 6's** (`#1a1b1e`), and the web is on Mantine 9's
+  (`#242424`). That was most of the "colours don't match".
+- **What publish means.** Every edit saves to the working copy at once, on every device.
+  Publishing snapshots it as the next version, which history and share links use; starting a
+  workout publishes first. The editor's "Unpublished changes" card now says so.
 
-**Exit:** create and edit a workout on the phone; web sees the new version.
+Carried to Phase 5:
+
+- The Share panel on the editor.
+- Settings: System, Light and Dark, and the accent presets, per device as on the web.
+  `app.json`'s `userInterfaceStyle: "dark"` applies from the next native build.
+- Duplicate exists on the phone only. Add it to the web's `SwipeRow`, or accept the difference.
+- The session screen and the rest of the app still use the older, larger spacing. Bring them to
+  the editor's density as each screen is ported.
+
+**Exit (met 2026-10-08, Android):** create and edit a workout on the phone; web sees the new
+version.
 
 ### Phase 5: Parity
 
-- [ ] History timeline, session detail, trend line, calendar.
-- [ ] Sharing: universal links / app links so share URLs open the app; import and merge through the
-      shared importer.
-- [ ] Schedule, library browse, friends and QR, settings (including the colour scheme and accent
+_Screens written 2026-10-08, not yet run on a phone. Typecheck, lint and 915/915 unit tests pass;
+Android bundles; web budgets met. **Needs a new dev build**: it adds `expo-crypto`,
+`expo-file-system` and `expo-sharing`, and `app.json` gains intent filters and
+`userInterfaceStyle: "automatic"`. A second pass the same day closed every gap a screen-by-screen
+audit against the web found (below), and wrote the Maestro flows; none has run yet._
+
+- [x] Share panel on the workout editor. _A Share fold under Version history
+      (`components/sharing/SharePanel.tsx`). A new link goes straight to the OS share sheet, which
+      has Copy on it; an addressed link goes to the friend's Workouts screen as on the web.
+      `ShareInventory` lists every open link, in the panel at the cap and in Settings._
+- [x] History timeline, session detail, trend line, calendar. _The History tab has Sessions,
+      Calendar and Records, as the web's three tabs. The timeline pages in as the end comes near
+      (`Screen`'s `onNearEnd`). Session detail is `history/session/[sessionId]`, with the
+      delete cluster; exercise history is `history/exercise/[exerciseId]`, with the workout
+      filter as chips. `TrendLine` and `ActivityCalendar` draw from the same domain geometry
+      with react-native-svg and plain views. Tooltips became tap-to-explain lines._
+- [x] Sharing: universal links / app links so share URLs open the app; import and merge through the
+      shared importer. _`app/share/[shareId].tsx` sits outside the signed-in group, as the web's
+      public route. Signed out, "Sign in to import" passes `from`, and sign-in returns there
+      (`returnPath` only honours `/share/…` and `/friend/…`). The signed-in gate passes the path
+      too, so a friend link survives a sign-in. `ImportPanel` runs `planImport`, `previewMerge`
+      and `applyMerge`, as the web does. Links point at the web origin (`extra.webOrigin` in
+      `app.json`, read by `src/links.ts`)._
+  - _App side: `android.intentFilters` (autoVerify, `/share/` and `/friend/`) and
+    `ios.associatedDomains`. Hosting side: `apps/web/public/.well-known/assetlinks.json` and
+    `apple-app-site-association`. **Both hold placeholders**: the Play App Signing and EAS key
+    SHA-256 fingerprints, and the Apple team id. Until they are filled in, verification fails and
+    links open in the browser, as they do today. `firebase.json` no longer ignores dotfiles (it
+    would have dropped `.well-known/`), and serves the AASA as JSON._
+- [x] Schedule, library browse, friends and QR, settings (including the colour scheme and accent
       preset, per device as on the web), export.
-- [x] Muscle map: port `bodyPolygons` to `react-native-svg`. _Done in Phase 4, on the editor. History still needs it._
+  - _Schedule (`schedule.tsx`) with the "only what is scheduled" switch, which Today now honours
+    with the web's "Show the other N" fold. The Workouts tab gained Sent to you and the
+    Library / Plan card._
+  - _Library (`library.tsx`): search, level and tag filters, then a sheet with the muscle map,
+    the preview and the importer. Exercises (`exercises.tsx`): the picker's search, now shared
+    as `components/exercises/ExerciseSearch.tsx`, plus edit and delete for custom exercises
+    (`CustomExerciseForm` takes `editing`)._
+  - _Friends (`friends.tsx`, `friend/[code].tsx`): the web's card, and the QR from the same
+    encoder (`qrcode-generator`, now in the catalog), drawn whole-point per module so the
+    antialiasing leaves no seams. It encodes the web URL, so any camera opens it: in the app
+    once app links verify, on the web until then. No in-app scanner, as on the web._
+  - _Settings: every web card except the walkthrough (the phone has no tour yet). Appearance is a
+    `ThemeProvider` (`src/theme.tsx`): System, Light or Dark and the accent preset, stored with
+    the web's `localStorage` keys in AsyncStorage (`src/storage.ts`). Export writes the web's
+    CSV or JSON to the cache and opens the share sheet. Linking Google, and deleting a
+    Google-only account, say to use the web until native Google sign-in exists._
+  - _Colours for the calendar stops, the trend line and record markers joined `schemeColors()`
+    in `@lift/ui-tokens`._
+- [x] Muscle map: port `bodyPolygons` to `react-native-svg`. _Done in Phase 4, on the editor
+      (`components/MuscleMap.tsx`), ready for History to reuse._
+- [x] Tab icons: the web's `BottomNav` glyphs (`components/TabIcon.tsx`). react-native-svg came
+      with Phase 4's build.
+
+Fixed in shared code on the way:
+
+- **Share ids on a phone.** `newShareId` takes its uuid from `sdk/random`, whose `.native.ts`
+  sibling uses `expo-crypto` (the OS's secure random source). `expo-crypto` is in the catalog and
+  held on 58.0.4: 58.0.5 is an Expo Modules API 2.0 release (`v2 true` in its `build.gradle`),
+  the same break as `expo-application`. `expo-file-system` 58.0.5 and `expo-sharing` 58.0.13 are
+  1.0 releases.
+- **`deleteSession` on a phone.** It refused whenever `navigator.onLine` was falsy, and React
+  Native has no `onLine`. It now refuses only when the browser reports offline. On a phone, the
+  screen greys the button out using Firestore's own offline signal, and a failed server read
+  explains itself.
+
+To check on the next dev build:
+
+- A share link and a friend QR open the app (after the fingerprints are filled in and the web is
+  deployed); signed out, both come back after sign-in.
+- Light, Dark and System, and an accent change, apply everywhere at once and survive a restart.
+- Export opens the share sheet with a file, and the file opens in a spreadsheet.
+- The calendar's month and year grids, at the phone's width.
+
+Parity pass (2026-10-08). Every web screen was compared with its phone counterpart; these were
+the gaps, all closed:
+
+- [x] **Active session.**
+  - Ad-hoc sessions can add exercises (`addAdHocEntry`, the picker with an "Add to session"
+    label).
+  - How to opens the instructions over the session, with the countdown in the sheet's title bar
+    (`RestPill`).
+  - − / + on weight (by `stepFor(unit)`) and reps.
+  - Handedness mirrors the card's controls, as on the web.
+  - A resumed session scrolls to the next unfinished exercise (the web's `useResumeScroll` rule).
+  - The header has ad-hoc / version and status badges; a finished session offers "Back to
+    history".
+  - The comparison chip explains itself on tap; warmups say they are left out of history and PRs.
+  - "Performed on" is a day stepper that cannot pass today (no date-picker module); the fields
+    follow changes made on another device.
+  - Denser, as the editor: 8 px radius, 15/12 px type, 44 px targets.
+- [x] **Today.** Each unfinished session has Resume and a two-tap Discard, a clock, and a warning
+      when it started on another day. There is a "Something else" ad-hoc start and an empty state
+      with a button.
+- [x] **Start.** The `on` param backdates a session, as the web's `?on=`. Starting with
+      unpublished edits says it published them, as a notice on the session screen.
+- [x] **Workouts list.** Exercises, sets, time and version badges, the line of exercise names,
+      Archive on each row (which also unschedules it), and Restore on archived rows.
+- [x] **Auth.** The live password checklist (`components/PasswordRequirements.tsx`) on register,
+      add a password and change password; Create is disabled until the password passes. Reset is
+      its own mode with the web's wording. Verify email polls every 4 s and again when the app
+      comes back to the front, and shows the web's sent / still-not-confirmed / failed-send /
+      wrong-address messages.
+- [x] **Errors.** `app/+not-found.tsx`, and a `RouteError` exported as `ErrorBoundary` from both
+      layouts.
+- [x] **Exercises.** Thumbnails in the result list (`ExerciseThumb`), with a glyph when an image
+      is missing.
+- [x] **Editor.** An exact rest in seconds, beside the steps and presets.
+- [x] **Walkthrough.** `components/Tour.tsx`, from steps moved to `@lift/domain/tour` so both
+      apps teach the same thing. Shown once per account on Today, and from Settings.
+- [x] **Duplicate on the web.** Swiping a row outside a circuit right duplicates it (inside one,
+      it still leaves the circuit), and the slot editor has a Duplicate button. Unit test and e2e
+      updated.
+- [x] A `SwitchRow` toggles from its whole row, not just the switch.
+
+Left different on purpose: the PR summary is an alert, not a toast; tooltips are tap-to-explain;
+export goes through the share sheet; there is no in-app QR scanner (the camera opens the link).
 
 **Exit:** every scenario in `e2e/*.spec.ts` has a mobile equivalent (Maestro or Detox).
+_Flows written, not yet run_ (`apps/mobile/.maestro`, `pnpm --filter @lift/mobile run e2e`):
+one file per web spec, with subflows for sign-up (through the emulator's real verification
+link, as `signUp.ts` does), sign-in, sign-out and building a workout. The README there has the
+setup: emulators under the app's project id, and a build with
+`EXPO_PUBLIC_USE_FIREBASE_EMULATORS=true`. Not covered: hold-then-drag grouping (Maestro cannot
+drag; the swipe actions are covered instead) and the web-only service-worker checks. Expect
+selector fixes on the first run. The exit is met once they pass.
+
+### Between phases: features on both apps (2026-10-08)
+
+Added to web and phone together, shared code first. Not yet run on a device.
+
+- [x] **Time and distance sets.** A slot is counted in reps, time or distance ("Counted in" in
+      both editors; distance in m, km, yd or mi). Sets store `seconds` and `distance` in their own
+      fields, so estimated 1RM, records and the swapped-numbers check, which all read `reps`,
+      leave them alone. Timed and distance sets still get last time's numbers and a comparison
+      chip (longer or further is better; the load breaks a tie), and are judged against their
+      target. Ad-hoc rows pick their measure before anything is logged. Time is typed in
+      seconds and shown as `1:30`. `@lift/domain/measure`; CSV gains `seconds`, `distance`,
+      `distance_unit`.
+- [x] **Assisted loads.** A load can be negative (−20 = 20 of assistance). A load at or below
+      zero is scored against an 80 kg reference bodyweight (`BODYWEIGHT_REFERENCE_KG`), so less
+      assistance, more reps, and finally no assistance all score as progress. Positive loads keep
+      plain Epley, so no barbell record moves; the cost is that a lightly weighted set of a
+      bodyweight lift scores below an unweighted one. Assisted sets add no tonnage. A first
+      record can now be below zero (`isFirst` on a PR and a milestone). Pull-ups at bodyweight
+      (load 0) now score by reps, so they can set records too. The − step on the load goes below
+      zero; on iPhone the load box gets a keyboard with a minus key.
+- [x] **First and last name.** Required at sign-up, editable in Settings (both refuse a blank).
+      An account with none (older, or made with Google) is asked once, prefilled from its
+      Google name. "Delete all data" clears them, and the app asks again.
+- [x] **Profile icon.** A circle in the accent colour with the initials (JS), or the photo of a
+      linked Google account. On Today (opens Settings) and in Settings, on both apps.
+- [x] **App banner (web).** Off until a store id is set (`VITE_IOS_APP_STORE_ID`,
+      `VITE_ANDROID_PACKAGE`). Set, the build adds Safari's Smart App Banner and the manifest's
+      `related_applications` + `prefer_related_applications`, and Android visitors get a "Get the
+      app" link to Play. Until then iPhone visitors in Safari get "Add to Home Screen" for the
+      PWA, which iOS never offers by itself; Chrome's own PWA install offer is unchanged.
+      Both the banner and the name prompt load lazily, keeping the web's first paint at
+      154.1 of 155 kB.
+- [x] **Jerrod's assisted dips and pull-ups.** Applied 2026-10-09 with `pnpm run negate-assisted`:
+      20 sets in 5 sessions (Dips - Chest Version, Pullups) flipped to negative, records and
+      overlays rebuilt. A re-run finds nothing left to change.
+- [x] **Names for the existing accounts.** Set 2026-10-09 with `pnpm run set-name` (dry run unless
+      `--apply`) for all five accounts, so none of them is asked.
+- [x] **Google sign-ups** take their name from Google when it has a first and a last part, with no
+      question; it stays editable in Settings. Only a one-word or missing Google name is asked.
+
+### Loading speed and editor parity (2026-10-16)
+
+- [x] **Shared listeners.** Each data hook (profile, workouts, schedule, custom exercises, a
+      session, the active sessions) now shares one Firestore listener per query and keeps its
+      last value (`@lift/data/hooks/useShared`). A screen opened later shows the data on its
+      first render, with no spinner. A listener stays open 30 s after its last reader. The
+      exercise library builds its resolver and search index once for the whole app, not once
+      per screen.
+- [x] **Workout editor matches the web.** The phone keeps its own gestures: hold to drag,
+      haptics, swipe actions and steppers in the sheet. Everything else now matches the web. - Rows have the ⠿ handle, ↑ ↓ ✕, and a prescription line that wraps. - Rest rows take their length typed in place. - Circuit cards take typed rounds ("mixed" when they differ) and a "round rest" box (empty
+      means your default). - The header is ← plus the name, with badges under it. - The unpublished card has "Publish vN" and "Discard, back to vN". - The four folds below the list open one at a time (accordion). - Deleting a workout uses red buttons. - The slot sheet has Remove, Duplicate, Cancel and Save, and a note on circuit members. - The exercise picker has a body-part rail beside the results, an "Any equipment"
+      dropdown, thumbnails on the right with ›, and a clear ✕ in the search box. - Exercise details show badges, the body diagram (`MuscleFocus`) and an "Instructions"
+      heading. - The custom exercise form has an "Unspecified" equipment option and "Fix the highlighted
+      fields." when something is wrong. - New workout: Create is disabled while the name is blank, and Cancel keeps what was typed.
+      An empty list shows a "Create your first workout" card.
+- [x] **Web gaps.** Version history now shows rest rows correctly (before, they had no name)
+      and lists "Changes from vN", as the phone does.
+- [x] **Start this workout** stays in the phone editor. The web has none there; on a phone,
+      the editor is where you are standing when you decide to begin.
+
+### Device feedback fixes (2026-10-24)
+
+- [x] **Names are letters only.** Each name uses A–Z, in parts joined by a space or a hyphen.
+      Each part is capitalised when saved ("ebersole-sunderland" → "Ebersole-Sunderland").
+      Settings on the phone drops unsaved typing when you leave the tab, so a cleared name no
+      longer looks saved.
+- [x] **Finish checks the numbers.** A set that counts as done (ticked, or with reps typed in)
+      must hold every number its row asks for before the session can finish. The same rule ticks
+      a set by itself. "Show me" scrolls to the first set that is short.
+- [x] **Auto-tick on the phone.** Tapping an RIR chip or a ± button now closes the keyboard.
+      This saves the number being typed, so a full row ticks itself, as on the web.
+- [x] **Rest countdown.** A new rest no longer shows a stale first number (a 10 s rest showed
+      24 s). A rest also ends, or falls back to an earlier set, when the set that started it is
+      skipped. Before, it kept running.
+- [x] **One back control.** Every back on the phone is now a ← beside the title, as on the web.
+- [x] **No double screens.** Once a screen opens another, it opens nothing more until you come
+      back to it (`usePush` in `src/navigation.ts`; 5 s backstop). Taps queued during lag are
+      handed over late, after the new screen has landed, so a time window or "until the next
+      screen shows" let a second Resume through.
+- [x] **Avatar photo.** The avatar also uses a linked sign-in's photo, for an email account
+      that later linked Google. It still falls back to initials.
 
 ### Phase 6: Release
 
@@ -537,7 +750,30 @@ To check on the next dev build:
 - [ ] Store listing, privacy labels, account deletion flow (already exists in
       `mutations/account.ts`).
 - [ ] Point phone visitors at the store with the OS mechanisms (Smart App Banner,
-      `related_applications`, universal/app links). See §0.
+      `related_applications`, universal/app links). See §0. _Built (see above): set
+      `VITE_IOS_APP_STORE_ID` and `VITE_ANDROID_PACKAGE` for the production build once listed._
+
+Decisions and values Phase 5 left open, all needed before release:
+
+- [ ] **Web domain.** The app assumes `https://lift-tracker-e4a9c.web.app` (Firebase Hosting's
+      default). If the web moves to a custom domain, change `extra.webOrigin`,
+      `ios.associatedDomains` and the `android.intentFilters` hosts in `apps/mobile/app.json`,
+      and decide whether old `web.app` links keep working (list both hosts in the filters).
+- [ ] **Android app links.** Fill `apps/web/public/.well-known/assetlinks.json` with the SHA-256
+      fingerprints of the Play App Signing key (Play Console > App integrity) and of the EAS
+      upload or dev key (`eas credentials`). Deploy the web, then check with
+      `adb shell pm get-app-links com.sundy0828.lifttracker`.
+- [ ] **iOS universal links.** Replace `REPLACE_WITH_TEAM_ID` in
+      `apps/web/public/.well-known/apple-app-site-association` with the Apple team id, and let
+      EAS enable the Associated Domains capability on the App ID.
+- [ ] **Google sign-in on the phone** (carried from Phase 2). Until it exists, linking Google,
+      and deleting a Google-only account, point to the web. Decide: add native Google sign-in
+      (and then **Sign in with Apple**, which the App Store requires of any app that offers
+      Google), or ship email and password only on the phone.
+- [ ] **`USE_EXACT_ALARM` declaration** for Play (Phase 3): a rest timer is the core feature.
+- [ ] **Expo SDK patch bump.** Lift the Modules API 1.0 holds (`expo-application`,
+      `expo-haptics`, `expo-notifications`, `expo-crypto`) together with an `expo` patch
+      release, and confirm on a dev build.
 
 ---
 

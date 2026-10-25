@@ -38,6 +38,8 @@ async function registerRaw(page: Page, prefix: string): Promise<void> {
 
   await page.goto('/sign-in');
   await page.getByRole('button', { name: 'Need an account?' }).click();
+  await page.getByRole('textbox', { name: 'First name' }).fill('Test');
+  await page.getByRole('textbox', { name: 'Last name' }).fill('Lifter');
   await page.getByRole('textbox', { name: 'Email' }).fill(email);
   await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Create account' }).click();

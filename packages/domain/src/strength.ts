@@ -1,3 +1,5 @@
+import type { Distance } from './measure';
+import { formatDistance, formatSeconds, toMetres } from './measure';
 import type { LoggedSet } from './sessions';
 import { performedSets } from './sessions';
 import type { Unit, Weight } from './types';
@@ -32,11 +34,39 @@ export function epley(weightKg: number, reps: number): number {
   return weightKg * (1 + reps / EPLEY_DIVISOR);
 }
 
+/**
+ * The bodyweight a bodyweight or assisted set is scored against, in kg.
+ *
+ * Epley on the bar's load alone scores every pull-up at 0 kg as 0, however
+ * many reps, and scores assistance (a negative load) as *less* the more reps
+ * you do. Neither tracks progress. So a load of zero or below is scored as
+ * the whole body moving: `epley(REF + load) - REF`, the estimated single
+ * **added** to bodyweight. 10 reps unassisted scores about +27 kg; 10 reps
+ * with 20 kg of help scores 0; less help or more reps scores higher, which is
+ * what progress on an assisted machine looks like.
+ *
+ * A fixed reference rather than your logged bodyweight, so a lighter morning
+ * cannot move a record. Positive loads keep plain Epley, so no barbell record
+ * changes; the cost is that a lightly weighted set of a bodyweight lift
+ * (+2.5 kg dips) scores below an unweighted one.
+ */
+export const BODYWEIGHT_REFERENCE_KG = 80;
+
+/** A set's score from its load and effective reps (reps plus any RIR). */
+function score(kilograms: number, effectiveReps: number): number {
+  if (kilograms > 0) return epley(kilograms, effectiveReps);
+  return epley(BODYWEIGHT_REFERENCE_KG + kilograms, effectiveReps) - BODYWEIGHT_REFERENCE_KG;
+}
+
 /** The part of a set the strength math needs. A `LoggedSet` satisfies it. */
 export type SetLoad = {
   weight: Weight | null;
   reps: number | null;
   rir: number | null;
+  /** A timed set's length. Absent and null both mean "not timed". */
+  seconds?: number | null;
+  /** A distance set's distance. */
+  distance?: Distance | null;
 };
 
 /** The load in kilograms, or null when nothing was entered. */
@@ -48,7 +78,7 @@ export function loadKg(set: SetLoad): number | null {
 export function e1rm(set: SetLoad): number | null {
   const kilograms = loadKg(set);
   if (kilograms === null || set.reps === null || set.reps <= 0) return null;
-  return epley(kilograms, set.reps);
+  return score(kilograms, set.reps);
 }
 
 /**
@@ -66,7 +96,7 @@ export function e1rm(set: SetLoad): number | null {
 export function adjustedE1rm(set: SetLoad): number | null {
   const kilograms = loadKg(set);
   if (kilograms === null || set.reps === null || set.reps <= 0) return null;
-  return epley(kilograms, set.reps + (set.rir ?? 0));
+  return score(kilograms, set.reps + (set.rir ?? 0));
 }
 
 export type Direction = 'up' | 'down' | 'same';
@@ -79,7 +109,69 @@ export type SetComparison = {
   weightDeltaKg: number | null;
   repsDelta: number | null;
   rirDelta: number | null;
+  /** Signed, for two timed sets. */
+  secondsDelta?: number;
+  /** Signed, in metres, for two distance sets. */
+  metresDelta?: number;
 };
+
+/**
+ * Two timed sets, or two distance sets: longer or further is better, and the
+ * load (a weighted plank, a loaded carry) decides a tie. Null when the two
+ * are not the same kind of set, or either is unfinished.
+ */
+function compareAmounts(current: SetLoad, previous: SetLoad): SetComparison | null {
+  const currentKg = loadKg(current);
+  const previousKg = loadKg(previous);
+  const weightDeltaKg = currentKg === null || previousKg === null ? null : currentKg - previousKg;
+  const rirDelta =
+    current.rir === null || previous.rir === null ? null : current.rir - previous.rir;
+
+  let amountDelta: number;
+  let extra: { secondsDelta: number } | { metresDelta: number };
+  if (typeof current.seconds === 'number' && typeof previous.seconds === 'number') {
+    amountDelta = current.seconds - previous.seconds;
+    extra = { secondsDelta: amountDelta };
+  } else if (
+    current.distance !== undefined &&
+    current.distance !== null &&
+    previous.distance !== undefined &&
+    previous.distance !== null
+  ) {
+    amountDelta = toMetres(current.distance) - toMetres(previous.distance);
+    extra = { metresDelta: amountDelta };
+  } else {
+    return null;
+  }
+
+  const tieBreak = weightDeltaKg ?? 0;
+  const direction: Direction =
+    amountDelta > EPSILON
+      ? 'up'
+      : amountDelta < -EPSILON
+        ? 'down'
+        : tieBreak > EPSILON
+          ? 'up'
+          : tieBreak < -EPSILON
+            ? 'down'
+            : 'same';
+
+  return {
+    direction,
+    e1rmDeltaKg: 0,
+    weightDeltaKg,
+    repsDelta: null,
+    rirDelta,
+    ...extra,
+  };
+}
+
+function isAmountSet(set: SetLoad): boolean {
+  return (
+    (set.seconds !== undefined && set.seconds !== null) ||
+    (set.distance !== undefined && set.distance !== null)
+  );
+}
 
 /**
  * Compares one set against the same set last time.
@@ -88,6 +180,7 @@ export type SetComparison = {
  * compare, and guessing at it would put a delta chip on an empty input.
  */
 export function compareSets(current: SetLoad, previous: SetLoad): SetComparison | null {
+  if (isAmountSet(current) || isAmountSet(previous)) return compareAmounts(current, previous);
   const now = adjustedE1rm(current);
   const before = adjustedE1rm(previous);
   if (now === null || before === null) return null;
@@ -143,8 +236,16 @@ export function describeComparison(
   if (comparison === null) return null;
 
   const { direction, e1rmDeltaKg, weightDeltaKg, repsDelta, rirDelta } = comparison;
+  const { secondsDelta, metresDelta } = comparison;
 
   const parts: string[] = [];
+  // The time or distance first: for those sets it is the number that moved.
+  if (secondsDelta !== undefined && secondsDelta !== 0) {
+    parts.push(`${secondsDelta > 0 ? '+' : '−'}${formatSeconds(Math.abs(secondsDelta))}`);
+  }
+  if (metresDelta !== undefined && Math.abs(metresDelta) > EPSILON) {
+    parts.push(signed(metresDelta, 'm'));
+  }
   if (weightDeltaKg !== null && Math.abs(weightDeltaKg) > EPSILON) {
     parts.push(signed(fromKg(weightDeltaKg, displayUnit), displayUnit));
   }
@@ -156,8 +257,18 @@ export function describeComparison(
   // same result, so RIR falling and capacity falling share a sign.
   if (rirDelta !== null && rirDelta !== 0) parts.push(signed(rirDelta, 'RIR'));
 
-  const verdict =
-    direction === 'same'
+  const amountSet = secondsDelta !== undefined || metresDelta !== undefined;
+  const verdict = amountSet
+    ? direction === 'same'
+      ? 'no change'
+      : direction === 'up'
+        ? secondsDelta !== undefined
+          ? 'longer'
+          : 'further'
+        : secondsDelta !== undefined
+          ? 'shorter'
+          : 'less far'
+    : direction === 'same'
       ? 'estimated 1RM unchanged'
       : `estimated 1RM ${direction === 'up' ? 'up' : 'down'} ${formatNumber(
           Math.abs(fromKg(e1rmDeltaKg, displayUnit)),
@@ -230,6 +341,21 @@ export function describeE1rm(set: SetLoad, displayUnit: Unit): string | null {
   if (score === null || set.reps === null) return null;
 
   const effective = set.reps + (set.rir ?? 0);
+  const kilograms = loadKg(set) ?? 0;
+  if (kilograms <= 0) {
+    const reserve =
+      set.rir === null || set.rir === 0 ? '' : ` Reps in reserve count as reps you had left.`;
+    const single =
+      score > 0
+        ? `a single with ${formatE1rm(score, displayUnit)} added`
+        : score < 0
+          ? `a single with ${formatE1rm(-score, displayUnit)} of assistance`
+          : 'a single at bodyweight';
+    return `${formatSet(set, displayUnit)} estimates ${single}, scored as if you weigh ${formatE1rm(
+      BODYWEIGHT_REFERENCE_KG,
+      displayUnit,
+    )}, so less assistance and more reps both count as progress.${reserve}`;
+  }
   const reserve =
     set.rir === null || set.rir === 0
       ? ''
@@ -245,7 +371,11 @@ export function describeE1rm(set: SetLoad, displayUnit: Unit): string | null {
 /** Past this many effective reps, Epley drifts high enough to be worth saying. */
 const LONG_SET_REPS = 12;
 
-/** Renders `185 × 9 @ 2 RIR`, omitting the parts that were not recorded. */
+/**
+ * Renders `185 × 9 @ 2 RIR`, `-20 lb × 8` (assisted), `45s`, `50 lb × 40 m`,
+ * omitting the parts that were not recorded. A time or distance with no load
+ * stands alone, since the load is optional there.
+ */
 export function formatSet(
   set: SetLoad,
   displayUnit: Unit,
@@ -257,7 +387,18 @@ export function formatSet(
     kilograms === null
       ? '—'
       : `${formatNumber(fromKg(kilograms, displayUnit))}${withUnit ? ` ${displayUnit}` : ''}`;
-  const reps = set.reps === null ? '' : ` × ${formatNumber(set.reps, 0)}`;
   const rir = set.rir === null ? '' : ` @ ${formatNumber(set.rir, 0)} RIR`;
+
+  const amount =
+    set.seconds !== undefined && set.seconds !== null
+      ? formatSeconds(set.seconds)
+      : set.distance !== undefined && set.distance !== null
+        ? formatDistance(set.distance)
+        : null;
+  if (amount !== null) {
+    return `${kilograms === null ? '' : `${load} × `}${amount}${rir}`;
+  }
+
+  const reps = set.reps === null ? '' : ` × ${formatNumber(set.reps, 0)}`;
   return `${load}${reps}${rir}`;
 }

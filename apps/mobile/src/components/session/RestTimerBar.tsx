@@ -116,7 +116,12 @@ export function RestTimerBar({ rest, withChime, onAdjust, onStop, onStart }: Pro
             onAdjust(15);
           }}
         />
-        <BarButton label={isOver ? 'Done' : 'Skip'} onPress={onStop} primary />
+        <BarButton
+          label={isOver ? 'Done' : 'Skip'}
+          accessibilityLabel={isOver ? 'Done resting' : 'Skip the rest'}
+          onPress={onStop}
+          primary
+        />
       </View>
     </View>
   );
@@ -154,7 +159,30 @@ function BarButton({
   );
 }
 
+/**
+ * The same countdown, small enough for a sheet's title bar.
+ *
+ * The instructions sheet covers the pinned bar, and a rest you cannot see is
+ * a rest you stop trusting, so the clock follows into the sheet. The bar
+ * stays mounted underneath it, so the end-of-rest alert still fires.
+ */
+export function RestPill({ rest }: { rest: Rest | null }) {
+  const palette = usePalette();
+  const { left, isOver } = useRestCountdown(rest);
+  if (rest === null) return null;
+  return (
+    <Text
+      testID="rest-pill"
+      accessibilityLabel="Rest remaining"
+      style={[styles.pill, { color: isOver ? palette.warn : palette.accent }]}
+    >
+      {isOver ? `+${formatDuration(-left)}` : formatDuration(left)}
+    </Text>
+  );
+}
+
 const styles = StyleSheet.create({
+  pill: { fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
   bar: { borderTopWidth: 1 },
   track: { height: 4 },
   fill: { height: 4 },
@@ -163,20 +191,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     justifyContent: 'space-between',
   },
   readout: { flex: 1, minWidth: 0 },
-  clock: { fontSize: 28, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  label: { fontSize: 13 },
+  clock: { fontSize: 24, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  label: { fontSize: 12 },
   button: {
     minHeight: 44,
-    minWidth: 52,
-    borderRadius: 10,
+    minWidth: 48,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 10,
   },
-  buttonLabel: { fontSize: 15, fontWeight: '600' },
+  buttonLabel: { fontSize: 14, fontWeight: '600' },
   pressed: { opacity: 0.7 },
 });

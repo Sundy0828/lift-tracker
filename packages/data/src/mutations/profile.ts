@@ -1,5 +1,6 @@
 import { serverTimestamp, setDoc } from '../sdk/firestore';
 import type { Handedness, Unit } from '@lift/domain/types';
+import { cleanName, nameProblem } from '@lift/domain/person';
 import { DEFAULT_PROFILE } from '@lift/domain/types';
 import { isAccountDeleted } from '../deletedAccounts';
 import { paths } from '../paths';
@@ -54,6 +55,22 @@ export function resetProfile(uid: string): Promise<void> {
     tourVersion: DEFAULT_PROFILE.tourVersion,
     createdAt: serverTimestamp(),
   });
+}
+
+/**
+ * The account's first and last name. Refuses a blank one: both are required.
+ *
+ * Deleting all data clears them with the rest of the profile (`resetProfile`
+ * replaces the document), and the app asks for them again.
+ */
+export function setName(uid: string, firstName: string, lastName: string): Promise<void> {
+  const problem = nameProblem(firstName, lastName);
+  if (problem !== null) return Promise.reject(new Error(problem));
+  return setDoc(
+    paths.user(uid),
+    { firstName: cleanName(firstName), lastName: cleanName(lastName) },
+    { merge: true },
+  );
 }
 
 export function setDisplayUnit(uid: string, unit: Unit): Promise<void> {

@@ -1,0 +1,37 @@
+# workouts.spec.ts: build a workout, publish it, edit a prescription, and
+# archive and restore it from the list.
+appId: com.sundy0828.lifttracker
+---
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+- runFlow:
+    file: ../subflows/new-workout.yaml
+    env:
+      NAME: 'PUSH'
+      FIRST: 'Pushups'
+      SECOND: 'Crunches'
+- assertVisible: '2 exercises'
+- assertVisible: '6 sets'
+- assertVisible: 'unpublished'
+
+# A prescription edit, saved from the sheet.
+- tapOn: 'Edit Pushups'
+- tapOn: 'More sets'
+- tapOn: 'Save'
+- assertVisible: '2 exercises'
+- assertVisible: '7 sets'
+
+- tapOn: 'Publish v1'
+- assertVisible: 'Published v1.*'
+- assertNotVisible: 'Unpublished changes'
+
+# The list shows it, versioned, and archives it from the row.
+- tapOn: 'Workouts'
+- assertVisible: 'PUSH'
+- assertVisible: 'v1'
+- assertVisible: 'Pushups · Crunches'
+- tapOn: 'Archive'
+- assertVisible: 'Archived'
+- tapOn: 'Restore'
+- assertNotVisible: 'Archived'
+- assertVisible: 'v1'

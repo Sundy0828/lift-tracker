@@ -30,6 +30,8 @@ type Props = {
   step: number;
   min: number;
   max: number;
+  /** Where stepping from an empty box lands. The minimum unless said; 0 for a load that may go negative. */
+  start?: number;
   placeholder?: string;
   disabled?: boolean;
   /** Called on blur and on every stepper press, never per keystroke. */
@@ -60,6 +62,7 @@ export function NumberField({
   step,
   min,
   max,
+  start = min,
   placeholder,
   disabled = false,
   onCommit,
@@ -93,9 +96,9 @@ export function NumberField({
 
   const nudge = (direction: 1 | -1): void => {
     const current = parse(input.current?.value ?? '') ?? value;
-    // Stepping from empty starts at the minimum rather than at zero-plus-step,
-    // so the first tap on a fresh RIR field gives 0 and not 1.
-    const base = current ?? min - step * direction;
+    // Stepping from empty lands on `start` (the minimum, unless said) rather
+    // than one step past it, so the first tap on a fresh field gives 0, not 1.
+    const base = current ?? start - step * direction;
     commit(Math.round((base + step * direction) / step) * step);
   };
 

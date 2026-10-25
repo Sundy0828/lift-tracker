@@ -1,4 +1,6 @@
 import type { ManifestOptions } from 'vite-plugin-pwa';
+import type { AppStores } from './appStores';
+import { relatedApplications } from './appStores';
 
 /**
  * The web app manifest, and the reason it is a module rather than a literal in
@@ -8,7 +10,14 @@ import type { ManifestOptions } from 'vite-plugin-pwa';
  * Lighthouse used to do that. Version 12 removed the PWA category and every
  * installability audit with it, so the §3 "PWA >= 95" budget has nothing left
  * to score it. The test is what enforces it now.
+ *
+ * `buildManifest` adds the store app once one is listed (see ./appStores);
+ * `manifest` is the manifest with none, which is what the tests check.
  */
+export function buildManifest(stores: AppStores) {
+  return { ...manifest, ...relatedApplications(stores) } satisfies Partial<ManifestOptions>;
+}
+
 export const manifest = {
   id: '/',
   name: 'Lift Tracker',

@@ -1,0 +1,81 @@
+# exercises.spec.ts: the catalog loads and searches locally, the body-part
+# chips narrow it, and a custom exercise is created, found, refused when
+# blank or duplicated, edited and deleted.
+appId: com.sundy0828.lifttracker
+---
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+- tapOn: 'Settings'
+- scrollUntilVisible:
+    element: 'Exercise library'
+- tapOn: 'Exercise library'
+
+# 800+ exercises, bundled, before anything is typed.
+- assertVisible: '[89][0-9]{2} exercises'
+
+- tapOn: 'Search exercises'
+- inputText: 'barbell bench press'
+- assertVisible:
+    text: 'Barbell Bench Press - Medium Grip'
+    below:
+      id: 'result-count'
+- eraseText: 40
+- inputText: 'zzzz no such lift'
+- assertVisible: 'No exercises match\..*'
+- eraseText: 40
+- hideKeyboard
+
+# The body-part chips narrow the list.
+- tapOn: 'Arms'
+- assertVisible: '[0-9]+ exercises'
+- tapOn: 'All'
+
+# A custom exercise: a blank name is refused, then it is made.
+- tapOn: 'New'
+- tapOn: 'Add exercise'
+- assertVisible: 'Give it a name'
+- tapOn: 'Name'
+- inputText: 'Maestro Raise'
+- tapOn:
+    text: 'Biceps'
+    index: 0
+- hideKeyboard
+- tapOn: 'Add exercise'
+- assertVisible: 'Added Maestro Raise'
+
+# A duplicate name is refused.
+- tapOn: 'New'
+- tapOn: 'Name'
+- inputText: 'maestro raise'
+- tapOn:
+    text: 'Biceps'
+    index: 0
+- hideKeyboard
+- tapOn: 'Add exercise'
+- assertVisible: 'You already have one with this name'
+- tapOn: 'Cancel'
+
+# Found alongside the catalog, editable, and deletable.
+- tapOn: 'Search exercises'
+- inputText: 'maestro'
+- tapOn:
+    text: 'Maestro Raise'
+    below:
+      id: 'result-count'
+- tapOn: 'Edit'
+- tapOn: 'Name'
+- eraseText: 40
+- inputText: 'Maestro Curl'
+- hideKeyboard
+- tapOn: 'Save'
+- assertVisible: 'Saved Maestro Curl'
+- tapOn: 'Search exercises'
+- eraseText: 40
+- inputText: 'maestro'
+- tapOn:
+    text: 'Maestro Curl'
+    below:
+      id: 'result-count'
+- tapOn: 'Delete'
+- tapOn: 'Delete for good'
+- assertVisible: 'Deleted Maestro Curl'

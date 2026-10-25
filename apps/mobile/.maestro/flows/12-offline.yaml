@@ -1,0 +1,53 @@
+# offline.spec.ts: a whole session is logged offline, survives the app being
+# killed, and syncs on reconnect. Phase 0's "kill it mid-session" check.
+#
+# Airplane mode cuts the Firestore emulator too, which is the point. Run this
+# against a preview build: a dev build loads its JavaScript from Metro over the
+# network, and airplane mode would take that down with it.
+appId: com.sundy0828.lifttracker
+---
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+- runFlow:
+    file: ../subflows/new-workout.yaml
+    env:
+      NAME: 'OFFLINE'
+      FIRST: 'Pushups'
+- tapOn: 'Publish v1'
+
+- setAirplaneMode: enabled
+- tapOn: 'Start this workout'
+- extendedWaitUntil:
+    visible: 'Session details'
+    timeout: 15000
+- tapOn: 'Set 1 weight'
+- inputText: '135'
+- tapOn: 'Set 1 reps'
+- inputText: '10'
+- hideKeyboard
+- tapOn: 'Set 1: 1 rep left'
+- assertVisible: 'Offline.*'
+
+# Killed mid-session: the set is still there on the way back.
+- killApp
+- launchApp
+- extendedWaitUntil:
+    visible: 'Session in progress'
+    timeout: 20000
+- tapOn: 'Resume'
+- assertVisible: 'Set 1 done, undo'
+- tapOn: 'Skip the rest'
+- tapOn: 'Finish session \(2 sets left\)'
+- tapOn: 'Settle them and finish'
+- tapOn: 'OK'
+
+# Back online, it reaches the server.
+- setAirplaneMode: disabled
+- tapOn: 'Settings'
+- scrollUntilVisible:
+    element: 'Sync'
+- extendedWaitUntil:
+    visible: 'up to date'
+    timeout: 60000
+- tapOn: 'History'
+- assertVisible: 'OFFLINE'

@@ -5,6 +5,7 @@ import { diffWorkout } from '@lift/domain/workoutDiff';
 import type { Workout, WorkoutBody } from '@lift/domain/workouts';
 import { db } from '../firestore';
 import { paths } from '../paths';
+import { secureUuid } from '../sdk/random';
 
 /**
  * Publishing a share, and taking one in (§2.9).
@@ -30,13 +31,12 @@ import { paths } from '../paths';
  * public document, so it has to be unguessable. There is no listing of other
  * people's shares, so nothing else can enumerate them.
  *
- * Hence `crypto` and nothing weaker, unlike `newRecordId` (../ids). React
- * Native has no `crypto` global, so on a phone this throws rather than mint a
- * guessable link. Sharing on mobile (Phase 5) needs a secure source such as
- * expo-crypto.
+ * Hence a secure random source and nothing weaker, unlike `newRecordId`
+ * (../ids): the browser's `crypto` on the web, expo-crypto on a phone (see
+ * `../sdk/random`).
  */
-export function newShareId(): string {
-  return crypto.randomUUID();
+export function newShareId(): Promise<string> {
+  return secureUuid();
 }
 
 export function publishShare(shareId: string, payload: SharePayload): Promise<void> {

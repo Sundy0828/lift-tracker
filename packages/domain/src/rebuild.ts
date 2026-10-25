@@ -68,8 +68,10 @@ export function rebuildExerciseStats(
     sessionIds.add(session.id);
 
     const candidate = bestSet(entry.sets);
-    const score = candidate === null ? 0 : (adjustedE1rm(candidate) ?? 0);
-    if (!beatsRecord(score, bestE1rm)) continue;
+    const score = candidate === null ? null : adjustedE1rm(candidate);
+    // The first scored set is the record whatever it scores: an assisted lift
+    // starts below zero (see buildStatsUpdate).
+    if (score === null || (best !== null && !beatsRecord(score, bestE1rm))) continue;
 
     bestE1rm = score;
     best = candidate;

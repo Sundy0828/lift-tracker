@@ -407,6 +407,8 @@ function setsFor(plan: ExercisePlan, week: number, startedAt: Date): LoggedSet[]
       setIndex: index,
       weight: load === null ? null : { value: load, unit: 'lb' as const },
       reps,
+      seconds: null,
+      distance: null,
       rir: pick(plan.rir),
       isWarmup: false,
       skipped: false,

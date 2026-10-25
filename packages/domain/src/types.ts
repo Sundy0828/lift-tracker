@@ -33,6 +33,9 @@ export type UserProfile = {
   friendCode: string | null;
   /** The name a friend code shows the person who holds it. Never the email. */
   displayName: string;
+  /** Required since sign-up asks for them; empty only on an older account. */
+  firstName: string;
+  lastName: string;
   /** Which build of the day index this account holds. 0 means none yet. */
   dayIndexVersion: number;
   /** The newest walkthrough this account has been shown. 0 means none. */
@@ -50,6 +53,8 @@ export const DEFAULT_PROFILE: UserProfile = {
   handedness: 'right',
   friendCode: null,
   displayName: '',
+  firstName: '',
+  lastName: '',
   dayIndexVersion: 0,
   tourVersion: 0,
   createdAt: null,

@@ -1,11 +1,11 @@
-import type { Equipment } from '@lift/domain/exercises';
+import type { CustomExercise, Equipment } from '@lift/domain/exercises';
 import { EQUIPMENT, normalizeExerciseName } from '@lift/domain/exercises';
 import type { MuscleGroup } from '@lift/domain/muscles';
 import { MUSCLE_GROUPS_BY_REGION, muscleLabel } from '@lift/domain/muscles';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { usePalette } from '../../theme';
-import { Button, Field } from '../ui';
+import { Button, Field, Notice } from '../ui';
 import { Chip } from './controls';
 
 export type CustomExerciseDraft = {
@@ -19,6 +19,8 @@ type Props = {
   /** What was typed in the search box: usually the name being looked for. */
   initialName: string;
   existingNames: readonly string[];
+  /** The custom exercise being changed, from the Exercises screen. Absent for a new one. */
+  editing?: CustomExercise;
   onCancel: () => void;
   onSave: (draft: CustomExerciseDraft) => void;
 };
@@ -60,23 +62,36 @@ function toggle<T>(list: readonly T[], item: T): T[] {
 }
 
 /**
- * A new custom exercise: the web's `CustomExerciseForm`, with chips in place
- * of drop-downs. Same rules: a name not already used, at least one primary
- * muscle, and a secondary muscle that is also primary counts once, as primary.
+ * A custom exercise, new or edited: the web's `CustomExerciseForm`, with chips
+ * in place of drop-downs. Same rules: a name not already used, at least one
+ * primary muscle, and a secondary muscle that is also primary counts once, as
+ * primary.
  */
-export function CustomExerciseForm({ initialName, existingNames, onCancel, onSave }: Props) {
+export function CustomExerciseForm({
+  initialName,
+  existingNames,
+  editing,
+  onCancel,
+  onSave,
+}: Props) {
   const palette = usePalette();
-  const [name, setName] = useState(initialName);
-  const [primary, setPrimary] = useState<MuscleGroup[]>([]);
-  const [secondary, setSecondary] = useState<MuscleGroup[]>([]);
-  const [equipment, setEquipment] = useState<Equipment | null>(null);
+  const [name, setName] = useState(editing?.name ?? initialName);
+  const [primary, setPrimary] = useState<MuscleGroup[]>(() => [...(editing?.primaryMuscles ?? [])]);
+  const [secondary, setSecondary] = useState<MuscleGroup[]>(() => [
+    ...(editing?.secondaryMuscles ?? []),
+  ]);
+  const [equipment, setEquipment] = useState<Equipment | null>(editing?.equipment ?? null);
   const [submitted, setSubmitted] = useState(false);
 
   const trimmed = name.trim();
+  // Its own name is not a clash when editing.
   const duplicate =
     trimmed !== '' &&
     existingNames.some(
-      (existing) => normalizeExerciseName(existing) === normalizeExerciseName(trimmed),
+      (existing) =>
+        normalizeExerciseName(existing) === normalizeExerciseName(trimmed) &&
+        (editing === undefined ||
+          normalizeExerciseName(existing) !== normalizeExerciseName(editing.name)),
     );
   const nameError =
     trimmed === '' ? 'Give it a name' : duplicate ? 'You already have one with this name' : null;
@@ -109,7 +124,7 @@ export function CustomExerciseForm({ initialName, existingNames, onCancel, onSav
       <View style={styles.group}>
         <Text style={[styles.label, { color: palette.text }]}>Primary muscles</Text>
         <Text style={[styles.small, { color: palette.dimmed }]}>
-          Counted as a full set each in volume
+          Counted as a full set each in volume math
         </Text>
         {submitted && primaryError !== null ? (
           <Text style={[styles.small, { color: palette.danger }]}>{primaryError}</Text>
@@ -136,6 +151,14 @@ export function CustomExerciseForm({ initialName, existingNames, onCancel, onSav
       <View style={styles.group}>
         <Text style={[styles.label, { color: palette.text }]}>Equipment</Text>
         <View style={styles.chips}>
+          {/* The web's empty Select: no equipment recorded. */}
+          <Chip
+            label="Unspecified"
+            selected={equipment === null}
+            onPress={() => {
+              setEquipment(null);
+            }}
+          />
           {EQUIPMENT.map((item) => (
             <Chip
               key={item}
@@ -149,12 +172,16 @@ export function CustomExerciseForm({ initialName, existingNames, onCancel, onSav
         </View>
       </View>
 
+      {submitted && (nameError !== null || primaryError !== null) ? (
+        <Notice tone="danger">Fix the highlighted fields.</Notice>
+      ) : null}
+
       <View style={styles.actions}>
         <View style={styles.grow}>
           <Button variant="subtle" label="Cancel" onPress={onCancel} />
         </View>
         <View style={styles.grow}>
-          <Button label="Add exercise" onPress={submit} />
+          <Button label={editing === undefined ? 'Add exercise' : 'Save'} onPress={submit} />
         </View>
       </View>
     </View>

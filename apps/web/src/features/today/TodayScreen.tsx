@@ -15,6 +15,7 @@ import { notifications } from '@mantine/notifications';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Link } from 'react-router';
+import { UserAvatar } from '@/components/Avatar';
 import { useAuth } from '@lift/data/hooks/useAuth';
 import { useProfile } from '@lift/data/hooks/useProfile';
 import { useSchedule } from '@lift/data/hooks/useSchedule';
@@ -34,7 +35,7 @@ import {
 } from '@lift/domain/workouts';
 import { SessionClock } from '@/features/logging/SessionClock';
 import { Tour } from '@/features/onboarding/Tour';
-import { TOUR_VERSION } from '@/features/onboarding/tourSteps';
+import { TOUR_VERSION } from '@lift/domain/tour';
 
 type ResumeItemProps = {
   session: Session;
@@ -236,7 +237,13 @@ export default function TodayScreen() {
 
   return (
     <Stack>
-      <Title order={2}>Today</Title>
+      <Group justify="space-between" align="center" wrap="nowrap">
+        <Title order={2}>Today</Title>
+        {/* You, at a glance; opens Settings, where the name and photo come from. */}
+        <UnstyledButton component={Link} to="/settings" aria-label="Settings and profile">
+          <UserAvatar />
+        </UnstyledButton>
+      </Group>
 
       {activePending ? (
         <Skeleton height={92} radius="md" />

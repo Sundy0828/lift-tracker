@@ -1,11 +1,15 @@
 import { Tabs } from 'expo-router';
+import { TabIcon, type TabName } from '../../../components/TabIcon';
 import { usePalette } from '../../../theme';
 
-/**
- * The web app's bottom nav (`BottomNav.tsx`): Today, Workouts, History,
- * Settings. Labels only for now; icons come with the next native build,
- * since an icon set needs a native font or SVG module.
- */
+const TABS: readonly { name: string; title: string; icon: TabName }[] = [
+  { name: 'index', title: 'Today', icon: 'today' },
+  { name: 'workouts', title: 'Workouts', icon: 'workouts' },
+  { name: 'history', title: 'History', icon: 'history' },
+  { name: 'settings', title: 'Settings', icon: 'settings' },
+];
+
+/** The web app's bottom nav (`BottomNav.tsx`): Today, Workouts, History, Settings. */
 export default function TabsLayout() {
   const palette = usePalette();
   return (
@@ -15,14 +19,22 @@ export default function TabsLayout() {
         tabBarActiveTintColor: palette.accent,
         tabBarInactiveTintColor: palette.dimmed,
         tabBarStyle: { backgroundColor: palette.surface, borderTopColor: palette.border },
-        tabBarIcon: () => null,
-        tabBarLabelStyle: { fontSize: 14, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
+        sceneStyle: { backgroundColor: palette.background },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Today' }} />
-      <Tabs.Screen name="workouts" options={{ title: 'Workouts' }} />
-      <Tabs.Screen name="history" options={{ title: 'History' }} />
-      <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
+      {TABS.map((tab) => (
+        <Tabs.Screen
+          key={tab.name}
+          name={tab.name}
+          options={{
+            title: tab.title,
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name={tab.icon} color={focused ? palette.accent : palette.dimmed} />
+            ),
+          }}
+        />
+      ))}
     </Tabs>
   );
 }

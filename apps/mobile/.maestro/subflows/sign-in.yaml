@@ -1,0 +1,19 @@
+# Signs an existing account in. Needs EMAIL and PASSWORD.
+appId: com.sundy0828.lifttracker
+---
+- tapOn:
+    id: 'email'
+- inputText: ${EMAIL}
+- tapOn:
+    id: 'password'
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn:
+    text: 'Sign in'
+    index: 1
+# Gone from the form, wherever sign-in sends you: Today, or back to the
+# link that asked for it.
+- extendedWaitUntil:
+    notVisible: 'Forgot password'
+    timeout: 20000
+- runFlow: dismiss-tour.yaml

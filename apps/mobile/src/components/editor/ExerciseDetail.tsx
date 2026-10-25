@@ -1,15 +1,15 @@
 import { loadExerciseDetails } from '@lift/catalog';
 import type { Exercise, ExerciseDetails } from '@lift/domain/exercises';
 import { catalogImageUrls, equipmentLabel } from '@lift/domain/exercises';
-import { muscleLabel } from '@lift/domain/muscles';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 import { usePalette } from '../../theme';
+import { MuscleFocus } from '../MuscleMap';
+import { Badge, Row } from '../ui';
 
 /**
- * One exercise: both movement frames, the muscles it works and how to do it.
- * The web's `ExerciseDetail`, without the muscle diagram (Phase 5 ports the
- * body map).
+ * One exercise: both movement frames, its badges, the muscles it works on the
+ * body diagram, and how to do it. The web's `ExerciseDetail`.
  *
  * The two frames are the start and end of the lift, which is the fastest way
  * to tell ten near-identical lateral raises apart. They are remote images, so
@@ -26,7 +26,9 @@ function Frames({ exercise }: { exercise: Exercise }) {
 
   if (urls.every((_, position) => failed.has(position))) {
     return (
-      <Text style={[styles.small, { color: palette.dimmed }]}>Pictures need a connection.</Text>
+      <Text style={[styles.small, { color: palette.dimmed }]}>
+        Pictures need a connection — they are cached once you have seen them.
+      </Text>
     );
   }
 
@@ -83,39 +85,34 @@ export function ExerciseDetail({ exercise }: { exercise: Exercise }) {
   const details = loaded?.id === id ? loaded.details : null;
   const loading = !isCustom && loaded?.id !== id;
 
-  const facts = [
-    exercise.isCustom ? 'custom' : null,
-    exercise.mechanic,
-    exercise.level,
-    exercise.force,
-    equipmentLabel(exercise.equipment),
-  ].filter((fact): fact is string => fact !== null);
+  const facts = [exercise.mechanic, exercise.level, exercise.force].filter(
+    (fact): fact is NonNullable<typeof fact> => fact !== null,
+  );
 
   return (
     <View style={styles.root}>
       <Frames exercise={exercise} />
 
-      <Text style={[styles.small, { color: palette.dimmed }]}>{facts.join(' · ')}</Text>
+      <Row>
+        {exercise.isCustom ? <Badge tone="accent" label="Custom" /> : null}
+        {facts.map((fact) => (
+          <Badge key={fact} label={fact} />
+        ))}
+        <Badge label={equipmentLabel(exercise.equipment)} />
+      </Row>
 
-      <View style={styles.block}>
-        <Text style={[styles.label, { color: palette.text }]}>Works</Text>
-        <Text style={[styles.body, { color: palette.text }]}>
-          {exercise.primaryMuscles.map(muscleLabel).join(', ') || 'Not recorded'}
-        </Text>
-        {exercise.secondaryMuscles.length === 0 ? null : (
-          <Text style={[styles.small, { color: palette.dimmed }]}>
-            Also {exercise.secondaryMuscles.map(muscleLabel).join(', ')}
-          </Text>
-        )}
-      </View>
+      <MuscleFocus primary={exercise.primaryMuscles} secondary={exercise.secondaryMuscles} />
 
       {isCustom ? null : loading ? (
-        <ActivityIndicator color={palette.accent} />
+        <View style={styles.loading}>
+          <ActivityIndicator size="small" color={palette.accent} />
+          <Text style={[styles.small, { color: palette.dimmed }]}>Loading instructions…</Text>
+        </View>
       ) : details === null || details.instructions.length === 0 ? (
         <Text style={[styles.small, { color: palette.dimmed }]}>No instructions available.</Text>
       ) : (
         <View style={styles.block}>
-          <Text style={[styles.label, { color: palette.text }]}>How to do it</Text>
+          <Text style={[styles.label, { color: palette.text }]}>Instructions</Text>
           {details.instructions.map((step, position) => (
             <View key={`${id}-${String(position)}`} style={styles.step}>
               <Text style={[styles.body, styles.stepNumber, { color: palette.dimmed }]}>
@@ -136,6 +133,7 @@ const styles = StyleSheet.create({
   frame: { flex: 1, gap: 4, alignItems: 'center' },
   image: { width: '100%', aspectRatio: 1, borderRadius: 10 },
   block: { gap: 4 },
+  loading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   label: { fontSize: 15, fontWeight: '600' },
   body: { fontSize: 15, lineHeight: 21 },
   small: { fontSize: 13 },

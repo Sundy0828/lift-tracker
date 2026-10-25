@@ -1,10 +1,11 @@
 import { ActionIcon, Text, Tooltip } from '@mantine/core';
 import { memo, useCallback, useState } from 'react';
+import type { Measure } from '@lift/domain/measure';
+import { MAX_LOAD } from '@lift/domain/sessions';
 import type { SetAssessment } from '@lift/domain/sessions';
 import type { Direction } from '@lift/domain/strength';
 import type { Unit } from '@lift/domain/types';
 import { stepFor } from '@lift/domain/units';
-import { MAX_REPS } from '@lift/domain/workouts';
 import { EffortField } from './EffortField';
 import { NumberField } from './NumberField';
 import classes from './SetRow.module.css';
@@ -35,7 +36,13 @@ type Props = {
   weight: number | null;
   /** The unit this set was stored in, which may differ from the display one. */
   weightUnit: Unit;
-  reps: number | null;
+  /** What the second box holds: reps, seconds or a distance. */
+  measure: Measure;
+  /** The set's reps, seconds or distance (in the row's unit). */
+  amount: number | null;
+  amountPlaceholder: string;
+  amountStep: number;
+  amountMax: number;
   rir: number | null;
   /** The prescribed reps in reserve, so the target buttons can be marked. */
   rirTarget: { min: number; max: number } | null;
@@ -43,10 +50,10 @@ type Props = {
   skipped: boolean;
   isComplete: boolean;
   displayUnit: Unit;
-  /** How the reps landed against the prescribed range. */
+  /** How the set landed against the prescribed target. */
   assessment: SetAssessment;
-  /** The rep range, named in the off-target note so colour is never alone. */
-  repRangeLabel: string | null;
+  /** The target, named in the off-target note so colour is never alone. */
+  targetLabel: string | null;
   /** Last time's numbers for this set position, already formatted. */
   previousLabel: string | null;
   /** The delta chip, or null when there is nothing comparable to compare to. */
@@ -55,7 +62,7 @@ type Props = {
   deltaDetail: string | null;
   deltaDirection: Direction | null;
   onWeight: (entryKey: string, setIndex: number, value: number | null, unit: Unit) => void;
-  onReps: (entryKey: string, setIndex: number, value: number | null) => void;
+  onAmount: (entryKey: string, setIndex: number, value: number | null) => void;
   onRir: (entryKey: string, setIndex: number, value: number | null) => void;
   onToggleComplete: (entryKey: string, setIndex: number) => void;
   onToggleSkipped: (entryKey: string, setIndex: number) => void;
@@ -84,15 +91,18 @@ const DELTA_COLOR: Record<Direction, string> = {
  */
 function assessmentNote(
   assessment: SetAssessment,
-  repRangeLabel: string | null,
-  missing: 'weight' | 'reps' | null,
+  targetLabel: string | null,
+  missing: string | null,
 ): string | null {
   if (assessment === 'incomplete') return `no ${missing ?? 'entry'} — will not be saved`;
-  if (repRangeLabel === null) return null;
-  if (assessment === 'under') return `under ${repRangeLabel}`;
-  if (assessment === 'over') return `over ${repRangeLabel}`;
+  if (targetLabel === null) return null;
+  if (assessment === 'under') return `under ${targetLabel}`;
+  if (assessment === 'over') return `over ${targetLabel}`;
   return null;
 }
+
+/** What the second box is called, for its label and the missing-number note. */
+const AMOUNT_NAMES: Record<Measure, string> = { reps: 'reps', time: 'time', distance: 'distance' };
 
 /**
  * The assessment as the row currently stands, with the missing-number verdict
@@ -101,7 +111,7 @@ function assessmentNote(
  */
 function liveAssessment(
   assessment: SetAssessment,
-  missing: 'weight' | 'reps' | null,
+  missing: string | null,
   isWarmup: boolean,
   skipped: boolean,
 ): SetAssessment {
@@ -116,7 +126,11 @@ function SetRowBase({
   ordinal,
   weight,
   weightUnit,
-  reps,
+  measure,
+  amount,
+  amountPlaceholder,
+  amountStep,
+  amountMax,
   rir,
   rirTarget,
   isWarmup,
@@ -124,13 +138,13 @@ function SetRowBase({
   isComplete,
   displayUnit,
   assessment,
-  repRangeLabel,
+  targetLabel,
   previousLabel,
   deltaLabel,
   deltaDetail,
   deltaDirection,
   onWeight,
-  onReps,
+  onAmount,
   onRir,
   onToggleComplete,
   onToggleSkipped,
@@ -152,7 +166,7 @@ function SetRowBase({
    * and not once per digit (§3).
    */
   const [hasWeight, setHasWeight] = useState(weight !== null);
-  const [hasReps, setHasReps] = useState(reps !== null);
+  const [hasReps, setHasReps] = useState(amount !== null);
   const onWeightFilled = useCallback((filled: boolean) => {
     setHasWeight(filled);
   }, []);
@@ -160,9 +174,21 @@ function SetRowBase({
     setHasReps(filled);
   }, []);
 
-  const missing = hasWeight === hasReps ? null : hasWeight ? 'reps' : 'weight';
+  // A reps set needs both numbers. A time or distance needs only itself, so
+  // the only half-entry there is a load with nothing beside it.
+  const amountName = AMOUNT_NAMES[measure];
+  const missing =
+    measure === 'reps'
+      ? hasWeight === hasReps
+        ? null
+        : hasWeight
+          ? 'reps'
+          : 'weight'
+      : hasWeight && !hasReps
+        ? amountName
+        : null;
   const live = liveAssessment(assessment, missing, isWarmup, skipped);
-  const note = assessmentNote(live, repRangeLabel, missing);
+  const note = assessmentNote(live, targetLabel, missing);
 
   return (
     <div
@@ -195,8 +221,10 @@ function SetRowBase({
           label={`Set ${ordinal} weight`}
           value={weight}
           step={stepFor(entryUnit)}
-          min={0}
-          max={2000}
+          // Below zero is assistance: an assisted pull-up or dip machine.
+          min={-MAX_LOAD}
+          max={MAX_LOAD}
+          start={0}
           placeholder={displayUnit}
           disabled={skipped}
           onFilled={onWeightFilled}
@@ -205,16 +233,16 @@ function SetRowBase({
           }}
         />
         <NumberField
-          label={`Set ${ordinal} reps`}
-          value={reps}
-          step={1}
+          label={`Set ${ordinal} ${measure === 'time' ? 'seconds' : amountName}`}
+          value={amount}
+          step={amountStep}
           min={0}
-          max={MAX_REPS}
-          placeholder="reps"
+          max={amountMax}
+          placeholder={amountPlaceholder}
           disabled={skipped}
           onFilled={onRepsFilled}
           onCommit={(value) => {
-            onReps(entryKey, setIndex, value);
+            onAmount(entryKey, setIndex, value);
           }}
         />
       </div>

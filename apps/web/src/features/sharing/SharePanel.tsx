@@ -65,8 +65,8 @@ export function SharePanel({
   const share = async (): Promise<void> => {
     if (version === null || uid === null || atCap) return;
     setBusy(true);
-    const shareId = newShareId();
     try {
+      const shareId = await newShareId();
       await publishShare(
         shareId,
         buildSharePayload({

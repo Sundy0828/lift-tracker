@@ -68,6 +68,8 @@ export async function signUp(page: Page, prefix: string): Promise<string> {
 
   await page.goto('/sign-in');
   await page.getByRole('button', { name: 'Need an account?' }).click();
+  await page.getByRole('textbox', { name: 'First name' }).fill('Test');
+  await page.getByRole('textbox', { name: 'Last name' }).fill('Lifter');
   await page.getByRole('textbox', { name: 'Email' }).fill(email);
   // getByLabel('Password') would also match Mantine's visibility toggle.
   await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);

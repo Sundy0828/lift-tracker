@@ -17,6 +17,7 @@
     "@react-native-firebase/app": "catalog:",
     "@react-native-firebase/auth": "catalog:",
     "@react-native-firebase/firestore": "catalog:",
+    "expo-crypto": "catalog:",
     "react": "catalog:"
   },
   "devDependencies": {
@@ -30,6 +31,9 @@
       "optional": true
     },
     "@react-native-firebase/firestore": {
+      "optional": true
+    },
+    "expo-crypto": {
       "optional": true
     }
   }
