@@ -35,10 +35,12 @@ let player: AudioPlayer | null = null;
 export function chime(): void {
   try {
     if (player === null) {
-      void setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' });
+      void setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(
+        () => undefined,
+      );
       player = createAudioPlayer(chimeSound);
     }
-    void player.seekTo(0);
+    void player.seekTo(0).catch(() => undefined);
     player.play();
   } catch {
     // An audio session the OS will not start costs the tone only.

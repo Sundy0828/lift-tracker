@@ -1,7 +1,13 @@
 {
   "hosting": {
     "public": "apps/web/dist",
-    "ignore": ["firebase.json", "**/node_modules/**", "**/stats.html"],
+    "ignore": [
+      "firebase.json",
+      "**/node_modules/**",
+      "**/stats.html",
+      "**/.!(well-known)",
+      "**/.!(well-known)/**"
+    ],
     "rewrites": [
       {
         "source": "**",

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -278,10 +278,49 @@ export function Sheet({
 }
 
 /**
+ * Text kept locally while typed and saved when editing ends, or when the field
+ * goes away first: tapping Back or a fold does not blur it (taps are handled
+ * while the keyboard is up), and a number pad has no return key. Each typed
+ * value is saved once, whichever comes first.
+ */
+export function useDraft(
+  saved: string,
+  save: (text: string) => void,
+): { value: string; onChangeText: (text: string) => void; onEndEditing: () => void } {
+  const [draft, setDraft] = useState<string | null>(null);
+  // Refs, so the unmount below sees the latest text and the latest `save`.
+  const pending = useRef<string | null>(null);
+  const latestSave = useRef(save);
+  useEffect(() => {
+    latestSave.current = save;
+  });
+
+  const flush = (): void => {
+    const text = pending.current;
+    pending.current = null;
+    if (text !== null) latestSave.current(text);
+  };
+
+  useEffect(() => flush, []);
+
+  return {
+    value: draft ?? saved,
+    onChangeText: (text) => {
+      pending.current = text;
+      setDraft(text);
+    },
+    onEndEditing: () => {
+      flush();
+      setDraft(null);
+    },
+  };
+}
+
+/**
  * A small typed number in a row: a rest's seconds, a circuit's rounds. The
  * web's `NumberInput size="xs"` with a suffix.
  *
- * Commits when typing ends, clamped. Empty commits null where `nullable` (a
+ * Commits when typing ends (or the row goes away first), clamped. Empty commits null where `nullable` (a
  * round rest left empty means "use my default", shown as the placeholder),
  * and otherwise puts the old value back.
  */
@@ -308,13 +347,8 @@ export function InlineNumber({
   onCommit: (value: number | null) => void;
 }) {
   const palette = usePalette();
-  const [text, setText] = useState<string | null>(null);
-  const shown = text ?? (value === null ? '' : String(value));
-
-  const commit = (): void => {
-    const raw = (text ?? '').trim();
-    setText(null);
-    if (text === null) return;
+  const draft = useDraft(value === null ? '' : String(value), (text) => {
+    const raw = text.trim();
     if (raw === '') {
       if (nullable && value !== null) onCommit(null);
       return;
@@ -323,7 +357,8 @@ export function InlineNumber({
     if (!Number.isFinite(parsed)) return;
     const next = Math.min(max, Math.max(min, parsed));
     if (next !== value) onCommit(next);
-  };
+  });
+  const shown = draft.value;
 
   return (
     <View
@@ -340,8 +375,8 @@ export function InlineNumber({
         value={shown}
         placeholder={placeholder}
         placeholderTextColor={palette.placeholder}
-        onChangeText={setText}
-        onEndEditing={commit}
+        onChangeText={draft.onChangeText}
+        onEndEditing={draft.onEndEditing}
         style={[styles.inlineInput, { color: palette.text }]}
       />
       {shown === '' ? null : (

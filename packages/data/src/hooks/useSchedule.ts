@@ -27,11 +27,15 @@ export function useSchedule(): ScheduleState {
   const uid = user?.uid ?? null;
 
   const start = useCallback(
-    (emit: (value: ScheduleState) => void) => {
+    (emit: (value: ScheduleState) => void, fail: () => void) => {
       if (uid === null) return () => undefined;
-      return onSnapshot(paths.schedule(uid), (next) => {
-        emit({ schedule: parseSchedule(next.data()), isPending: false });
-      });
+      return onSnapshot(
+        paths.schedule(uid),
+        (next) => {
+          emit({ schedule: parseSchedule(next.data()), isPending: false });
+        },
+        fail,
+      );
     },
     [uid],
   );

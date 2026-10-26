@@ -118,7 +118,10 @@ export function SignInMethods() {
             size="compact"
             variant="danger-subtle"
             label="Remove"
-            disabled={busy || onlyOne}
+            // Not from the phone: Google would be the only way in, and the
+            // phone cannot sign in with Google yet. The next sign-out would
+            // lock the app out of the account.
+            disabled
             onPress={() => {
               if (user !== null) {
                 void run(
@@ -185,6 +188,11 @@ export function SignInMethods() {
         <Small>
           The last method cannot be removed — an account with no way in keeps its data and locks you
           out of it for good.
+        </Small>
+      ) : hasPassword ? (
+        <Small>
+          The app signs in with email and password only, so the password cannot be removed here.
+          Remove it in Settings on the web.
         </Small>
       ) : null}
 

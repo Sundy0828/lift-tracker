@@ -22,9 +22,19 @@ export function useRecentSearches(): {
   useEffect(() => {
     let cancelled = false;
     void readItem(KEY).then((raw) => {
-      // A search remembered before the read landed wins over the stored list.
-      if (!cancelled)
-        setRecent((current) => (current.length > 0 ? current : parseRecentSearches(raw)));
+      if (cancelled) return;
+      setRecent((current) => {
+        const stored = parseRecentSearches(raw);
+        if (current.length === 0) return stored;
+        // Searches remembered before the read landed go on top of the stored
+        // list, oldest first so the newest ends up at the front.
+        const merged = current.reduceRight<readonly string[]>(
+          (list, query) => rememberSearch(list, query),
+          stored,
+        );
+        writeItem(KEY, JSON.stringify(merged));
+        return merged;
+      });
     });
     return () => {
       cancelled = true;

@@ -5,6 +5,7 @@ import { useActiveSession } from '@lift/data/hooks/useSession';
 import { useWorkouts } from '@lift/data/hooks/useWorkouts';
 import { setTourVersion } from '@lift/data/mutations/profile';
 import { abandonSession, newSessionId, startSession } from '@lift/data/mutations/sessions';
+import { platform } from '@lift/data/platform';
 import { dayOfWeekFor, scheduledOn, weekdayName } from '@lift/domain/schedule';
 import type { Session } from '@lift/domain/sessions';
 import { localDateKey, sessionProgress } from '@lift/domain/sessions';
@@ -152,6 +153,9 @@ export default function Today() {
     if (uid === null) return;
     setArmedId(null);
     void abandonSession(uid, session);
+    // Its rest may still be scheduled from a run that was killed mid-rest, and
+    // no session screen is up to end it.
+    void platform().cancelRestAlarm();
   };
 
   const startAdHoc = (): void => {

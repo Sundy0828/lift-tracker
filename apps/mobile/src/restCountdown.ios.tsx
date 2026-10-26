@@ -1,6 +1,11 @@
 import { HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import { font, foregroundStyle, monospacedDigit, padding } from '@expo/ui/swift-ui/modifiers';
-import { createLiveActivity, type LiveActivity, type LiveActivityEnvironment } from 'expo-widgets';
+import {
+  createLiveActivity,
+  type LiveActivity,
+  type LiveActivityEnvironment,
+  type LiveActivityFactory,
+} from 'expo-widgets';
 
 /**
  * The rest countdown as a Live Activity: on the Lock Screen, and in the
@@ -63,7 +68,22 @@ function RestActivity(props: RestProps, environment: LiveActivityEnvironment) {
   };
 }
 
-const RestTimer = createLiveActivity<RestProps>('RestTimer', RestActivity);
+let restTimer: LiveActivityFactory<RestProps> | null | undefined;
+
+/**
+ * Created on first use rather than at import, so a build where it throws
+ * (no widget extension, an older dev client) loses the countdown, not the app.
+ */
+function activity(): LiveActivityFactory<RestProps> | null {
+  if (restTimer === undefined) {
+    try {
+      restTimer = createLiveActivity<RestProps>('RestTimer', RestActivity);
+    } catch {
+      restTimer = null;
+    }
+  }
+  return restTimer;
+}
 
 let current: LiveActivity<RestProps> | null = null;
 
@@ -72,7 +92,7 @@ let current: LiveActivity<RestProps> | null = null;
  * so one left by a run that was killed mid-rest is still on the Lock Screen.
  */
 function endOrphans(): void {
-  for (const instance of RestTimer.getInstances()) {
+  for (const instance of activity()?.getInstances() ?? []) {
     if (instance.getId() !== current?.getId()) {
       void instance.end('immediate').catch(() => undefined);
     }
@@ -85,8 +105,10 @@ export function showRestCountdown(endsAt: number, label: string): void {
   const staleDate = new Date(endsAt);
   try {
     if (current === null) {
+      const factory = activity();
+      if (factory === null) return;
       endOrphans();
-      current = RestTimer.start(props, undefined, staleDate);
+      current = factory.start(props, undefined, staleDate);
     } else {
       void current.update(props, staleDate).catch(() => undefined);
     }

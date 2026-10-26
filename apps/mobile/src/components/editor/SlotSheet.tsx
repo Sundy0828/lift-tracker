@@ -55,7 +55,8 @@ function clampRest(seconds: number): number {
 
 /**
  * The rest as an exact number of seconds, as the web's editor takes it, for
- * the odd length the steps and presets do not reach. Commits when typing ends.
+ * the odd length the steps and presets do not reach. Each parsed value goes
+ * into the form as typed, so Save right after typing keeps it.
  */
 function ExactRest({
   seconds,
@@ -71,10 +72,12 @@ function ExactRest({
       keyboardType="number-pad"
       returnKeyType="done"
       value={text ?? String(seconds)}
-      onChangeText={setText}
-      onEndEditing={() => {
-        const parsed = Number.parseInt(text ?? '', 10);
+      onChangeText={(next) => {
+        setText(next);
+        const parsed = Number.parseInt(next, 10);
         if (Number.isFinite(parsed)) onChange(clampRest(parsed));
+      }}
+      onEndEditing={() => {
         setText(null);
       }}
     />

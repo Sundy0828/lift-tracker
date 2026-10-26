@@ -16,7 +16,7 @@ import {
 import type { Exercise } from '@lift/domain/exercises';
 import { SESSION_STOPS, workoutVolume } from '@lift/domain/volume';
 import { diffWorkout, hasUnpublishedChanges } from '@lift/domain/workoutDiff';
-import type { ExerciseSlot, SlotPlace, WorkoutBody } from '@lift/domain/workouts';
+import type { ExerciseSlot, SlotPlace, Workout, WorkoutBody } from '@lift/domain/workouts';
 import {
   activeGroupIds,
   createRestSlot,
@@ -29,6 +29,7 @@ import {
   leaveGroup,
   linkToPrevious,
   moveSlot,
+  parseSlots,
   placeSlot,
   pruneGroupRest,
   reconcileGroups,
@@ -37,7 +38,7 @@ import {
   withGroupRounds,
 } from '@lift/domain/workouts';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform as OS,
@@ -50,7 +51,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DragScrollView } from '../../../components/editor/drag';
 import { ExercisePicker } from '../../../components/editor/ExercisePicker';
-import { Section } from '../../../components/editor/controls';
+import { Section, useDraft } from '../../../components/editor/controls';
 import { SlotFace, SlotList } from '../../../components/editor/SlotList';
 import { SlotSheet, type SlotEdit } from '../../../components/editor/SlotSheet';
 import { VersionHistory } from '../../../components/editor/VersionHistory';
@@ -83,12 +84,28 @@ function back(): void {
 }
 
 /**
+ * Whether a snapshot shows a body this screen wrote. Round rest is checked
+ * entry by entry: the write merges it, so the snapshot may keep extra keys.
+ */
+function reflects(workout: Workout, written: WorkoutBody): boolean {
+  return (
+    workout.name === written.name &&
+    JSON.stringify(workout.slots) === JSON.stringify(parseSlots(written.slots)) &&
+    Object.entries(written.groupRest).every(
+      ([groupId, seconds]) => workout.groupRest[groupId] === seconds,
+    )
+  );
+}
+
+/**
  * The workout editor: the web's `WorkoutEditorScreen`, edit for edit.
  *
  * Firestore's local cache is the single source of truth. Every edit writes
  * through (not awaited) and the listener re-renders from cache at once, so
  * there is no draft to keep in step, and editing works offline. Only the name
- * and the notes keep local text while typed, and save when editing ends.
+ * and the notes keep local text while typed, and save when editing ends or
+ * the field goes away. Until the listener catches up, the next edit builds on
+ * the last body written rather than the render's.
  *
  * Every slot change goes through the same `@lift/domain/workouts` functions
  * the web uses, and is pruned the same way, so a workout edited on either app
@@ -110,8 +127,6 @@ export default function WorkoutEditor() {
   const [editingSlot, setEditingSlot] = useState<ExerciseSlot | null>(null);
   /** Where a picked exercise lands: the gap whose + Exercise was pressed. */
   const [picking, setPicking] = useState<SlotPlace | null>(null);
-  const [name, setName] = useState<string | null>(null);
-  const [notes, setNotes] = useState<string | null>(null);
   const [armedToDelete, setArmedToDelete] = useState(false);
   const [fold, setFold] = useState<Fold | null>('muscles');
   /** A one-line notice under the header; the phone's stand-in for the web's toasts. */
@@ -126,6 +141,18 @@ export default function WorkoutEditor() {
       clearTimeout(timer);
     };
   }, [notice]);
+
+  /**
+   * The last body written, until a snapshot shows it. Edits build on this, so
+   * two made before the listener fires do not both start from one render, the
+   * second undoing the first.
+   */
+  const written = useRef<WorkoutBody | null>(null);
+  useEffect(() => {
+    if (written.current === null || workout === null) return;
+    // Nothing left to sync means the snapshot is at least as new as the write.
+    if (!hasPendingWrites || reflects(workout, written.current)) written.current = null;
+  }, [workout, hasPendingWrites]);
 
   if (isPending) return <Loading />;
 
@@ -156,15 +183,21 @@ export default function WorkoutEditor() {
   const hasCircuit = activeGroupIds(workout.slots).length > 0;
   const archived = workout.archivedAt !== null;
 
+  /** What the next edit builds on. */
+  const latest = (): WorkoutBody => written.current ?? body;
+
   const commit = (next: WorkoutBody): void => {
     if (uid === null) return;
     // Pruned on every edit so a dissolved circuit cannot leave its round rest
     // behind for a later group that reuses the id. Not awaited.
-    void saveWorkoutBody(uid, workout.id, pruneGroupRest(next));
+    const pruned = pruneGroupRest(next);
+    written.current = pruned;
+    void saveWorkoutBody(uid, workout.id, pruned);
   };
 
   const mapSlots = (change: (slots: readonly ExerciseSlot[]) => ExerciseSlot[]): void => {
-    commit({ ...body, slots: change(workout.slots) });
+    const current = latest();
+    commit({ ...current, slots: change(current.slots) });
   };
 
   const groupOf = (slotId: string): string | null =>
@@ -253,9 +286,12 @@ export default function WorkoutEditor() {
       <KeyboardAvoidingView style={styles.root} behavior={OS.OS === 'ios' ? 'padding' : undefined}>
         <DragScrollView
           contentContainerStyle={styles.content}
-          // Two rows already in one circuit have nothing to join, so hovering
-          // there stays a move.
+          // Two rows already in one circuit have nothing to join, and a rest
+          // row joins none, so hovering there stays a move.
           canGroup={(slotId, targetId) => {
+            const isRest = (id: string): boolean =>
+              workout.slots.find((slot) => slot.slotId === id)?.kind === 'rest';
+            if (isRest(slotId) || isRest(targetId)) return false;
             const group = groupOf(slotId);
             return group === null || group !== groupOf(targetId);
           }}
@@ -274,17 +310,12 @@ export default function WorkoutEditor() {
         >
           <View style={styles.titleRow}>
             <BackArrow fallback="/workouts" label="Back to workouts" />
-            <TextInput
-              accessibilityLabel="Workout name"
-              value={name ?? workout.name}
-              onChangeText={setName}
-              onEndEditing={() => {
-                const trimmed = (name ?? workout.name).trim();
-                if (trimmed !== '' && trimmed !== workout.name) commit({ ...body, name: trimmed });
-                setName(null);
+            <NameField
+              name={workout.name}
+              onSave={(next) => {
+                const current = latest();
+                if (next !== current.name) commit({ ...current, name: next });
               }}
-              returnKeyType="done"
-              style={[styles.name, { color: palette.text }]}
             />
           </View>
 
@@ -385,7 +416,8 @@ export default function WorkoutEditor() {
               mapSlots((slots) => withGroupRounds(slots, groupId, rounds));
             }}
             onGroupRest={(groupId, seconds) => {
-              commit({ ...body, groupRest: { ...body.groupRest, [groupId]: seconds } });
+              const current = latest();
+              commit({ ...current, groupRest: { ...current.groupRest, [groupId]: seconds } });
             }}
           />
 
@@ -425,18 +457,11 @@ export default function WorkoutEditor() {
               setFold((current) => (current === 'notes' ? null : 'notes'));
             }}
           >
-            <Field
-              label="Workout notes"
-              multiline
-              value={notes ?? workout.notes}
-              onChangeText={setNotes}
-              onEndEditing={() => {
-                if (uid !== null && notes !== null && notes !== workout.notes) {
-                  void saveWorkoutNotes(uid, workout.id, notes);
-                }
-                setNotes(null);
+            <NotesField
+              notes={workout.notes}
+              onSave={(next) => {
+                if (uid !== null) void saveWorkoutNotes(uid, workout.id, next);
               }}
-              style={styles.notes}
             />
           </Section>
 
@@ -524,6 +549,31 @@ export default function WorkoutEditor() {
       />
     </SafeAreaView>
   );
+}
+
+/** The name, as typed and trimmed. Blank saves nothing. */
+function NameField({ name, onSave }: { name: string; onSave: (name: string) => void }) {
+  const palette = usePalette();
+  const draft = useDraft(name, (text) => {
+    const trimmed = text.trim();
+    if (trimmed !== '') onSave(trimmed);
+  });
+  return (
+    <TextInput
+      accessibilityLabel="Workout name"
+      {...draft}
+      returnKeyType="done"
+      style={[styles.name, { color: palette.text }]}
+    />
+  );
+}
+
+/** Saves when typing ends, or when its fold closes or the screen goes first. */
+function NotesField({ notes, onSave }: { notes: string; onSave: (notes: string) => void }) {
+  const draft = useDraft(notes, (text) => {
+    if (text !== notes) onSave(text);
+  });
+  return <Field label="Workout notes" multiline {...draft} style={styles.notes} />;
 }
 
 const styles = StyleSheet.create({

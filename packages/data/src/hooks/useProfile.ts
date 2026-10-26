@@ -40,7 +40,7 @@ export function useProfile(): ProfileState {
   const uid = user?.uid ?? null;
 
   const start = useCallback(
-    (emit: (value: ProfileState) => void) => {
+    (emit: (value: ProfileState) => void, fail: () => void) => {
       if (uid === null) return () => undefined;
       // Seeding is driven off this listener rather than a separate read, so a
       // new account gets its `createdAt` without an extra round trip and
@@ -48,32 +48,37 @@ export function useProfile(): ProfileState {
       let seeded = false;
       const syncKey = `profile:${uid}`;
 
-      const unsubscribe = onSnapshot(paths.user(uid), { includeMetadataChanges: true }, (next) => {
-        reportSync(syncKey, {
-          pending: next.metadata.hasPendingWrites,
-          fromCache: next.metadata.fromCache,
-        });
+      const unsubscribe = onSnapshot(
+        paths.user(uid),
+        { includeMetadataChanges: true },
+        (next) => {
+          reportSync(syncKey, {
+            pending: next.metadata.hasPendingWrites,
+            fromCache: next.metadata.fromCache,
+          });
 
-        const profile = parseProfile(next.data());
-        emit({
-          profile,
-          isPending: false,
-          hasPendingWrites: next.metadata.hasPendingWrites,
-          fromCache: next.metadata.fromCache,
-        });
+          const profile = parseProfile(next.data());
+          emit({
+            profile,
+            isPending: false,
+            hasPendingWrites: next.metadata.hasPendingWrites,
+            fromCache: next.metadata.fromCache,
+          });
 
-        if (!next.exists() && !seeded) {
-          seeded = true;
-          void initializeProfile(uid);
-        }
+          if (!next.exists() && !seeded) {
+            seeded = true;
+            void initializeProfile(uid);
+          }
 
-        // Only from a server snapshot: the cache can report no code while the
-        // account already has one, and minting a second would strand the first
-        // in a public collection nothing can list to find it again.
-        if (!next.metadata.fromCache) {
-          void ensureFriendCode(uid, profile.friendCode, profile.displayName);
-        }
-      });
+          // Only from a server snapshot: the cache can report no code while the
+          // account already has one, and minting a second would strand the first
+          // in a public collection nothing can list to find it again.
+          if (!next.metadata.fromCache) {
+            void ensureFriendCode(uid, profile.friendCode, profile.displayName);
+          }
+        },
+        fail,
+      );
 
       return () => {
         unsubscribe();

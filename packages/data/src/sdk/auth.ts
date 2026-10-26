@@ -39,6 +39,11 @@ export type { Auth, User } from 'firebase/auth';
  */
 const googleProvider = new GoogleAuthProvider();
 
+/** Whether this platform can sign in with Google. False on a phone until it has a native sign-in. */
+export function googleSignInAvailable(): boolean {
+  return true;
+}
+
 export async function signInWithGoogle(auth: Auth): Promise<void> {
   await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
 }

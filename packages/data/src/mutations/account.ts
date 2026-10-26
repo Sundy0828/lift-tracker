@@ -14,6 +14,7 @@ import { db } from '../firestore';
 import { paths } from '../paths';
 import {
   EmailAuthProvider,
+  googleSignInAvailable,
   deleteUser,
   linkGoogle as linkGoogleProvider,
   linkWithCredential,
@@ -50,12 +51,16 @@ export type ReauthMethod = 'google' | 'password' | 'unsupported';
  * How this account has to prove it is really at the keyboard.
  *
  * Firebase demands a recent sign-in before it will delete a user, and the way
- * to satisfy it depends on how they signed in originally.
+ * to satisfy it depends on how they signed in originally. Where Google sign-in
+ * is not available (the phone, for now), an account that also has a password
+ * proves itself with that instead.
  */
 export function reauthMethod(user: User): ReauthMethod {
   const providers = user.providerData.map((entry) => entry.providerId);
-  if (providers.includes('google.com')) return 'google';
+  const hasGoogle = providers.includes('google.com');
+  if (hasGoogle && googleSignInAvailable()) return 'google';
   if (providers.includes('password')) return 'password';
+  if (hasGoogle) return 'google';
   return 'unsupported';
 }
 

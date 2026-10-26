@@ -14,9 +14,11 @@ type Emit = (value: string) => void;
 
 function fakeQuery() {
   let emit: Emit = () => undefined;
+  let fail: () => void = () => undefined;
   const stop = vi.fn();
-  const start = vi.fn((next: Emit) => {
+  const start = vi.fn((next: Emit, onError: () => void) => {
     emit = next;
+    fail = onError;
     return stop;
   });
   return {
@@ -25,6 +27,11 @@ function fakeQuery() {
     emit: (value: string) => {
       act(() => {
         emit(value);
+      });
+    },
+    fail: () => {
+      act(() => {
+        fail();
       });
     },
   };
@@ -69,6 +76,27 @@ describe('a shared subscription', () => {
 
     vi.advanceTimersByTime(IDLE_MS);
     expect(query.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts a fresh listener after one dies, as on sign-out and back in', () => {
+    vi.useFakeTimers();
+    const query = fakeQuery();
+    const reader = renderHook(() => useSharedSubscription('workouts:u1', query.start));
+    query.emit('PUSH');
+    reader.unmount();
+
+    // Signing out refuses the still-open listener; signing back in is quick.
+    query.fail();
+    expect(query.stop).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(IDLE_MS - 1);
+    const back = renderHook(() => useSharedSubscription('workouts:u1', query.start));
+    expect(query.start).toHaveBeenCalledTimes(2);
+    expect(back.result.current).toBe('PUSH');
+
+    // The idle timer from before does not stop the new listener twice.
+    back.unmount();
+    vi.advanceTimersByTime(IDLE_MS);
+    expect(query.stop).toHaveBeenCalledTimes(2);
   });
 
   it('keeps accounts apart: another key is another listener, and reads nothing yet', () => {

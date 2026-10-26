@@ -37,6 +37,10 @@ function notYet(): Promise<never> {
   );
 }
 
+export function googleSignInAvailable(): boolean {
+  return false;
+}
+
 export const signInWithGoogle: (auth: Auth) => Promise<void> = notYet;
 
 export const linkGoogle: (user: User) => Promise<void> = notYet;

@@ -69,7 +69,11 @@ function ensureSetup(): Promise<void> {
         options: { opensAppToForeground: true },
       },
     ]);
-  })();
+  })().catch((error: unknown) => {
+    // Tried again on the next rest, rather than every rest failing after one.
+    setup = null;
+    throw error;
+  });
   return setup;
 }
 
@@ -87,7 +91,11 @@ export function restAlarmDenied(): boolean {
 async function canNotify(): Promise<boolean> {
   await ensureSetup();
   const current = await Notifications.getPermissionsAsync();
-  if (current.granted) return true;
+  if (current.granted) {
+    // Switched on in Settings since it was refused.
+    denied = false;
+    return true;
+  }
   if (!current.canAskAgain) {
     denied = true;
     return false;
@@ -104,7 +112,20 @@ async function cancelAll(): Promise<void> {
   await Notifications.dismissAllNotificationsAsync();
 }
 
-async function schedule(endsAt: number, body: string, tag: string): Promise<void> {
+/** The session the rests being scheduled belong to; goes into each alert. */
+let restSessionId: string | null = null;
+
+/** Set by the session screen, so Done can find its way back to it. */
+export function setRestSession(sessionId: string | null): void {
+  restSessionId = sessionId;
+}
+
+async function schedule(
+  endsAt: number,
+  body: string,
+  tag: string,
+  sessionId: string | null,
+): Promise<void> {
   const allowed = await canNotify();
   await cancelAll();
   // After the cancel, which on Android dismisses every notification of the
@@ -127,8 +148,9 @@ async function schedule(endsAt: number, body: string, tag: string): Promise<void
         // sound; the vibration and the banner get through.
         interruptionLevel: 'timeSensitive',
         vibrate: REST_VIBRATION,
-        // Read back by `scheduledRestEndsAt` after the app is killed.
-        data: { kind: 'rest', endsAt, tag },
+        // Read back by `scheduledRestEndsAt` after the app is killed, and by
+        // `listenForRestResponses` to reopen the session from Done.
+        data: { kind: 'rest', endsAt, tag, sessionId },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
@@ -161,7 +183,11 @@ function serially(task: () => Promise<void>): Promise<void> {
 }
 
 export const nativePlatform: Platform = {
-  scheduleRestAlarm: (endsAt, body, tag) => serially(() => schedule(endsAt, body, tag)),
+  scheduleRestAlarm: (endsAt, body, tag) => {
+    // Read now, not when the queue gets to it.
+    const sessionId = restSessionId;
+    return serially(() => schedule(endsAt, body, tag, sessionId));
+  },
   cancelRestAlarm: () =>
     serially(async () => {
       hideRestCountdown();
@@ -170,7 +196,9 @@ export const nativePlatform: Platform = {
 
   onBackground(listener) {
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'background') listener();
+      // 'inactive' too: an app swiped away in the iOS app switcher is killed
+      // from there, without ever reaching 'background'.
+      if (state === 'background' || state === 'inactive') listener();
     });
     return () => {
       subscription.remove();
@@ -187,14 +215,73 @@ export const nativePlatform: Platform = {
   },
 };
 
+const doneListeners = new Set<() => void>();
+
 /**
  * Calls `listener` when Done is pressed on a rest notification. The app is
- * brought to the foreground for it (see `ensureSetup`).
+ * brought to the foreground for it (see `ensureSetup`). Fed by
+ * `listenForRestResponses`, which handles Done itself while nobody listens.
  */
 export function onRestDone(listener: () => void): () => void {
+  doneListeners.add(listener);
+  return () => {
+    doneListeners.delete(listener);
+  };
+}
+
+/** Done pressed with no session screen up, by rest tag: when it was pressed. */
+const doneWhileAway = new Map<string, number>();
+
+/**
+ * When Done was pressed for this rest while its screen was not up (the app
+ * had been killed), or null. Read once: the screen records the rest from it.
+ */
+export function takeRestDone(tag: string): number | null {
+  const at = doneWhileAway.get(tag) ?? null;
+  doneWhileAway.delete(tag);
+  return at;
+}
+
+/** The last response handled, so the one that launched the app is not taken twice. */
+let handled: string | null = null;
+
+function handleResponse(
+  response: Notifications.NotificationResponse,
+  open: (sessionId: string) => void,
+): void {
+  if (response.actionIdentifier !== REST_DONE_ACTION) return;
+  const id = response.notification.request.identifier;
+  if (handled === id) return;
+  handled = id;
+
+  if (doneListeners.size > 0) {
+    for (const listener of doneListeners) listener();
+    return;
+  }
+  // No session screen to end the rest, so the follow-up alerts are stopped
+  // here, at once, and the screen is told when it opens.
+  void nativePlatform.cancelRestAlarm();
+  const data = response.notification.request.content.data as Record<string, unknown> | null;
+  if (typeof data?.['tag'] === 'string') doneWhileAway.set(data['tag'], Date.now());
+  if (typeof data?.['sessionId'] === 'string') open(data['sessionId']);
+}
+
+/**
+ * Handles Done for the whole app, from the root. The session screen is not
+ * mounted when Done launches a killed app, and the response that launched it
+ * is only read back here, never delivered to a listener added later. `open`
+ * is asked to show the rest's session.
+ */
+export function listenForRestResponses(open: (sessionId: string) => void): () => void {
   const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-    if (response.actionIdentifier === REST_DONE_ACTION) listener();
+    handleResponse(response, open);
   });
+  try {
+    const launched = Notifications.getLastNotificationResponse();
+    if (launched !== null) handleResponse(launched, open);
+  } catch {
+    // Unreadable: that Done is lost, and its alerts run their course.
+  }
   return () => {
     subscription.remove();
   };

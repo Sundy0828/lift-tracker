@@ -34,7 +34,7 @@ export function useSession(sessionId: string | null): SessionState {
   const key = uid === null || sessionId === null ? null : `session:${uid}/${sessionId}`;
 
   const start = useCallback(
-    (emit: (value: SessionState) => void) => {
+    (emit: (value: SessionState) => void, fail: () => void) => {
       if (uid === null || sessionId === null) return () => undefined;
       const syncKey = `session:${uid}/${sessionId}`;
 
@@ -58,6 +58,7 @@ export function useSession(sessionId: string | null): SessionState {
             notFound: !next.exists() && !next.metadata.fromCache,
           });
         },
+        fail,
       );
 
       return () => {
@@ -87,13 +88,17 @@ export function useActiveSession(): ActiveSessionState {
   const uid = user?.uid ?? null;
 
   const start = useCallback(
-    (emit: (value: ActiveSessionState) => void) => {
+    (emit: (value: ActiveSessionState) => void, fail: () => void) => {
       if (uid === null) return () => undefined;
-      return onSnapshot(query(paths.sessions(uid), where('status', '==', 'active')), (next) => {
-        const sessions = next.docs.map((document) => toSession(document.id, document.data()));
-        sessions.sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
-        emit({ sessions, session: sessions[0] ?? null, isPending: false });
-      });
+      return onSnapshot(
+        query(paths.sessions(uid), where('status', '==', 'active')),
+        (next) => {
+          const sessions = next.docs.map((document) => toSession(document.id, document.data()));
+          sessions.sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
+          emit({ sessions, session: sessions[0] ?? null, isPending: false });
+        },
+        fail,
+      );
     },
     [uid],
   );

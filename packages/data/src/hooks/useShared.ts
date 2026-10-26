@@ -20,7 +20,11 @@ import { useCallback, useSyncExternalStore } from 'react';
  *
  * `start` must open the listener and return its unsubscribe, and must be stable
  * for a key (wrap it in `useCallback` on the values that make up the key):
- * one key is one query, and only the first reader's `start` is used.
+ * one key is one query, and only the first reader's `start` is used. It must
+ * also pass `fail` as the listener's error callback. Firestore ends a listener
+ * for good when it errors, and signing out does exactly that: the rules refuse
+ * every open listener with permission-denied. Without `fail`, signing back in
+ * within `IDLE_MS` would find the dead listener and never start a new one.
  */
 
 /** How long a listener outlives its last reader. Long enough to cover a round trip between screens. */
@@ -51,7 +55,7 @@ function entryFor(key: string): Entry {
  */
 export function useSharedSubscription<T>(
   key: string | null,
-  start: (emit: (value: T) => void) => () => void,
+  start: (emit: (value: T) => void, fail: () => void) => () => void,
 ): T | undefined {
   const subscribe = useCallback(
     (notify: () => void) => {
@@ -63,11 +67,20 @@ export function useSharedSubscription<T>(
         entry.idle = null;
       }
       entry.readers.add(notify);
-      entry.stop ??= start((value) => {
-        entry.value = value;
-        entry.has = true;
-        for (const reader of entry.readers) reader();
-      });
+      entry.stop ??= start(
+        (value) => {
+          entry.value = value;
+          entry.has = true;
+          for (const reader of entry.readers) reader();
+        },
+        // The listener is dead. Forget it, keeping its last value, so the next
+        // reader to subscribe starts a fresh one.
+        () => {
+          const stop = entry.stop;
+          entry.stop = null;
+          stop?.();
+        },
+      );
 
       return () => {
         entry.readers.delete(notify);

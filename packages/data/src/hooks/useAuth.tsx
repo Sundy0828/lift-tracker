@@ -27,8 +27,8 @@ export type AuthValue = {
    *
    * Google accounts arrive verified, so in practice this is only ever false
    * for a password account that has not clicked its link yet. Read from state
-   * rather than straight off `user`, because `reload()` mutates the existing
-   * `User` object in place and React would never see the change.
+   * rather than straight off `user`, because on the web `reload()` mutates the
+   * existing `User` object in place and React would never see the change.
    */
   isEmailVerified: boolean;
   signInWithGoogle: () => Promise<void>;
@@ -60,6 +60,16 @@ export type AuthValue = {
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
+
+/**
+ * The account as `reload()` left it. The web SDK updates the `User` it was
+ * called on; React Native Firebase swaps a new `User` into `auth.currentUser`
+ * and leaves the old one stale, so read the current one back.
+ */
+function reloaded(previous: User): User {
+  const current = auth.currentUser;
+  return current !== null && current.uid === previous.uid ? current : previous;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -132,17 +142,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // this tab — nothing tells this session about it. Re-reading the
         // account is the only way to find out.
         await current.reload();
-        const verified = current.emailVerified;
-        setIsEmailVerified(verified);
-        return verified;
+        const fresh = reloaded(current);
+        setUser(fresh);
+        setIsEmailVerified(fresh.emailVerified);
+        return fresh.emailVerified;
       },
       providerIds,
       refreshUser: async () => {
         const current = auth.currentUser;
         if (current === null) return;
         await current.reload();
-        setIsEmailVerified(current.emailVerified);
-        setProviderIds(current.providerData.map((entry) => entry.providerId));
+        const fresh = reloaded(current);
+        setUser(fresh);
+        setIsEmailVerified(fresh.emailVerified);
+        setProviderIds(fresh.providerData.map((entry) => entry.providerId));
       },
       sendPasswordReset: async (email) => {
         try {

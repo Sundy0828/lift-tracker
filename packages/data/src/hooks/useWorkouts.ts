@@ -24,7 +24,7 @@ export function useWorkouts(): WorkoutsState {
   const uid = user?.uid ?? null;
 
   const start = useCallback(
-    (emit: (value: WorkoutsState) => void) => {
+    (emit: (value: WorkoutsState) => void, fail: () => void) => {
       if (uid === null) return () => undefined;
       const syncKey = `workouts:${uid}`;
 
@@ -42,6 +42,7 @@ export function useWorkouts(): WorkoutsState {
             hasPendingWrites: next.metadata.hasPendingWrites,
           });
         },
+        fail,
       );
 
       return () => {

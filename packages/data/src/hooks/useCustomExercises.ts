@@ -28,7 +28,7 @@ export function useCustomExercises(): CustomExercisesState {
   const uid = user?.uid ?? null;
 
   const start = useCallback(
-    (emit: (value: CustomExercisesState) => void) => {
+    (emit: (value: CustomExercisesState) => void, fail: () => void) => {
       if (uid === null) return () => undefined;
       const syncKey = `custom-exercises:${uid}`;
 
@@ -46,6 +46,7 @@ export function useCustomExercises(): CustomExercisesState {
             hasPendingWrites: next.metadata.hasPendingWrites,
           });
         },
+        fail,
       );
 
       return () => {

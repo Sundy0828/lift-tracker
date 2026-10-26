@@ -47,7 +47,9 @@ export function RestTimerBar({ rest, withChime, onAdjust, onStop, onStart }: Pro
     if (rest === null || !isOver) return;
     if (alerted.current !== rest.endsAt) {
       alerted.current = rest.endsAt;
-      count.current = 0;
+      // First seen already well over (back from the background): the repeats
+      // missed meanwhile are counted as raised, so one alert fires, not a burst.
+      count.current = Math.floor(-left / REST_ALERT_REPEAT_SECONDS);
     }
     if (count.current >= REST_ALERT_LIMIT) return;
     if (-left < count.current * REST_ALERT_REPEAT_SECONDS) return;

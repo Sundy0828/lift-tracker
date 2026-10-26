@@ -65,12 +65,13 @@ import { Sheet } from '../../../components/editor/controls';
 import { ExerciseDetail } from '../../../components/editor/ExerciseDetail';
 import { ExercisePicker } from '../../../components/editor/ExercisePicker';
 import { EntryCard } from '../../../components/session/EntryCard';
+import { commitTyping } from '../../../components/session/NumberField';
 import { RestPill, RestTimerBar } from '../../../components/session/RestTimerBar';
 import { SessionClock } from '../../../components/session/SessionClock';
 import { SessionMeta } from '../../../components/session/SessionMeta';
 import { SyncStrip } from '../../../components/SyncStrip';
 import { BackArrow, Badge, Body, Button, Loading, Title } from '../../../components/ui';
-import { onRestDone, scheduledRestEndsAt } from '../../../platform';
+import { onRestDone, scheduledRestEndsAt, setRestSession, takeRestDone } from '../../../platform';
 import { usePalette } from '../../../theme';
 
 /** How long a notice stays up, and the shortest gap between two set queries. */
@@ -282,6 +283,14 @@ export default function ActiveSession() {
   // "Done resting" on the notification brings the app up and lands here.
   useEffect(() => onRestDone(endRest), [endRest]);
 
+  // Named in every rest alert, so Done on a killed app can reopen this session.
+  useEffect(() => {
+    setRestSession(sessionId);
+    return () => {
+      setRestSession(null);
+    };
+  }, [sessionId]);
+
   const onRemoveEntry = useCallback(
     (key: string) => {
       endRest();
@@ -429,6 +438,7 @@ export default function ActiveSession() {
 
   const onToggleSkipped = useCallback(
     (key: string, setIndex: number) => {
+      commitTyping();
       const next = toggleSetSkipped(read(), key, setIndex);
       apply(() => next);
       releaseRest(next);
@@ -443,10 +453,19 @@ export default function ActiveSession() {
    */
   const onToggleComplete = useCallback(
     (key: string, setIndex: number) => {
+      const isDone = (entries: readonly SessionEntry[]): boolean => {
+        const set = entryFor(entries, key)?.sets.find(
+          (candidate) => candidate.setIndex === setIndex,
+        );
+        return set !== undefined && set.completedAt !== null;
+      };
+      // A number still being typed counts. Committing it may tick the set by
+      // itself (`onSetEntered`), and then that was this tap.
+      const tickedBefore = isDone(read());
+      commitTyping();
       const before = read();
-      const entry = entryFor(before, key);
-      const set = entry?.sets.find((candidate) => candidate.setIndex === setIndex);
-      const wasComplete = set !== undefined && set.completedAt !== null;
+      const wasComplete = isDone(before);
+      if (wasComplete && !tickedBefore) return;
       const wasResting = restOwnedBy({ entryKey: key, setIndex });
 
       const next = toggleSetComplete(before, key, setIndex);
@@ -500,10 +519,24 @@ export default function ActiveSession() {
   useEffect(() => {
     if (session === null || profilePending || resumed.current === session.id) return;
     resumed.current = session.id;
-    if (session.status !== 'active' || !profile.autoStartRest) return;
+    if (session.status !== 'active') return;
 
     const owner = restOwner(session.entries);
     if (owner === null) return;
+
+    // Done was pressed on the notification before this screen was up (it
+    // launched the app): the rest ended then, so it is recorded, not resumed.
+    const doneAt = takeRestDone(restTag(owner));
+    const finishedAt = Date.parse(lastCompletedSet(session.entries)?.completedAt ?? '');
+    if (doneAt !== null && !Number.isNaN(finishedAt)) {
+      apply((entries) =>
+        updateSet(entries, owner.entryKey, owner.setIndex, {
+          restTakenSeconds: Math.max(0, Math.round((doneAt - finishedAt) / 1000)),
+        }),
+      );
+      return;
+    }
+    if (!profile.autoStartRest) return;
 
     void scheduledRestEndsAt(restTag(owner)).then((knownEndsAt) => {
       // Gone from the screen, or a set ticked while the lookup ran has
@@ -516,7 +549,11 @@ export default function ActiveSession() {
         Date.now(),
         knownEndsAt,
       );
-      if (owed === null) return;
+      if (owed === null) {
+        // The killed run's alerts are still to come for a rest that is over.
+        if (knownEndsAt !== null) stopRest();
+        return;
+      }
       rested.current.add(setRef(owed.owner.entryKey, owed.owner.setIndex));
       resumeRest(owed.startedAt, owed.seconds, restLabel(owed.nextExerciseName), owed.owner);
     });
@@ -527,6 +564,8 @@ export default function ActiveSession() {
     profile.defaultRestSeconds,
     peekRest,
     resumeRest,
+    stopRest,
+    apply,
   ]);
 
   if (isPending) return <Loading />;
@@ -599,21 +638,25 @@ export default function ActiveSession() {
 
   const finish = (): void => {
     if (uid === null || isDone) return;
+    // The number still being typed is part of what is finished, so it is
+    // committed and everything below reads the draft, not this render.
+    commitTyping();
+    const current = read();
     // A set that counts as done has to hold its numbers first: otherwise it
     // reaches history half-entered, or not at all.
-    if (missing.length > 0) {
+    if (setsMissingNumbers(current).length > 0) {
       setShowingMissing(true);
       return;
     }
-    if (outstanding.length > 0) {
+    if (outstandingSets(current).length > 0) {
       setConfirmingEarly(true);
       return;
     }
-    void complete(entries);
+    void complete(current);
   };
 
   const finishEarly = (): void => {
-    const settled = settleOutstandingSets(entries);
+    const settled = settleOutstandingSets(read());
     apply(() => settled.entries);
     setConfirmingEarly(false);
     void complete(settled.entries);
@@ -629,7 +672,12 @@ export default function ActiveSession() {
 
   const abandon = (): void => {
     if (uid === null) return;
-    void abandonSession(uid, session);
+    // Written first, and judged on the draft rather than the stored copy:
+    // otherwise a pending edit decides nothing, and its write on the way out
+    // brings a deleted session back.
+    commitTyping();
+    draft.flush();
+    void abandonSession(uid, { ...session, entries: [...read()] });
     stopRest();
     router.replace('/');
   };
