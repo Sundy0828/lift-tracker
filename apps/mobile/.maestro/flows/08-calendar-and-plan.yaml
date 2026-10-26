@@ -1,0 +1,72 @@
+# calendar-and-plan.spec.ts: a logged session shades today and moves the
+# totals and the streak; the year view draws; the plan narrows Today and opens
+# back out on request; a workout archived mid-week comes off the plan.
+appId: com.sundy0828.lifttracker
+---
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+- runFlow:
+    file: ../subflows/new-workout.yaml
+    env:
+      NAME: 'PLANNED'
+      FIRST: 'Pushups'
+- tapOn: 'Publish v1'
+- runFlow:
+    file: ../subflows/new-workout.yaml
+    env:
+      NAME: 'OTHER'
+      FIRST: 'Crunches'
+- tapOn: 'Publish v1'
+
+# One quick session, so the calendar has something to shade.
+- tapOn: 'Today'
+- tapOn:
+    text: 'Start'
+    index: 0
+- extendedWaitUntil:
+    visible: 'Session details'
+    timeout: 15000
+- tapOn: 'Set 1 weight'
+- inputText: '135'
+- tapOn: 'Set 1 reps'
+- inputText: '10'
+- hideKeyboard
+- tapOn: 'Set 1: 1 rep left'
+- tapOn: 'Skip the rest'
+- tapOn: 'Finish session \(2 sets left\)'
+- tapOn: 'Settle them and finish'
+- tapOn: 'OK'
+
+- tapOn: 'History'
+- tapOn: 'Calendar'
+- extendedWaitUntil:
+    visible:
+      id: 'month-calendar'
+    timeout: 20000
+- assertVisible: '1 week in a row'
+- assertVisible: 'This week counts already\.'
+- assertVisible: '1 day trained'
+- tapOn: 'Year'
+- assertVisible:
+    id: 'year-calendar'
+
+# The plan: today's card is the one carrying the "today" badge.
+- tapOn: 'Workouts'
+- tapOn: 'Plan'
+- tapOn:
+    text: 'PLANNED'
+    below: 'today'
+- tapOn: 'Today shows only what is scheduled'
+- tapOn: 'Today'
+- assertVisible: '.* — what you planned'
+- assertNotVisible: 'OTHER'
+- tapOn: '▸ Show the other 1 workout'
+- assertVisible: 'OTHER'
+
+# Archiving it takes it off the week: Today opens back out.
+- tapOn: 'Workouts'
+- tapOn:
+    text: 'Archive'
+    index: 0
+- tapOn: 'Today'
+- assertVisible: 'Start a workout'

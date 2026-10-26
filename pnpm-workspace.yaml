@@ -1,0 +1,52 @@
+packages:
+  - apps/*
+  - packages/*
+  - rules
+
+# One version for every dependency used by more than one project. Each
+# package.json says "catalog:" instead of a version, so they move together.
+#
+# React is exact, not a range: web and mobile must run the same React, and
+# mobile's comes from the Expo SDK (SDK 58 bundles 19.3.0). Bump it together
+# with the Expo SDK, never on its own.
+#
+# TypeScript stops at 6.0: typescript-eslint supports < 6.1. The 7.x native
+# compiler waits for that support.
+catalog:
+  react: 19.3.0
+  react-dom: 19.3.0
+  '@types/react': ^19.3.0
+  '@types/react-dom': ^19.3.0
+  '@types/node': ^26.6.3
+  firebase: ^12.19.0
+  typescript: ~6.0.3
+  vitest: ^5.0.2
+  # Mobile. Expo SDK 58 pins react-native; the native Firebase SDK is shared
+  # with @lift/data, which typechecks its .native.ts seam against it.
+  react-native: 0.88.0-rc.3
+  '@react-native-firebase/app': ^26.4.0
+  '@react-native-firebase/auth': ^26.4.0
+  '@react-native-firebase/firestore': ^26.4.0
+  # The phone's secure random source for share ids, behind @lift/data's
+  # .native.ts seam. Held on 58.0.4: 58.0.5 is an Expo Modules API 2.0 release
+  # (`v2 true` in its build.gradle; see `overrides` below for why that breaks).
+  expo-crypto: 58.0.4
+  # The friend QR, drawn by both apps.
+  qrcode-generator: ^2.0.4
+
+# Install scripts npm already skipped (npm 11 blocks them by default). None is
+# needed: @firebase/util writes optional auto-init defaults, protobufjs only
+# prints a version notice, and re2 is an optional native regex for
+# firebase-tools, which falls back to the JS engine without it.
+allowBuilds:
+  '@firebase/util': false
+  protobufjs: false
+  re2: false
+
+# Held on Expo Modules API 1.0 releases. expo-application 58.0.4 moved its
+# Android module to API 2.0, and with expo 58.0.2's modules core the module is
+# linked but never registered: the app throws "Cannot find native module
+# 'ExpoApplication'" at launch (expo-notifications imports it). Lift this when
+# the Expo SDK patch is bumped, and check a dev build before relying on it.
+overrides:
+  expo-application: 58.0.3

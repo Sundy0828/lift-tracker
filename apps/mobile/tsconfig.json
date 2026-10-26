@@ -1,0 +1,53 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    // The repo's strictness (tsconfig.base.json at the root), on top of Expo's
+    // React Native settings.
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "useUnknownInCatchVariables": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+
+    /**
+     * Resolve `./x` to `x.native.ts` first, as Metro does. That is what makes
+     * this project check `@lift/data` and `@lift/catalog` the way the phone
+     * runs them: against React Native Firebase and the bundled catalog, not
+     * the web SDK. Those two packages are compiled from source here (see
+     * `include`) rather than referenced, because their built declarations are
+     * the web build.
+     */
+    "moduleSuffixes": [".native", ""],
+
+    // Part of the root `tsc --build`, so it needs to be a composite project.
+    "composite": true,
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "../..",
+    "outDir": "./node_modules/.tmp/types",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo"
+  },
+  "include": ["src", "../../packages/data/src", "../../packages/catalog/src"],
+  "exclude": [
+    "../../packages/*/src/**/*.test.ts",
+    // Web builds of the platform seams. Each has a .native.ts sibling that
+    // this project compiles instead; keep the list in step with those files.
+    "../../packages/data/src/firebase.ts",
+    "../../packages/data/src/firestore.ts",
+    "../../packages/data/src/sdk/auth.ts",
+    "../../packages/data/src/sdk/firestore.ts",
+    "../../packages/data/src/sdk/random.ts",
+    "../../packages/catalog/src/source.ts"
+  ],
+  "references": [
+    { "path": "../../packages/domain/tsconfig.lib.json" },
+    { "path": "../../packages/ui-tokens" }
+  ]
+}

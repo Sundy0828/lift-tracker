@@ -1,0 +1,52 @@
+# versions.spec.ts: an edit after publishing is a pending change, publishing
+# makes the next version, going back discards the edit, and history lists
+# each version with what changed.
+appId: com.sundy0828.lifttracker
+---
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+- runFlow:
+    file: ../subflows/new-workout.yaml
+    env:
+      NAME: 'VERSIONED'
+      FIRST: 'Pushups'
+- tapOn: 'Publish v1'
+
+# An edit: pending until published.
+- tapOn: 'Add an exercise after Pushups'
+- inputText: 'crunches'
+- tapOn:
+    text: 'Crunches'
+    below:
+      id: 'result-count'
+- tapOn: 'Add to workout'
+- assertVisible: 'Unpublished changes'
+- tapOn: 'Discard, back to v1'
+- assertNotVisible: 'Unpublished changes'
+- assertNotVisible: 'Edit Crunches'
+
+# Again, and published this time.
+- tapOn: 'Add an exercise after Pushups'
+- inputText: 'crunches'
+- tapOn:
+    text: 'Crunches'
+    below:
+      id: 'result-count'
+- tapOn: 'Add to workout'
+- tapOn: 'Publish v2'
+- assertVisible: 'Published v2.*'
+
+- scrollUntilVisible:
+    element: 'Version history'
+- tapOn: 'Version history'
+- assertVisible: '.*2 published.*'
+
+# Starting the workout with an unpublished edit publishes it, and says so.
+- tapOn: 'Edit Crunches'
+- tapOn: 'More sets'
+- tapOn: 'Save'
+- scrollUntilVisible:
+    element: 'Start this workout'
+    direction: UP
+- tapOn: 'Start this workout'
+- assertVisible: 'Published v3.*'

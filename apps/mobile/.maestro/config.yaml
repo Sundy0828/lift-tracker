@@ -1,0 +1,3 @@
+# Maestro workspace: `maestro test .maestro` runs every flow in flows/, in name order.
+flows:
+  - 'flows/*'

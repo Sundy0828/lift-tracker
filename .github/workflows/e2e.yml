@@ -13,25 +13,27 @@ name: End-to-end
 # and holds nothing up. A red run here is a signal to go and look, not a
 # barrier: the live deploy and the preview deploy both proceed on `verify`
 # alone.
+# PAUSED 2026-10-02: manual runs only. On CI (not locally) the run hangs
+# after the last workouts test, reproducibly, holding the runner until the job
+# limit. Restore the push/pull_request triggers below once that is fixed.
 on:
-  push:
-    branches:
-      - master
-    # The suite reads no documentation and no performance budget.
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '.env.example'
-      - '.gitignore'
-      - 'lighthouserc.cjs'
-  pull_request:
-    # The suite reads no documentation and no performance budget.
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '.env.example'
-      - '.gitignore'
-      - 'lighthouserc.cjs'
+  workflow_dispatch:
+  # push:
+  #   branches:
+  #     - master
+  #   paths-ignore:
+  #     - '**/*.md'
+  #     - 'docs/**'
+  #     - '.env.example'
+  #     - '.gitignore'
+  #     - 'apps/web/lighthouserc.cjs'
+  # pull_request:
+  #   paths-ignore:
+  #     - '**/*.md'
+  #     - 'docs/**'
+  #     - '.env.example'
+  #     - '.gitignore'
+  #     - 'apps/web/lighthouserc.cjs'
 
 # A newer commit on the same ref makes an in-flight run pointless.
 concurrency:
@@ -42,25 +44,31 @@ jobs:
   e2e:
     name: end-to-end
     runs-on: ubuntu-latest
+    # The suite takes under ten minutes. Without a cap, a hung browser holds
+    # the runner for GitHub's six-hour default (it did, on 2026-09-29).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      # Reads the pnpm version from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
+          cache: pnpm
       # The Firestore and Auth emulators are Java processes.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-      - run: npm ci
+      # The phone app's packages (Expo, React Native) are not needed here.
+      - run: pnpm install --frozen-lockfile --filter '!@lift/mobile'
       # Only chromium: the suite runs one project, a Pixel 7 profile.
-      - run: npx playwright install --with-deps chromium
-      - run: npm run e2e:ci
+      - run: pnpm --filter @lift/web exec playwright install --with-deps chromium
+      - run: pnpm run e2e:ci
       - name: Upload the report when it fails
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: playwright-report/
+          path: apps/web/playwright-report/
           retention-days: 7

@@ -1,0 +1,59 @@
+# history-view.spec.ts and history-delete.spec.ts: a finished session shows
+# each set's effort and the muscles it worked; a session discarded with
+# nothing logged never reaches history; deleting a session removes it.
+appId: com.sundy0828.lifttracker
+---
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+- runFlow:
+    file: ../subflows/new-workout.yaml
+    env:
+      NAME: 'HIST'
+      FIRST: 'Pushups'
+
+# Nothing logged, then discarded: no trace in History.
+- tapOn: 'Start this workout'
+- extendedWaitUntil:
+    visible: 'Session details'
+    timeout: 15000
+- tapOn: 'Discard this session'
+- tapOn: 'Tap again to discard it'
+- tapOn: 'History'
+- assertVisible: 'Nothing logged yet'
+
+# One set logged, then finished early: the rest are settled as skipped.
+- tapOn: 'Today'
+- tapOn: 'Start'
+- extendedWaitUntil:
+    visible: 'Session details'
+    timeout: 15000
+- tapOn: 'Set 1 weight'
+- inputText: '135'
+- tapOn: 'Set 1 reps'
+- inputText: '10'
+- hideKeyboard
+- tapOn: 'Set 1: 1 rep left'
+- tapOn: 'Skip the rest'
+- tapOn: 'Finish session \(2 sets left\)'
+- tapOn: 'Settle them and finish'
+- tapOn: 'OK'
+
+- tapOn: 'History'
+- tapOn: 'HIST'
+- assertVisible: 'As it was at v1'
+- assertVisible: '135 lb × 10.*'
+- assertVisible: 'Muscle map'
+- assertVisible: '.*skipped.*'
+
+# The exercise opens its own history, with the estimate explained.
+- tapOn: 'Pushups'
+- assertVisible: 'Every performance'
+- tapOn: 'Back'
+
+- scrollUntilVisible:
+    element: 'Delete session'
+- tapOn: 'Delete session'
+- tapOn: 'Delete for good'
+- extendedWaitUntil:
+    visible: 'Nothing logged yet'
+    timeout: 15000

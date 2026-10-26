@@ -1,5 +1,5 @@
-import type { LibraryLevel } from '@/domain/library';
-import type { ExerciseSlot, Prescription, RepRange } from '@/domain/workouts';
+import type { LibraryLevel } from '@lift/domain/library';
+import type { ExerciseSlot, Prescription, RepRange } from '@lift/domain/workouts';
 
 /**
  * The workouts the global library ships with.

@@ -1,23 +1,13 @@
 {
   "files": [],
   "references": [
-    {
-      "path": "./tsconfig.app.json"
-    },
-    {
-      "path": "./tsconfig.test.json"
-    },
-    {
-      "path": "./tsconfig.node.json"
-    },
-    {
-      "path": "./tsconfig.sw.json"
-    },
-    {
-      "path": "./tsconfig.e2e.json"
-    },
-    {
-      "path": "./tsconfig.rules.json"
-    }
+    { "path": "./packages/domain" },
+    { "path": "./packages/ui-tokens" },
+    { "path": "./packages/catalog" },
+    { "path": "./packages/data" },
+    { "path": "./apps/web" },
+    { "path": "./apps/mobile" },
+    { "path": "./rules" },
+    { "path": "./tsconfig.scripts.json" }
   ]
 }

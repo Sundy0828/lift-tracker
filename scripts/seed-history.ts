@@ -7,7 +7,7 @@
  * this script can write it, the app could have. No service-account key is
  * needed and none is stored.
  *
- *   npm run seed -- --email demo@example.com --password 'Hunter2$Hunter2'
+ *   pnpm run seed --email demo@example.com --password 'Hunter2$Hunter2'
  *
  * Flags:
  *   --email / --password   the account to seed. Created if it does not exist.
@@ -39,12 +39,14 @@ import {
   type DocumentReference,
   type Firestore,
 } from 'firebase/firestore';
-import type { ExerciseStats, WorkoutStats } from '@/domain/overlay';
-import { buildStatsUpdate } from '@/domain/overlay';
-import type { LoggedSet, Session, SessionEntry } from '@/domain/sessions';
-import { localDateKey, sessionExerciseIds } from '@/domain/sessions';
-import type { ExerciseSlot, Prescription, WorkoutBody } from '@/domain/workouts';
-import { DEFAULT_PRESCRIPTION } from '@/domain/workouts';
+import type { ExerciseStats, WorkoutStats } from '@lift/domain/overlay';
+import { buildStatsUpdate } from '@lift/domain/overlay';
+import type { LoggedSet, Session, SessionEntry } from '@lift/domain/sessions';
+import { localDateKey, sessionExerciseIds } from '@lift/domain/sessions';
+import { loadScaleLookup } from '@lift/domain/strength';
+import type { ExerciseSlot, Prescription, WorkoutBody } from '@lift/domain/workouts';
+import { DEFAULT_PRESCRIPTION } from '@lift/domain/workouts';
+import { exerciseResolver } from './exercise-library';
 
 // --- CLI ------------------------------------------------------------------
 
@@ -407,6 +409,8 @@ function setsFor(plan: ExercisePlan, week: number, startedAt: Date): LoggedSet[]
       setIndex: index,
       weight: load === null ? null : { value: load, unit: 'lb' as const },
       reps,
+      seconds: null,
+      distance: null,
       rir: pick(plan.rir),
       isWarmup: false,
       skipped: false,
@@ -660,11 +664,14 @@ async function seed(db: Firestore, uid: string, weeks: number): Promise<void> {
   const exerciseStats = new Map<string, ExerciseStats>();
   const workoutStats = new Map<string, WorkoutStats>();
   let records = 0;
+  // Catalog lifts only, so no custom exercises: pull-ups score on the
+  // bodyweight scale, as the app would score them.
+  const scaleOf = loadScaleLookup(exerciseResolver([]));
 
   for (const session of [...sessions].sort((a, b) =>
     (a.completedAt ?? '').localeCompare(b.completedAt ?? ''),
   )) {
-    const update = buildStatsUpdate(session, (id) => exerciseStats.get(id) ?? null);
+    const update = buildStatsUpdate(session, (id) => exerciseStats.get(id) ?? null, scaleOf);
     records += update.prs.length;
     for (const [id, stats] of update.exerciseStats) exerciseStats.set(id, stats);
     if (update.workoutStats !== null) {

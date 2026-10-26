@@ -516,11 +516,24 @@ Stated targets, enforced in CI:
 
 | Metric                                      | Budget       |
 | ------------------------------------------- | ------------ |
-| Initial JS (gzipped, entry + shared chunks) | ≤ 150 kB     |
+| Initial JS (gzipped, entry + shared chunks) | ≤ ~~150~~ 155 kB |
 | Route chunks                                | ≤ 60 kB each |
 | LCP on a throttled mid-tier mobile profile  | ≤ 2.0 s      |
 | INP while typing in the set grid            | ≤ 100 ms     |
 | Lighthouse PWA + Performance                | ≥ ~~95~~ 90  |
+
+The initial-JS budget moved to 155 kB on 2026-09-28 for React 19.3.0, whose `react-dom` is 8.3 kB
+larger gzipped than 19.2.8. Web and the Expo mobile app share one React version, and Expo SDK 58
+ships 19.3.0 (see MOBILE_PLAN.md).
+
+What the initial-JS budget is for: it only costs a download on a first visit (a new user, or a
+share link opened on a new device). Repeat visits load the bundle from the service worker's
+precache. React sits in its own vendor chunk, so a deploy re-downloads it only when React itself
+changes. Once the native app ships, phone visitors are sent to the store, so fewer people pay even
+the first load. Parse and run cost is still paid on every cold start, but a few kB of it is a few
+milliseconds. So treat the number as a regression alarm, not a target: its job is to fail loudly
+when something large lands on the first-paint path by accident (the ~147 kB Firestore SDK is the
+usual suspect). Raise it for a deliberate, understood change like the React bump above.
 
 Non-negotiable rules:
 

@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "68371304653",
+    "project_id": "lift-tracker-e4a9c",
+    "storage_bucket": "lift-tracker-e4a9c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:68371304653:android:b2aa2bc2632f8542b29984",
+        "android_client_info": {
+          "package_name": "com.sundy0828.lifttracker"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "68371304653-m10ek1fmtcts6cn9c9men4dv12ne4fu2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBSWxXMlW3YIgJ4h1rCGmpM5k_TtLY1fCQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "68371304653-m10ek1fmtcts6cn9c9men4dv12ne4fu2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

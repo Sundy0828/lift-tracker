@@ -1,0 +1,22 @@
+# smoke.spec.ts: signed out lands on sign-in; the unit and the default rest
+# persist across a restart. (The manifest and service worker checks are web only.)
+appId: com.sundy0828.lifttracker
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 20000
+- assertVisible: 'New here\? Create an account'
+
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+
+- tapOn: 'Settings'
+- tapOn: 'Kilograms \(kg\)'
+- tapOn: '180s'
+- stopApp
+- launchApp
+- tapOn: 'Settings'
+- assertVisible: '.*steppers move in .* kg\.'
+- assertVisible: 'Default rest: 180s'

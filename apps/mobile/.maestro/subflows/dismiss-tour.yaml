@@ -1,0 +1,9 @@
+# Every new account is a first run; the walkthrough would sit over the screen
+# each flow is about. onboarding.yaml is the one that asserts it appears.
+appId: com.sundy0828.lifttracker
+---
+- runFlow:
+    when:
+      visible: 'HOW THIS WORKS'
+    commands:
+      - tapOn: 'Skip'

@@ -1,0 +1,474 @@
+import {
+  Accordion,
+  ActionIcon,
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Group,
+  Skeleton,
+  Stack,
+  Text,
+  TextInput,
+  Textarea,
+  Title,
+} from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router';
+import { MuscleMap } from '@/components/MuscleMap';
+import { useAuth } from '@lift/data/hooks/useAuth';
+import { useMuscleLookup } from '@lift/data/hooks/useMuscleLookup';
+import { useProfile } from '@lift/data/hooks/useProfile';
+import { useWorkout } from '@lift/data/hooks/useWorkout';
+import {
+  deleteWorkout,
+  discardWorkoutChanges,
+  newId,
+  publishWorkoutVersion,
+  saveWorkoutBody,
+  saveWorkoutNotes,
+} from '@lift/data/mutations/workouts';
+import type { Exercise } from '@lift/domain/exercises';
+import { diffWorkout, hasUnpublishedChanges } from '@lift/domain/workoutDiff';
+import type { ExerciseSlot, WorkoutBody } from '@lift/domain/workouts';
+import {
+  activeGroupIds,
+  createRestSlot,
+  createSlot,
+  duplicateSlot,
+  estimateWorkoutSeconds,
+  exerciseSlots,
+  formatEstimate,
+  groupWithSlot,
+  insertSlotAfter,
+  leaveGroup,
+  pruneGroupRest,
+  reconcileGroups,
+  reorder,
+  totalSets,
+  withGroupRounds,
+} from '@lift/domain/workouts';
+import { SESSION_STOPS, workoutVolume } from '@lift/domain/volume';
+import { SharePanel } from '@/features/sharing/SharePanel';
+import { ExercisePicker } from './ExercisePicker';
+import { PrescriptionEditor, type SlotEdit } from './PrescriptionEditor';
+import { SlotList } from './SlotList';
+import { VersionHistory } from './VersionHistory';
+import classes from './WorkoutEditorScreen.module.css';
+
+/**
+ * The workout editor: one named, reusable exercise list — PUSH, ABS, PULL.
+ *
+ * There is no plan container above it, so this screen is the whole editor:
+ * the name, the slots, and the publish state of one workout. What you train on
+ * a given day is simply which workouts you start.
+ *
+ * Firestore's local cache is the single source of truth: every edit writes
+ * through and the listener re-renders from cache immediately, so there is no
+ * separate draft state to keep in sync. Only free-text fields keep local
+ * state, to stop the cursor jumping mid-word, and save on blur.
+ */
+export default function WorkoutEditorScreen() {
+  const { workoutId = null } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+
+  const { workout, versions, isPending, hasPendingWrites, notFound } = useWorkout(workoutId);
+  const { lookup } = useMuscleLookup();
+  const { profile } = useProfile();
+
+  const [editingSlot, setEditingSlot] = useState<ExerciseSlot | null>(null);
+  /**
+   * Where a newly picked exercise lands: after this slot, or at the start when
+   * null. `join` is false for the insert row below a circuit, which lands the
+   * exercise after the block rather than inside it.
+   */
+  const [picking, setPicking] = useState<{ afterSlotId: string | null; join: boolean } | null>(
+    null,
+  );
+  const [name, setName] = useState<string | null>(null);
+  const [notes, setNotes] = useState<string | null>(null);
+  const [armedToDelete, setArmedToDelete] = useState(false);
+
+  if (isPending) return <Skeleton height={400} radius="md" />;
+
+  if (notFound || workout === null) {
+    return (
+      <Stack>
+        <Title order={2}>Workout not found</Title>
+        <Button component={Link} to="/workouts" variant="light">
+          Back to workouts
+        </Button>
+      </Stack>
+    );
+  }
+
+  const body: WorkoutBody = {
+    name: workout.name,
+    slots: workout.slots,
+    groupRest: workout.groupRest,
+  };
+  // The version list arrives on its own listener, so it is still empty on the
+  // first render of an already-published workout. `currentVersion` is the
+  // authority on whether a snapshot exists.
+  const published = versions[0] ?? null;
+  const pendingDiff = diffWorkout(published, body);
+  const hasChanges = hasUnpublishedChanges(published, workout.currentVersion, body);
+  const volume = workoutVolume(body, lookup);
+  const exerciseCount = exerciseSlots(workout.slots).length;
+  const hasCircuit = activeGroupIds(workout.slots).length > 0;
+
+  const commit = (next: WorkoutBody): void => {
+    if (uid === null) return;
+    // Pruned on every edit so a dissolved circuit cannot leave its round rest
+    // behind to be inherited by a later group reusing the id.
+    // Not awaited: applied to the local cache immediately, flushed on reconnect.
+    void saveWorkoutBody(uid, workout.id, pruneGroupRest(next));
+  };
+
+  const mapSlots = (change: (slots: readonly ExerciseSlot[]) => ExerciseSlot[]): void => {
+    commit({ ...body, slots: change(workout.slots) });
+  };
+
+  const addExercise = (exercise: Exercise, afterSlotId: string | null, join: boolean): void => {
+    mapSlots((slots) =>
+      insertSlotAfter(
+        slots,
+        afterSlotId,
+        createSlot(slots, {
+          slotId: newId(),
+          exerciseId: exercise.id,
+          exerciseName: exercise.name,
+        }),
+        join,
+      ),
+    );
+  };
+
+  const setSlotRest = (slotId: string, seconds: number | null): void => {
+    mapSlots((slots) =>
+      slots.map((slot) =>
+        slot.slotId === slotId
+          ? { ...slot, prescription: { ...slot.prescription, restSeconds: seconds } }
+          : slot,
+      ),
+    );
+  };
+
+  const saveSlot = (slotId: string, edit: SlotEdit): void => {
+    mapSlots((slots) =>
+      slots.map((slot) => (slot.slotId === slotId ? { ...slot, ...edit } : slot)),
+    );
+  };
+
+  const removeSlot = (slotId: string): void => {
+    // Reconciled: deleting a circuit member can leave the group with one
+    // member, which is just an exercise.
+    mapSlots((slots) => reconcileGroups(slots.filter((slot) => slot.slotId !== slotId)));
+  };
+
+  /** A copy right after it, in the same circuit, as the phone's swipe makes. */
+  const duplicate = (slotId: string): void => {
+    mapSlots((slots) => duplicateSlot(slots, slotId, newId()));
+  };
+
+  /**
+   * Only offered once something is published: with no snapshot there is
+   * nothing to go back *to*, and a button that emptied the list instead would
+   * be a destructive action wearing an undo's clothes. Deleting the workout
+   * is the way to abandon one that was never published.
+   */
+  const discard = (): void => {
+    if (uid === null || published === null || !hasChanges) return;
+    void discardWorkoutChanges(uid, workout.id, published);
+    notifications.show({
+      message: `Reverted to v${String(published.versionNumber)}`,
+      color: 'gray',
+    });
+  };
+
+  /** Deletes the workout and leaves. Published versions stay for history. */
+  const remove = (): void => {
+    if (uid === null) return;
+    setArmedToDelete(false);
+    // Not awaited: applied to the local cache immediately, like every other
+    // edit on this screen.
+    void deleteWorkout(uid, workout.id);
+    notifications.show({ message: `Deleted ${workout.name}`, color: 'gray' });
+    void navigate('/workouts');
+  };
+
+  const publish = (): void => {
+    if (uid === null || !hasChanges) return;
+    const { promise, result } = publishWorkoutVersion(uid, workout, body, published);
+    void promise;
+    notifications.show({
+      message: `Published v${String(result.versionNumber)} — ${result.changeSummary}`,
+      color: 'sky',
+    });
+  };
+
+  return (
+    <Stack>
+      <Stack gap={2}>
+        <Group gap="xs" wrap="nowrap">
+          <ActionIcon
+            component={Link}
+            to="/workouts"
+            variant="subtle"
+            size="lg"
+            fz="lg"
+            aria-label="Back to workouts"
+          >
+            <span aria-hidden="true">←</span>
+          </ActionIcon>
+          <TextInput
+            aria-label="Workout name"
+            variant="unstyled"
+            size="lg"
+            fw={650}
+            style={{ flex: 1, minWidth: 0 }}
+            value={name ?? workout.name}
+            onChange={(event) => {
+              setName(event.currentTarget.value);
+            }}
+            onBlur={() => {
+              const trimmed = (name ?? workout.name).trim();
+              if (trimmed !== '' && trimmed !== workout.name) commit({ ...body, name: trimmed });
+              setName(null);
+            }}
+          />
+        </Group>
+        <Group gap="xs">
+          <Badge variant="light" color="gray" size="sm">
+            {/* Exercises, not rows: a rest row is a pause, not an exercise. */}
+            {exerciseCount === 1 ? '1 exercise' : `${String(exerciseCount)} exercises`}
+          </Badge>
+          <Badge variant="light" color="gray" size="sm">
+            {totalSets(body)} sets
+          </Badge>
+          {workout.slots.length === 0 ? null : (
+            <Badge variant="light" color="gray" size="sm">
+              ~{formatEstimate(estimateWorkoutSeconds(body, profile.defaultRestSeconds))}
+            </Badge>
+          )}
+          <Badge variant="light" color={workout.currentVersion === 0 ? 'gray' : 'sky'} size="sm">
+            {workout.currentVersion === 0 ? 'unpublished' : `v${String(workout.currentVersion)}`}
+          </Badge>
+          {/*
+            Sync state, stated rather than implied (§2.8).
+      
+            Every edit here is fire-and-forget into the local cache, so the
+            screen is already correct the instant you type and there is nothing
+            to wait for. That is exactly why the chip is needed: without it
+            "saved" and "saved *everywhere*" look identical, and closing the tab
+            on a slow connection silently loses the last edit. Settings has
+            carried this chip since phase 0; the editor never got one.
+          */}
+          {hasPendingWrites ? (
+            <Badge variant="light" color="gray" size="sm" data-testid="workout-sync">
+              saving…
+            </Badge>
+          ) : (
+            <Badge variant="light" color="gray" size="sm" data-testid="workout-sync">
+              saved
+            </Badge>
+          )}
+        </Group>
+      </Stack>
+
+      {hasChanges ? (
+        <Alert color="sky" variant="light" title="Unpublished changes">
+          <Stack gap="xs">
+            <Text size="sm">{pendingDiff.summary}</Text>
+            <Group>
+              <Button size="compact-sm" onClick={publish}>
+                Publish v{String(workout.currentVersion + 1)}
+              </Button>
+              {published === null ? null : (
+                <Button size="compact-sm" variant="default" onClick={discard}>
+                  Discard, back to v{String(published.versionNumber)}
+                </Button>
+              )}
+            </Group>
+          </Stack>
+        </Alert>
+      ) : null}
+
+      {workout.slots.length === 0 ? (
+        <Text size="sm" c="dimmed">
+          No exercises yet.
+        </Text>
+      ) : null}
+
+      {/*
+        Rendered even when the workout is empty: the list's top insert row is
+        the only way to add the first exercise.
+      */}
+      <SlotList
+        workout={body}
+        defaultRestSeconds={profile.defaultRestSeconds}
+        onReorder={(from, to) => {
+          // Reconciled after the move, which is what lets you drag a member
+          // out of a circuit to leave it.
+          mapSlots((slots) => reconcileGroups(reorder(slots, from, to)));
+        }}
+        onEditSlot={setEditingSlot}
+        onRemoveSlot={removeSlot}
+        onDuplicateSlot={duplicate}
+        onGroup={(activeSlotId, targetSlotId) => {
+          mapSlots((slots) => groupWithSlot(slots, activeSlotId, targetSlotId, newId()));
+        }}
+        onLeaveCircuit={(slotId, placeBefore) => {
+          mapSlots((slots) => leaveGroup(slots, slotId, placeBefore));
+        }}
+        onAddAfter={(slotId, join) => {
+          setPicking({ afterSlotId: slotId, join });
+        }}
+        onAddRestAfter={(slotId, join) => {
+          mapSlots((slots) => insertSlotAfter(slots, slotId, createRestSlot(newId()), join));
+        }}
+        onRestSeconds={setSlotRest}
+        onRounds={(groupId, rounds) => {
+          mapSlots((slots) => withGroupRounds(slots, groupId, rounds));
+        }}
+        onGroupRest={(groupId, seconds) => {
+          commit({ ...body, groupRest: { ...body.groupRest, [groupId]: seconds } });
+        }}
+      />
+
+      {/* One hint line, not one per gesture, and each half only appears once
+          it applies: grouping needs something to group with, leaving needs a
+          circuit to leave. */}
+      {workout.slots.length === 0 ? null : (
+        <Text size="xs" c="dimmed">
+          Swipe a row left to delete it.
+          {exerciseCount > 1 ? (
+            <>
+              {' '}
+              Drag an exercise onto another and hold for a moment to make them a circuit, or press{' '}
+              <kbd className={classes.kbd}>g</kbd> while dragging.
+            </>
+          ) : null}
+          {hasCircuit
+            ? ' To leave a circuit, drag a member out of the block in any direction — or swipe the row right.'
+            : null}
+        </Text>
+      )}
+
+      <Accordion variant="separated" defaultValue="muscles">
+        <Accordion.Item value="muscles">
+          <Accordion.Control>Muscle map</Accordion.Control>
+          <Accordion.Panel>
+            {/* Session bands, not weekly: one workout is one session's work,
+                and with no plan above it nothing here knows your week. */}
+            <MuscleMap
+              basis="planned"
+              volume={volume}
+              stops={SESSION_STOPS}
+              scopeLabel="this workout"
+              testId="workout-muscle-map"
+            />
+          </Accordion.Panel>
+        </Accordion.Item>
+
+        <Accordion.Item value="notes">
+          <Accordion.Control>Notes</Accordion.Control>
+          <Accordion.Panel>
+            <Textarea
+              aria-label="Workout notes"
+              autosize
+              minRows={3}
+              value={notes ?? workout.notes}
+              onChange={(event) => {
+                setNotes(event.currentTarget.value);
+              }}
+              onBlur={() => {
+                if (uid !== null && notes !== null && notes !== workout.notes) {
+                  void saveWorkoutNotes(uid, workout.id, notes);
+                }
+                setNotes(null);
+              }}
+            />
+          </Accordion.Panel>
+        </Accordion.Item>
+
+        <Accordion.Item value="versions">
+          <Accordion.Control>Version history</Accordion.Control>
+          <Accordion.Panel>
+            <VersionHistory versions={versions} currentVersion={workout.currentVersion} />
+          </Accordion.Panel>
+        </Accordion.Item>
+
+        <Accordion.Item value="share">
+          <Accordion.Control>Share</Accordion.Control>
+          <Accordion.Panel>
+            {/* The published version, not the draft on screen: a link has to
+                carry a snapshot that cannot move under the recipient. */}
+            <SharePanel workout={workout} version={published} />
+          </Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
+
+      <Card withBorder padding="sm" data-testid="delete-workout">
+        <Stack gap="xs" align="flex-start">
+          <Text size="sm" c="dimmed">
+            Deleting removes the workout. Sessions you already logged against it stay in history.
+          </Text>
+          <Group gap="xs" wrap="wrap">
+            {armedToDelete ? (
+              <>
+                <Button size="compact-sm" color="red" onClick={remove}>
+                  Delete for good
+                </Button>
+                <Button
+                  size="compact-sm"
+                  variant="subtle"
+                  onClick={() => {
+                    setArmedToDelete(false);
+                  }}
+                >
+                  Keep it
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="compact-sm"
+                variant="subtle"
+                color="red"
+                onClick={() => {
+                  setArmedToDelete(true);
+                }}
+              >
+                Delete workout
+              </Button>
+            )}
+          </Group>
+        </Stack>
+      </Card>
+
+      <PrescriptionEditor
+        slot={editingSlot}
+        onClose={() => {
+          setEditingSlot(null);
+        }}
+        onSave={saveSlot}
+        onRemove={removeSlot}
+        onDuplicate={duplicate}
+      />
+
+      <ExercisePicker
+        opened={picking !== null}
+        onClose={() => {
+          setPicking(null);
+        }}
+        onPick={(exercise) => {
+          addExercise(exercise, picking?.afterSlotId ?? null, picking?.join ?? true);
+          setPicking(null);
+        }}
+      />
+    </Stack>
+  );
+}

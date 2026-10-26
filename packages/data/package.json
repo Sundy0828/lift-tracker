@@ -1,0 +1,40 @@
+{
+  "name": "@lift/data",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./hooks/useAuth": "./src/hooks/useAuth.tsx",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@lift/catalog": "workspace:*",
+    "@lift/domain": "workspace:*",
+    "firebase": "catalog:"
+  },
+  "peerDependencies": {
+    "@react-native-firebase/app": "catalog:",
+    "@react-native-firebase/auth": "catalog:",
+    "@react-native-firebase/firestore": "catalog:",
+    "expo-crypto": "catalog:",
+    "react": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@react-native-firebase/app": {
+      "optional": true
+    },
+    "@react-native-firebase/auth": {
+      "optional": true
+    },
+    "@react-native-firebase/firestore": {
+      "optional": true
+    },
+    "expo-crypto": {
+      "optional": true
+    }
+  }
+}

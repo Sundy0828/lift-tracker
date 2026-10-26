@@ -1,0 +1,10 @@
+appId: com.sundy0828.lifttracker
+---
+- tapOn: 'Settings'
+- scrollUntilVisible:
+    element: 'Sign out'
+    direction: DOWN
+- tapOn: 'Sign out'
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 10000

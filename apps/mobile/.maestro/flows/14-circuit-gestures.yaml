@@ -1,0 +1,60 @@
+# circuit-gestures.spec.ts, the parts a phone can be driven through without a
+# hold-then-drag (which Maestro cannot do): swipe left deletes, swipe right
+# duplicates or joins the row above, a circuit leaves by swipe, and the insert
+# rows add in place.
+appId: com.sundy0828.lifttracker
+---
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+- runFlow:
+    file: ../subflows/new-workout.yaml
+    env:
+      NAME: 'GESTURES'
+      FIRST: 'Pushups'
+      SECOND: 'Crunches'
+      THIRD: 'Pullups'
+- assertVisible: '3 exercises'
+- assertVisible: '9 sets'
+
+# Right: Duplicate.
+- swipe:
+    from: 'Edit Pushups'
+    direction: RIGHT
+- tapOn: 'Duplicate'
+- assertVisible: '4 exercises'
+- assertVisible: '12 sets'
+
+# Left: Delete.
+- swipe:
+    from: 'Edit Pullups'
+    direction: LEFT
+- tapOn: 'Delete'
+- assertVisible: '3 exercises'
+- assertVisible: '9 sets'
+
+# Right on a row: make it a circuit with the one above, then leave it again.
+- swipe:
+    from: 'Edit Crunches'
+    direction: RIGHT
+- tapOn: 'Circuit with above'
+- assertVisible: 'Circuit'
+- swipe:
+    from: 'Edit Crunches'
+    direction: RIGHT
+- tapOn: 'Leave circuit'
+- assertNotVisible: 'Circuit'
+
+# The insert row at the start adds at the top.
+- tapOn: 'Add an exercise at the start'
+- inputText: 'pullups'
+- tapOn:
+    text: 'Pullups'
+    below:
+      id: 'result-count'
+- tapOn: 'Add to workout'
+- assertVisible: '.*4 exercises.*'
+
+# A rest row adds no sets.
+- tapOn: 'Add a rest after Pullups'
+- assertVisible: '4 exercises'
+- assertVisible: '12 sets'

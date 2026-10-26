@@ -5,7 +5,19 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'dev-dist', 'coverage', 'playwright-report', 'test-results'] },
+  {
+    ignores: [
+      '**/dist',
+      // Maestro scripts run in Maestro's own JS engine, with its globals.
+      '**/.maestro',
+      '**/dev-dist',
+      '**/coverage',
+      '**/playwright-report',
+      '**/test-results',
+      '**/.lighthouseci',
+      'apps/mobile/.expo',
+    ],
+  },
 
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
@@ -47,9 +59,9 @@ export default tseslint.config(
     languageOptions: { sourceType: 'module' },
   },
 
-  // --- Browser code. -------------------------------------------------------
+  // --- Browser code, and the React hooks shared with mobile. --------------
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['apps/web/src/**/*.{ts,tsx}', 'packages/data/src/**/*.{ts,tsx}'],
     languageOptions: { globals: globals.browser },
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },
     rules: {
@@ -58,16 +70,26 @@ export default tseslint.config(
     },
   },
   {
-    // The domain layer is pure: no React, no Firebase.
-    files: ['src/domain/**/*.ts'],
+    // Pure packages, shared by web and mobile: no UI framework, no Firebase.
+    files: ['packages/{domain,catalog,ui-tokens}/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
           patterns: [
             {
-              group: ['react', 'react-dom', 'firebase', 'firebase/*'],
-              message: 'src/domain must stay pure — no React or Firebase imports.',
+              group: [
+                'react',
+                'react-dom',
+                'react-native',
+                'firebase',
+                'firebase/*',
+                '@firebase/*',
+                '@react-native-firebase/*',
+                '@mantine/*',
+              ],
+              message:
+                'domain, catalog and ui-tokens must stay pure — no React, Firebase or Mantine imports.',
             },
           ],
         },
@@ -75,8 +97,25 @@ export default tseslint.config(
     },
   },
   {
-    // Only src/data may talk to Firestore directly.
-    files: ['src/{app,features,components}/**/*.{ts,tsx}'],
+    // The data layer is shared with mobile, so no web UI kit in it.
+    files: ['packages/data/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@mantine/*', 'react-dom', 'react-dom/*', 'react-router', '@dnd-kit/*'],
+              message: '@lift/data is shared with mobile — keep web UI libraries in apps/web.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Only @lift/data may talk to Firestore directly.
+    files: ['apps/web/src/{app,features,components}/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -85,7 +124,7 @@ export default tseslint.config(
             {
               group: ['firebase/firestore', 'firebase/firestore/*'],
               message:
-                'Firestore access is confined to src/data — consume a hook from src/data/hooks instead.',
+                'Firestore access is confined to @lift/data — consume a hook from @lift/data/hooks instead.',
             },
           ],
         },
@@ -93,22 +132,50 @@ export default tseslint.config(
     },
   },
   {
-    // src/data holds providers and hooks, not fast-refreshable screens.
-    files: ['src/data/**/*.{ts,tsx}'],
+    // @lift/data holds providers and hooks, not fast-refreshable screens.
+    files: ['packages/data/**/*.{ts,tsx}'],
     rules: { 'react-refresh/only-export-components': 'off' },
   },
+  // --- Mobile (Expo / React Native). --------------------------------------
   {
-    files: ['src/sw.ts'],
+    files: ['apps/mobile/src/**/*.{ts,tsx}'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['firebase', 'firebase/*', '@firebase/*', '@react-native-firebase/*'],
+              message:
+                'Firebase access is confined to @lift/data — consume a hook from @lift/data/hooks instead.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['apps/web/src/sw.ts'],
     languageOptions: { globals: globals.serviceworker },
   },
 
   // --- Tests and tooling. --------------------------------------------------
   {
-    files: ['**/*.test.{ts,tsx}', 'src/test/**/*.ts'],
+    files: ['**/*.test.{ts,tsx}', 'apps/web/src/test/**/*.ts'],
     rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
   },
   {
-    files: ['vite.config.ts', 'playwright.config.ts', 'scripts/**/*.ts', 'e2e/**/*.ts'],
+    files: [
+      '*.config.ts',
+      'scripts/**/*.ts',
+      'rules/**/*.ts',
+      'apps/web/*.config.ts',
+      'apps/web/scripts/**/*.ts',
+      'apps/web/e2e/**/*.ts',
+      'packages/catalog/scripts/**/*.ts',
+    ],
     languageOptions: { globals: globals.node },
   },
 );

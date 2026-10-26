@@ -40,39 +40,61 @@ structural), and `occurrenceIndex`, which distinguishes the same exercise
 appearing twice in one workout. The **name** is versioned along with the slots,
 so an old snapshot renders under the name it had; **notes** are not.
 
+## Workspace layout
+
+A pnpm workspace. The web app is one consumer of the shared packages; the
+native mobile app (see [MOBILE_PLAN.md](docs/MOBILE_PLAN.md)) will be the other.
+
+| Path                 | Package           | Holds                                                       |
+| -------------------- | ----------------- | ----------------------------------------------------------- |
+| `apps/web`           | `@lift/web`       | the PWA: screens, router, service worker, Vite, e2e         |
+| `packages/domain`    | `@lift/domain`    | pure logic and types, no dependencies                       |
+| `packages/catalog`   | `@lift/catalog`   | the vendored exercise catalog and its generator             |
+| `packages/data`      | `@lift/data`      | Firestore converters, hooks, mutations, sync state          |
+| `packages/ui-tokens` | `@lift/ui-tokens` | accent colours, font, sizes as plain values                 |
+| `rules`              | `@lift/rules`     | the security-rules suite (`firestore.rules` is at the root) |
+| `scripts`            | —                 | admin scripts: seed, prune, verify                          |
+
+Installs are isolated (pnpm's default), so a package can only import what its
+own `package.json` declares. Run everything from the root.
+
 ## Quick start
 
 ```bash
-npm install
-npm run emulators   # terminal 1 — needs Java, see below
-npm run dev         # terminal 2 — http://localhost:5173
+corepack enable pnpm   # or: npm install -g pnpm
+pnpm install
+pnpm run emulators     # terminal 1 — needs Java, see below
+pnpm run dev           # terminal 2 — http://localhost:5173
 ```
 
 Sign in with any email — the Auth emulator accepts anything. Passwords are the
 app's own rule, not the emulator's: 8–4096 characters with an uppercase letter,
 a lowercase letter, a number, and one special character from
 ``^ $ * . [ ] { } ( ) ? " ! @ # % & / \ , > < ' : ; | _ ~ ` ``. Nothing else is
-allowed — see [`src/features/auth/password.ts`](src/features/auth/password.ts).
+allowed — see [`password.ts`](apps/web/src/features/auth/password.ts).
 
 ## Gates
 
 All four must pass before a phase is considered done:
 
 ```bash
-npm run typecheck && npm run lint && npm run test && npm run build
+pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build
 ```
 
-| Script              | What it does                                                         |
-| ------------------- | -------------------------------------------------------------------- |
-| `npm run dev`       | Vite dev server                                                      |
-| `npm run typecheck` | `tsc --build` across the app, service worker, node, and e2e projects |
-| `npm run lint`      | ESLint (type-aware, zero warnings allowed) + Prettier check          |
-| `npm run test`      | Vitest unit tests                                                    |
-| `npm run build`     | Production build, including the service worker and `dist/stats.html` |
-| `npm run e2e`       | Playwright against a production build (needs the emulators up)       |
-| `npm run emulators` | Firebase Auth + Firestore emulators                                  |
-| `npm run icons`     | Regenerates `public/icons/*` from `scripts/generate-icons.ts`        |
-| `npm run deploy`    | Build, then `firebase deploy --only hosting`                         |
+Always write `pnpm run <script>`: some script names, `deploy` among them, are
+also built-in pnpm commands, and a bare `pnpm deploy` runs pnpm's.
+
+| Script               | What it does                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| `pnpm run dev`       | Vite dev server                                                                      |
+| `pnpm run typecheck` | `tsc --build` across every package and app project                                   |
+| `pnpm run lint`      | ESLint (type-aware, zero warnings allowed) + Prettier check                          |
+| `pnpm run test`      | Vitest unit tests, one project per package                                           |
+| `pnpm run build`     | Production build into `apps/web/dist`, including the service worker and `stats.html` |
+| `pnpm run e2e`       | Playwright against a production build (needs the emulators up)                       |
+| `pnpm run emulators` | Firebase Auth + Firestore emulators                                                  |
+| `pnpm run icons`     | Regenerates `apps/web/public/icons/*` from `apps/web/scripts/generate-icons.ts`      |
+| `pnpm run deploy`    | Build, then `firebase deploy --only hosting,firestore`                               |
 
 ## Firebase configuration
 
@@ -94,9 +116,9 @@ Three of these cannot be done from a config file:
 3. **Deploy the rules**, or every write is denied:
 
    ```bash
-   npx firebase login
-   npx firebase use --add          # select the project, alias it `default`
-   npx firebase deploy --only firestore:rules
+   pnpm exec firebase login
+   pnpm exec firebase use --add          # select the project, alias it `default`
+   pnpm exec firebase deploy --only firestore:rules
    ```
 
    Skipping this has a misleading symptom rather than an error: the unit toggle
@@ -110,15 +132,15 @@ emulator is a Java process. Without a JDK on `PATH` it fails with
 `Could not spawn 'java -version'`. Install a JDK 17+ (for example
 `winget install EclipseAdoptium.Temurin.21.JDK`) to get Firestore locally.
 
-Without it, `npm run emulators -- --only auth` still works, and the app remains
+Without it, `pnpm run emulators --only auth` still works, and the app remains
 usable: Firestore writes queue in the persistent local cache and the UI reads
 back from it, which is the same path a real offline session takes. They just
 never reach a server.
 
 ## The exercise catalog
 
-`src/catalog/generated/` is committed, generated data — refresh it with
-`npm run catalog:update`, never edit it by hand. It holds
+`packages/catalog/src/generated/` is committed, generated data — refresh it with
+`pnpm run catalog:update`, never edit it by hand. It holds
 [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (876 exercises,
 Unlicense/public domain) split in two:
 
@@ -127,10 +149,12 @@ Unlicense/public domain) split in two:
 | `exercises.json` | 19 kB   | on first visit to Exercises; the searchable core |
 | `details.json`   | 142 kB  | only when an exercise detail view is opened      |
 
-Both are emitted as separate hashed assets and precached by the service worker,
-so a cold offline start can still search and add an exercise mid-session.
+On web both are emitted as separate hashed assets and precached by the service
+worker, so a cold offline start can still search and add an exercise
+mid-session. How the bytes are read is per platform
+(`packages/catalog/src/source.ts`), so mobile can ship them inside the app.
 
-`src/catalog/catalog.test.ts` validates the _committed_ files against the
+`packages/catalog/src/catalog.test.ts` validates the _committed_ files against the
 domain vocabularies. If an upstream refresh changes shape or introduces a
 muscle name the domain does not know, that test fails rather than the app
 silently rendering half-empty rows.
@@ -152,20 +176,26 @@ bundled and always work offline.
 
 ## TypeScript projects
 
-`tsc --build` drives five projects, so each kind of code gets exactly the
-globals it should have:
+`tsc --build` at the root drives every project through references, so each
+kind of code gets exactly the globals it should have. Each package has a
+`tsconfig.lib.json` (its source, which other projects reference) and a
+`tsconfig.test.json` (source plus tests, with Node types for fixture reads).
 
-| Project              | Covers                       | Notably                                              |
-| -------------------- | ---------------------------- | ---------------------------------------------------- |
-| `tsconfig.app.json`  | `src` minus tests and the SW | no Node types — app code cannot reach `fs`/`process` |
-| `tsconfig.test.json` | `src` including tests        | adds Node types for fixture reads                    |
-| `tsconfig.sw.json`   | `src/sw.ts`                  | WebWorker lib, no DOM                                |
-| `tsconfig.node.json` | build scripts, `src/domain`  | scripts share the domain validators                  |
-| `tsconfig.e2e.json`  | Playwright specs             | DOM lib for `page.evaluate`                          |
+| Project                              | Covers                                | Notably                                              |
+| ------------------------------------ | ------------------------------------- | ---------------------------------------------------- |
+| `packages/domain/tsconfig.lib.json`  | the domain                            | no DOM and no Node types — it must run on Hermes too |
+| `packages/catalog/tsconfig.lib.json` | the catalog loader                    | DOM for `fetch` only                                 |
+| `packages/data/tsconfig.lib.json`    | the data layer                        | DOM + JSX, no Node types                             |
+| `apps/web/tsconfig.app.json`         | `apps/web/src` minus tests and the SW | no Node types — app code cannot reach `fs`/`process` |
+| `apps/web/tsconfig.sw.json`          | `apps/web/src/sw.ts`                  | WebWorker lib, no DOM                                |
+| `apps/web/tsconfig.node.json`        | Vite config, web scripts              | Node types                                           |
+| `apps/web/tsconfig.e2e.json`         | Playwright specs                      | DOM lib for `page.evaluate`                          |
+| `tsconfig.scripts.json`              | admin scripts, root Vitest config     | Node types                                           |
 
-Build scripts run with `node --import ./scripts/ts-resolve.mjs`, a small hook
-that teaches Node the extensionless and `@/` specifiers Vite resolves — so a
-script and the app import the domain the same way, with no second copy of it.
+Scripts run with `node --import <root>/scripts/ts-resolve.mjs`, a small hook
+that teaches Node the extensionless relative specifiers the bundlers resolve.
+`@lift/*` imports resolve through each package's `exports` map, so a script
+and the app import the domain the same way, with no second copy of it.
 
 ## The muscle map
 
@@ -178,7 +208,7 @@ have I really hit lately" rather than "what does this workout claim to hit".
 That needs sessions, so a weekly map (`WEEKLY_STOPS`) arrives with history in
 phase 4, rolled up from what you logged rather than from a stored intention.
 
-`src/components/MuscleMap/bodyPolygons.ts` holds the front and back figures,
+`apps/web/src/components/MuscleMap/bodyPolygons.ts` holds the front and back figures,
 adapted from [body-highlighter](https://github.com/lahaxearnaud/body-highlighter)
 (MIT — see [LICENSES.md](LICENSES.md)). Vendored rather than imported: the
 package renders its own SVG and shades by _how many exercises_ hit a muscle,
@@ -333,10 +363,12 @@ default rather than just saying "your default".
 
 ## Layering rules (enforced by ESLint)
 
-- `src/domain/` is pure — no React, no Firebase. This is the layer to test hardest.
-- `src/data/` is the only place that imports `firebase/firestore`. Components
-  consume hooks from `src/data/hooks/`.
-- `src/data/firebase.ts` (app + auth) is on the first-paint path and must never
-  import `firebase/firestore`. The Firestore instance lives in
-  `src/data/firestore.ts`, which is reachable only from lazy chunks — the SDK is
-  ~149 kB gzipped, larger than the whole initial-JS budget.
+- `@lift/domain`, `@lift/catalog` and `@lift/ui-tokens` are pure — no React, no
+  Firebase, no Mantine. The domain is the layer to test hardest.
+- `@lift/data` is the only place that imports `firebase/firestore`. Screens
+  consume hooks from `@lift/data/hooks/*`. It is shared with mobile, so no web
+  UI library (Mantine, react-dom, react-router, dnd-kit) may appear in it.
+- `packages/data/src/firebase.ts` (app + auth) is on the first-paint path and
+  must never import `firebase/firestore`. The Firestore instance lives in
+  `packages/data/src/firestore.ts`, which is reachable only from lazy chunks —
+  the SDK is ~149 kB gzipped, larger than the whole initial-JS budget.

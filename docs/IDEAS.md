@@ -183,7 +183,7 @@ The user's framing was "phone numbers, and any other data I could use to get peo
 ## 8. Analytics
 
 - **Touches:** one SDK, one consent gate, and the §3 performance budget.
-- **The hard part:** GA4's tag is heavy enough to matter against a 150 kB initial-JS budget that CI
+- **The hard part:** GA4's tag is heavy enough to matter against a 155 kB initial-JS budget that CI
   enforces. Load it lazily and after first interaction, the way `@mantine/notifications` already is
   in `src/app/providers.tsx`, or use a lighter product-analytics option.
 - **Also:** consent. An analytics tag that fires before consent is a compliance problem in the EU

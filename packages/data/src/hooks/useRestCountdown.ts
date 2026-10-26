@@ -1,0 +1,55 @@
+import { useEffect, useState } from 'react';
+import { platform } from '../platform';
+import type { Rest } from './useRestTimer';
+
+/**
+ * The ticking half of the rest timer.
+ *
+ * It lives here rather than in `useRestTimer` because it re-renders twice a
+ * second, and the hook that owns the deadline sits above the whole set grid
+ * (§3). Only the small components that draw a clock use this one.
+ *
+ * Past zero `left` goes negative and `isOver` turns true, so a rest that ran
+ * long says by how much instead of vanishing.
+ */
+export type RestCountdown = {
+  /** Whole seconds left. Negative once the rest has run out. */
+  left: number;
+  isOver: boolean;
+};
+
+const STOPPED: RestCountdown = { left: 0, isOver: false };
+
+export function useRestCountdown(rest: Rest | null): RestCountdown {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (rest === null) return;
+
+    // Every 500 ms rather than 1000: a whole-second readout driven off a
+    // 1000 ms interval visibly skips numbers as the two drift apart.
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 500);
+
+    // Resynced when the screen comes back, so the number is right on the frame
+    // the user actually sees rather than up to half a second later.
+    const resync = (): void => {
+      setNow(Date.now());
+    };
+    const unsubscribe = platform().onForeground(resync);
+
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
+  }, [rest]);
+
+  if (rest === null) return STOPPED;
+
+  // `now` stops while no rest runs, so on a new rest's first frame it can be
+  // long stale: a 10 s rest once read 24 s for a frame. No rest is seen before
+  // its `startedAt`, so that is the earliest `now` can be.
+  const left = Math.ceil((rest.endsAt - Math.max(now, rest.startedAt)) / 1000);
+  return { left, isOver: left <= 0 };
+}

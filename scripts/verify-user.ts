@@ -1,8 +1,8 @@
 /**
  * Marks an account's email as confirmed, without an email.
  *
- *   npm run verify-user -- --email someone@example.com
- *   npm run verify-user -- --all-unverified          # every password account
+ *   pnpm run verify-user --email someone@example.com
+ *   pnpm run verify-user --all-unverified          # every password account
  *
  * This exists because gating the app on a confirmed address is retroactive:
  * accounts that existed before the gate have `emailVerified: false` and are

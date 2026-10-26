@@ -1,0 +1,44 @@
+# Builds a workout from the Workouts tab and leaves the editor open on it.
+# NAME, and up to three exercises: FIRST (required), SECOND, THIRD, each a
+# catalog name typed into the picker and then tapped in its results (below
+# the count, so the search box holding the same text is never the target).
+appId: com.sundy0828.lifttracker
+---
+- tapOn: 'Workouts'
+- tapOn: 'New'
+- tapOn:
+    id: 'workout-name'
+- inputText: ${NAME}
+- tapOn: 'Create'
+- extendedWaitUntil:
+    visible: 'No exercises yet.'
+    timeout: 10000
+- tapOn: 'Add an exercise at the start'
+- inputText: ${FIRST}
+- tapOn:
+    text: ${FIRST}
+    below:
+      id: 'result-count'
+- tapOn: 'Add to workout'
+- runFlow:
+    when:
+      true: ${typeof SECOND !== 'undefined' && SECOND !== ''}
+    commands:
+      - tapOn: 'Add an exercise after ${FIRST}'
+      - inputText: ${SECOND}
+      - tapOn:
+          text: ${SECOND}
+          below:
+            id: 'result-count'
+      - tapOn: 'Add to workout'
+- runFlow:
+    when:
+      true: ${typeof THIRD !== 'undefined' && THIRD !== ''}
+    commands:
+      - tapOn: 'Add an exercise after ${SECOND}'
+      - inputText: ${THIRD}
+      - tapOn:
+          text: ${THIRD}
+          below:
+            id: 'result-count'
+      - tapOn: 'Add to workout'

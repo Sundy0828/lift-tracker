@@ -1,0 +1,82 @@
+# sharing.spec.ts: a link opens signed out and offers a way in; a shared
+# workout imports; a merge publishes a new version of the target; a revoked
+# link says so.
+#
+# The link is read off Settings > Shared links and opened through the app's
+# scheme, which is the same route an app link lands on.
+appId: com.sundy0828.lifttracker
+---
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+- runFlow:
+    file: ../subflows/new-workout.yaml
+    env:
+      NAME: 'SHARED'
+      FIRST: 'Pushups'
+      SECOND: 'Crunches'
+- tapOn: 'Publish v1'
+
+- scrollUntilVisible:
+    element: 'Share'
+- tapOn: 'Share'
+- tapOn: 'Create a link to v1'
+# The OS share sheet: leave it.
+- back
+
+- tapOn: 'Back to workouts'
+- tapOn: 'Settings'
+- scrollUntilVisible:
+    element:
+      id: 'share-url'
+- copyTextFrom:
+    id: 'share-url'
+- evalScript: ${output.shareId = maestro.copiedText.split('/share/')[1]}
+
+# Imported as a new workout of its own.
+- openLink: lifttracker://share/${output.shareId}
+- assertVisible: 'SHARED WORKOUT'
+- tapOn: 'Import as a new workout'
+- extendedWaitUntil:
+    visible: 'Start this workout'
+    timeout: 15000
+- tapOn: 'Back to workouts'
+- assertVisible:
+    text: 'SHARED'
+    index: 1
+
+# Merged into one of mine: a new version of the target.
+- runFlow:
+    file: ../subflows/new-workout.yaml
+    env:
+      NAME: 'TARGET'
+      FIRST: 'Pushups'
+- tapOn: 'Publish v1'
+- openLink: lifttracker://share/${output.shareId}
+- tapOn: 'Merge into mine'
+- tapOn: 'TARGET'
+- assertVisible: 'What would change'
+- tapOn: 'Merge [0-9]+ changes?'
+- extendedWaitUntil:
+    visible: '.*v2.*'
+    timeout: 15000
+
+# Signed out, the link still shows the workout and offers a way in.
+- runFlow: ../subflows/sign-out.yaml
+- openLink: lifttracker://share/${output.shareId}
+- assertVisible: 'SHARED WORKOUT'
+- assertVisible: 'Sign in to import'
+- tapOn: 'Sign in to import'
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${output.email}
+      PASSWORD: ${output.password}
+- assertVisible: 'Add this to your workouts'
+
+# Turned off: the owner is told so.
+- tapOn: 'Settings'
+- scrollUntilVisible:
+    element: 'Turn off'
+- tapOn: 'Turn off'
+- openLink: lifttracker://share/${output.shareId}
+- assertVisible: 'This link is turned off'

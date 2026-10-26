@@ -1,0 +1,60 @@
+# sharing.spec.ts, "friends": a code becomes a request, a request becomes a
+# connection, and a workout can be sent to them. The friend link is opened
+# through the app's scheme, where a scanned QR's app link lands.
+appId: com.sundy0828.lifttracker
+---
+# A, who will be asked.
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+- evalScript: ${output.emailA = output.email}
+- tapOn: 'Settings'
+- scrollUntilVisible:
+    element: 'Friends'
+- tapOn:
+    text: 'Friends'
+    index: 1
+- extendedWaitUntil:
+    visible:
+      id: 'friend-code'
+    timeout: 20000
+- assertVisible:
+    id: 'friend-qr'
+- copyTextFrom:
+    id: 'friend-code'
+- evalScript: ${output.codeA = maestro.copiedText.replace('-', '')}
+- tapOn: 'Back'
+- runFlow: ../subflows/sign-out.yaml
+
+# B asks, from A's link. Nothing is sent until B presses the button.
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+- openLink: lifttracker://friend/${output.codeA}
+- assertVisible: 'Friend code'
+- tapOn: 'Send request'
+- assertVisible: 'Request sent\..*'
+- extendedWaitUntil:
+    visible: 'Waiting on them'
+    timeout: 10000
+- runFlow:
+    file: ../subflows/new-workout.yaml
+    env:
+      NAME: 'GIFT'
+      FIRST: 'Pushups'
+- tapOn: 'Publish v1'
+- runFlow: ../subflows/sign-out.yaml
+
+# A accepts.
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${output.emailA}
+      PASSWORD: ${output.password}
+- tapOn: 'Settings'
+- scrollUntilVisible:
+    element: 'Friends'
+- tapOn:
+    text: 'Friends'
+    index: 1
+- assertVisible: 'Wants to connect'
+- tapOn: 'Accept'
+- assertVisible: 'Connected'

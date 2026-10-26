@@ -1,0 +1,62 @@
+# exercise-picker.spec.ts, exercise-preview.spec.ts, exercise-info.spec.ts:
+# tapping a result previews it, going back keeps the query, confirming adds
+# exactly one, a remembered search comes back as a chip, the search is empty
+# on reopening, a custom exercise made in the picker lands in the workout,
+# and editing a slot reopens the instructions.
+appId: com.sundy0828.lifttracker
+---
+- runFlow: ../subflows/sign-up.yaml
+- runFlow: ../subflows/dismiss-tour.yaml
+- tapOn: 'Workouts'
+- tapOn: 'New'
+- tapOn:
+    id: 'workout-name'
+- inputText: 'PICK'
+- tapOn: 'Create'
+
+- tapOn: 'Add an exercise at the start'
+- inputText: 'pushups'
+- tapOn:
+    text: 'Pushups'
+    below:
+      id: 'result-count'
+# A preview, not an add: the movement first.
+- assertVisible: 'Add to workout'
+- tapOn: 'Back'
+- assertVisible: 'pushups'
+- tapOn:
+    text: 'Pushups'
+    below:
+      id: 'result-count'
+- tapOn: 'Add to workout'
+- assertVisible: '1 exercise'
+- assertVisible: '3 sets'
+
+# Reopened: an empty box, and the last search as a chip.
+- tapOn: 'Add an exercise after Pushups'
+- assertVisible: 'Recent'
+- tapOn: 'pushups'
+- assertVisible:
+    text: 'Pushups'
+    below:
+      id: 'result-count'
+
+# A custom exercise from the picker goes straight into the workout.
+- eraseText: 20
+- tapOn: 'New'
+- tapOn: 'Name'
+- inputText: 'Picker Press'
+- tapOn:
+    text: 'Biceps'
+    index: 0
+- hideKeyboard
+- tapOn: 'Add exercise'
+- assertVisible: 'Edit Picker Press'
+- assertVisible: '2 exercises'
+- assertVisible: '6 sets'
+
+# Editing a slot reopens the instructions.
+- tapOn: 'Edit Pushups'
+- tapOn: 'How to do it'
+- assertVisible: 'Hide how to do it'
+- tapOn: 'Close'
