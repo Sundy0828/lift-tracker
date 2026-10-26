@@ -16,6 +16,7 @@ import { buildStatsUpdate } from '@lift/domain/overlay';
 import { rebuildExerciseStats, rebuildWorkoutStats } from '@lift/domain/rebuild';
 import type { NewSessionInput, Session, SessionEntry } from '@lift/domain/sessions';
 import { newSession, sessionExerciseIds, totalPerformedSets } from '@lift/domain/sessions';
+import type { LoadScaleOf } from '@lift/domain/strength';
 import type { Weight } from '@lift/domain/types';
 import { toSession } from '../converters/session';
 import { db } from '../firestore';
@@ -236,14 +237,19 @@ async function settleCompletion(
  * Awaited, unlike the writes above: the caller leaves the screen straight
  * after, and a reload before the batch reached disk left the session active
  * for ever. Throws when the server refuses the write while online.
+ *
+ * `scaleOf` is each exercise's scoring scale, from the exercise library
+ * (`useLoadScale`), so a weighted dip is scored against bodyweight like the
+ * record it is compared with.
  */
 export async function completeSession(
   uid: string,
   session: Session,
   previousStats: (exerciseId: string) => ExerciseStats | null,
+  scaleOf: LoadScaleOf,
 ): Promise<CompleteSessionResult> {
   const completedAt = new Date().toISOString();
-  const update = buildStatsUpdate(session, previousStats);
+  const update = buildStatsUpdate(session, previousStats, scaleOf);
 
   const batch = writeBatch(db);
   batch.set(
@@ -324,9 +330,13 @@ async function remaining(source: Query, deletedId: string): Promise<Session[]> {
  * The only awaited write here: `bestE1rm` and `totalSessions` are running
  * aggregates, so both stats tiers are recomputed from the sessions that
  * remain, read from the server. Rejects when offline or when the session is
- * still active.
+ * still active. `scaleOf` scores the rebuilt records, as in `completeSession`.
  */
-export async function deleteSession(uid: string, session: Session): Promise<void> {
+export async function deleteSession(
+  uid: string,
+  session: Session,
+  scaleOf: LoadScaleOf,
+): Promise<void> {
   if (session.status === 'active') {
     throw new Error('A session in progress is discarded from Today, not deleted here.');
   }
@@ -357,6 +367,7 @@ export async function deleteSession(uid: string, session: Session): Promise<void
             ),
             session.id,
           ),
+          scaleOf(exerciseId),
         ),
       })),
     );

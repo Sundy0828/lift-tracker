@@ -74,7 +74,11 @@ function history(workoutId: string | null, workoutName: string, sets: LoggedSet[
     ...session,
     entries: session.entries.map((entry) => ({ ...entry, sets })),
   };
-  return buildStatsUpdate(logged, () => null);
+  return buildStatsUpdate(
+    logged,
+    () => null,
+    () => 'external',
+  );
 }
 
 const handlers = () => ({
@@ -108,6 +112,7 @@ function setup(
         handedness={options.handedness ?? 'right'}
         workoutStats={workoutStats}
         exerciseStats={exerciseStats}
+        loadScale="external"
         workoutName={workoutName}
         overlayScope={options.overlayScope ?? 'any'}
         onShowExercise={options.onShowExercise}

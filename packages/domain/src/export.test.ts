@@ -60,7 +60,11 @@ function rows(csv: string): string[] {
 
 describe('sessionsToCsv', () => {
   it('writes a header and one row per set', () => {
-    const csv = sessionsToCsv([session([entry('bench', [set(0, 185, 8), set(1, 185, 7)])])], 'lb');
+    const csv = sessionsToCsv(
+      [session([entry('bench', [set(0, 185, 8), set(1, 185, 7)])])],
+      'lb',
+      () => 'external',
+    );
     const lines = rows(csv);
 
     expect(lines[0]).toContain('performed_on');
@@ -70,7 +74,11 @@ describe('sessionsToCsv', () => {
   });
 
   it('converts the load to the display unit but keeps the logged one', () => {
-    const csv = sessionsToCsv([session([entry('bench', [set(0, 100, 5, { unit: 'kg' })])])], 'lb');
+    const csv = sessionsToCsv(
+      [session([entry('bench', [set(0, 100, 5, { unit: 'kg' })])])],
+      'lb',
+      () => 'external',
+    );
     const [, row = ''] = rows(csv);
 
     // 100 kg is 220.46 lb.
@@ -80,13 +88,14 @@ describe('sessionsToCsv', () => {
 
   it('keeps a rest row out of the file, since it has no sets', () => {
     const rest = entry('__rest__', [], { kind: 'rest' });
-    expect(rows(sessionsToCsv([session([rest])], 'lb'))).toHaveLength(1);
+    expect(rows(sessionsToCsv([session([rest])], 'lb', () => 'external'))).toHaveLength(1);
   });
 
   it('quotes a field holding a comma or a quote', () => {
     const csv = sessionsToCsv(
       [session([entry('bench', [set(0, 185, 8)])], { workoutName: 'PUSH, "heavy"' })],
       'lb',
+      () => 'external',
     );
     expect(csv).toContain('"PUSH, ""heavy"""');
   });
@@ -95,6 +104,7 @@ describe('sessionsToCsv', () => {
     const csv = sessionsToCsv(
       [session([entry('bench', [set(0, 185, 8)])], { workoutName: '=cmd|calc' })],
       'lb',
+      () => 'external',
     );
     expect(csv).toContain("'=cmd|calc");
   });
@@ -110,6 +120,7 @@ describe('sessionsToCsv', () => {
         ]),
       ],
       'lb',
+      () => 'external',
     );
     const lines = rows(csv);
     expect(lines).toHaveLength(3);
@@ -117,13 +128,19 @@ describe('sessionsToCsv', () => {
   });
 
   it('leaves a missing number empty rather than writing a zero', () => {
-    const csv = sessionsToCsv([session([entry('pullup', [set(0, null, 8)])])], 'lb');
+    const csv = sessionsToCsv(
+      [session([entry('pullup', [set(0, null, 8)])])],
+      'lb',
+      () => 'external',
+    );
     // Empty weight and unit columns, straight after the skipped column.
     expect(rows(csv)[1]).toContain('no,no,,,8');
   });
 
   it('ends with a newline, so appending to it does not lose the last row', () => {
-    expect(sessionsToCsv([session([entry('bench', [set(0, 185, 8)])])], 'lb')).toMatch(/\n$/u);
+    expect(
+      sessionsToCsv([session([entry('bench', [set(0, 185, 8)])])], 'lb', () => 'external'),
+    ).toMatch(/\n$/u);
   });
 });
 

@@ -1,6 +1,7 @@
 import { Alert, Button, Card, Group, Stack, Text } from '@mantine/core';
 import { useEffect, useRef, useState } from 'react';
 import { useAllSessions } from '@lift/data/hooks/useAllSessions';
+import { useLoadScale } from '@lift/data/hooks/useLoadScale';
 import { useProfile } from '@lift/data/hooks/useProfile';
 import { exportFilename, sessionsToCsv, sessionsToJson } from '@lift/domain/export';
 
@@ -34,6 +35,8 @@ export function ExportCard() {
   const { profile } = useProfile();
   const [wanted, setWanted] = useState<Format | null>(null);
   const { sessions, isPending, complete, error } = useAllSessions(wanted !== null);
+  // The CSV's e1RM column is scored per exercise, so it waits for the library.
+  const { scaleOf, isPending: scalePending } = useLoadScale();
   const [done, setDone] = useState<string | null>(null);
   /** The request already written, so one press cannot save two files. */
   const written = useRef<Format | null>(null);
@@ -41,11 +44,23 @@ export function ExportCard() {
   // The read starts when a button is pressed and the file is written the
   // moment it lands, so the press is one action rather than press-then-wait.
   useEffect(() => {
-    if (wanted === null || isPending || error !== null || written.current === wanted) return;
+    if (
+      wanted === null ||
+      isPending ||
+      scalePending ||
+      error !== null ||
+      written.current === wanted
+    ) {
+      return;
+    }
 
     written.current = wanted;
     if (wanted === 'csv') {
-      download(exportFilename('csv'), sessionsToCsv(sessions, profile.displayUnit), 'text/csv');
+      download(
+        exportFilename('csv'),
+        sessionsToCsv(sessions, profile.displayUnit, scaleOf),
+        'text/csv',
+      );
     } else {
       download(exportFilename('json'), sessionsToJson(sessions), 'application/json');
     }
@@ -55,7 +70,7 @@ export function ExportCard() {
         : `${String(sessions.length)} most recent sessions exported — there are older ones this could not read in one go.`,
     );
     setWanted(null);
-  }, [wanted, isPending, error, sessions, complete, profile.displayUnit]);
+  }, [wanted, isPending, scalePending, scaleOf, error, sessions, complete, profile.displayUnit]);
 
   const start = (format: Format): void => {
     setDone(null);

@@ -11,6 +11,7 @@ import {
 } from './overlay';
 import type { LoggedSet, Session, SessionEntry } from './sessions';
 import { emptySet, newSession } from './sessions';
+import type { LoadScaleOf } from './strength';
 import { adjustedE1rm, describeComparison } from './strength';
 import type { Unit } from './types';
 import type { ExerciseSlot, WorkoutBody } from './workouts';
@@ -90,7 +91,7 @@ describe('resolveOverlay', () => {
     { 'slot-bench': [set(0, 205, 6, 1), set(1, 205, 5, 0)] },
     [slot('slot-bench', 'bench')],
   );
-  const pushStats = buildStatsUpdate(push, NO_PREVIOUS);
+  const pushStats = buildStatsUpdate(push, NO_PREVIOUS, () => 'external');
   const benchAnywhere = pushStats.exerciseStats.get('bench') ?? null;
 
   const chest = logged(
@@ -98,7 +99,7 @@ describe('resolveOverlay', () => {
     { 'slot-bench': [set(0, 185, 9, 2)] },
     [slot('slot-bench', 'bench')],
   );
-  const chestStats = buildStatsUpdate(chest, NO_PREVIOUS);
+  const chestStats = buildStatsUpdate(chest, NO_PREVIOUS, () => 'external');
 
   it('prefers this workout own history, even when the exercise was done more recently elsewhere', () => {
     const overlay = resolveOverlay(
@@ -226,7 +227,7 @@ describe('duplicate occurrences', () => {
     },
     slots,
   );
-  const update = buildStatsUpdate(session, NO_PREVIOUS);
+  const update = buildStatsUpdate(session, NO_PREVIOUS, () => 'external');
 
   it('keys the two occurrences apart so they never collapse', () => {
     const byOccurrence = update.workoutStats?.byOccurrence ?? {};
@@ -295,7 +296,7 @@ describe('buildStatsUpdate', () => {
       { 'slot-a': [set(0, 100, 10, 2)] },
       [slot('slot-a', 'curl')],
     );
-    const update = buildStatsUpdate(session, NO_PREVIOUS);
+    const update = buildStatsUpdate(session, NO_PREVIOUS, () => 'external');
 
     expect(update.workoutStats).toBeNull();
     expect(update.exerciseStats.get('curl')?.lastWorkoutId).toBeNull();
@@ -307,7 +308,7 @@ describe('buildStatsUpdate', () => {
       { 'slot-a': [set(0, 185, 8, 2)], 'slot-b': [emptySet(0), emptySet(1)] },
       [slot('slot-a', 'bench'), slot('slot-b', 'fly')],
     );
-    const update = buildStatsUpdate(session, NO_PREVIOUS);
+    const update = buildStatsUpdate(session, NO_PREVIOUS, () => 'external');
 
     expect(Object.keys(update.workoutStats?.byOccurrence ?? {})).toEqual(['bench#0']);
     expect(update.exerciseStats.has('fly')).toBe(false);
@@ -322,7 +323,7 @@ describe('buildStatsUpdate', () => {
         slot('slot-rest', '__rest__', { kind: 'rest', exerciseName: 'Rest' }),
       ],
     );
-    const update = buildStatsUpdate(session, NO_PREVIOUS);
+    const update = buildStatsUpdate(session, NO_PREVIOUS, () => 'external');
 
     expect(Object.keys(update.workoutStats?.byOccurrence ?? {})).toEqual(['crunch#0']);
     expect(update.exerciseStats.has('__rest__')).toBe(false);
@@ -334,7 +335,8 @@ describe('buildStatsUpdate', () => {
       { 'slot-a': [set(0, 95, 10, 6, { isWarmup: true }), set(1, 185, 8, 2)] },
       [slot('slot-a', 'bench')],
     );
-    const stored = buildStatsUpdate(session, NO_PREVIOUS).workoutStats?.byOccurrence['bench#0'];
+    const stored = buildStatsUpdate(session, NO_PREVIOUS, () => 'external').workoutStats
+      ?.byOccurrence['bench#0'];
 
     expect(stored?.sets).toHaveLength(1);
     expect(stored?.sets[0]?.weight?.value).toBe(185);
@@ -348,6 +350,7 @@ describe('buildStatsUpdate', () => {
         [slot('slot-a', 'bench'), slot('slot-b', 'fly')],
       ),
       NO_PREVIOUS,
+      () => 'external',
     );
     const second = buildStatsUpdate(
       logged(
@@ -356,6 +359,7 @@ describe('buildStatsUpdate', () => {
         [slot('slot-a', 'bench')],
       ),
       NO_PREVIOUS,
+      () => 'external',
     );
 
     expect(Object.keys(first.workoutStats?.byOccurrence ?? {})).toContain('fly#0');
@@ -371,14 +375,14 @@ describe('PR detection', () => {
   );
 
   it('treats a first performance as a record', () => {
-    const update = buildStatsUpdate(week1, NO_PREVIOUS);
+    const update = buildStatsUpdate(week1, NO_PREVIOUS, () => 'external');
     expect(update.prs.map((pr) => pr.exerciseId)).toEqual(['bench']);
     expect(update.prs[0]?.previousE1rmKg).toBe(0);
     expect(update.exerciseStats.get('bench')?.bestSet?.setIndex).toBe(0);
   });
 
   it('fires when a later session beats the stored best', () => {
-    const first = buildStatsUpdate(week1, NO_PREVIOUS);
+    const first = buildStatsUpdate(week1, NO_PREVIOUS, () => 'external');
     const stored = first.exerciseStats.get('bench') ?? null;
 
     const week2 = logged(
@@ -386,7 +390,11 @@ describe('PR detection', () => {
       { 'slot-a': [set(0, 195, 8, 2)] },
       [slot('slot-a', 'bench')],
     );
-    const update = buildStatsUpdate(week2, () => stored);
+    const update = buildStatsUpdate(
+      week2,
+      () => stored,
+      () => 'external',
+    );
 
     expect(update.prs).toHaveLength(1);
     expect(update.exerciseStats.get('bench')?.bestSet?.weight?.value).toBe(195);
@@ -395,13 +403,18 @@ describe('PR detection', () => {
   });
 
   it('does not fire for repeating the same best set', () => {
-    const stored = buildStatsUpdate(week1, NO_PREVIOUS).exerciseStats.get('bench') ?? null;
+    const stored =
+      buildStatsUpdate(week1, NO_PREVIOUS, () => 'external').exerciseStats.get('bench') ?? null;
     const repeat = logged(
       { id: 's2', workoutId: 'push', workoutName: 'PUSH', performedOn: '2025-08-31' },
       { 'slot-a': [set(0, 185, 8, 2)] },
       [slot('slot-a', 'bench')],
     );
-    const update = buildStatsUpdate(repeat, () => stored);
+    const update = buildStatsUpdate(
+      repeat,
+      () => stored,
+      () => 'external',
+    );
 
     expect(update.prs).toHaveLength(0);
     // The record and the set that made it are both left where they were.
@@ -410,26 +423,36 @@ describe('PR detection', () => {
   });
 
   it('does not fire for a heavier set that is worse once RIR is counted', () => {
-    const stored = buildStatsUpdate(week1, NO_PREVIOUS).exerciseStats.get('bench') ?? null;
+    const stored =
+      buildStatsUpdate(week1, NO_PREVIOUS, () => 'external').exerciseStats.get('bench') ?? null;
     // 195x5 @1 is 195x6 adjusted, below 185x8 @2 = 185x10 adjusted.
     const heavier = logged(
       { id: 's2', workoutId: 'push', workoutName: 'PUSH', performedOn: '2025-08-31' },
       { 'slot-a': [set(0, 195, 5, 1)] },
       [slot('slot-a', 'bench')],
     );
-    const update = buildStatsUpdate(heavier, () => stored);
+    const update = buildStatsUpdate(
+      heavier,
+      () => stored,
+      () => 'external',
+    );
 
     expect(update.prs).toHaveLength(0);
   });
 
   it('detects a PR across units', () => {
-    const stored = buildStatsUpdate(week1, NO_PREVIOUS).exerciseStats.get('bench') ?? null;
+    const stored =
+      buildStatsUpdate(week1, NO_PREVIOUS, () => 'external').exerciseStats.get('bench') ?? null;
     const inKg = logged(
       { id: 's2', workoutId: 'push', workoutName: 'PUSH', performedOn: '2025-08-31' },
       { 'slot-a': [set(0, 90, 8, 2, { unit: 'kg' })] },
       [slot('slot-a', 'bench')],
     );
-    const update = buildStatsUpdate(inKg, () => stored);
+    const update = buildStatsUpdate(
+      inKg,
+      () => stored,
+      () => 'external',
+    );
 
     // 90 kg is ~198 lb, comfortably over 185 lb at the same reps and RIR.
     expect(update.prs).toHaveLength(1);
@@ -437,9 +460,59 @@ describe('PR detection', () => {
   });
 
   it('does not double-count a session completed twice', () => {
-    const first = buildStatsUpdate(week1, NO_PREVIOUS).exerciseStats.get('bench') ?? null;
-    const again = buildStatsUpdate(week1, () => first);
+    const first =
+      buildStatsUpdate(week1, NO_PREVIOUS, () => 'external').exerciseStats.get('bench') ?? null;
+    const again = buildStatsUpdate(
+      week1,
+      () => first,
+      () => 'external',
+    );
     expect(again.exerciseStats.get('bench')?.totalSessions).toBe(1);
+  });
+
+  describe('scored per exercise', () => {
+    /** Dips are a bodyweight lift; bench is not. One session holds both. */
+    const scaleOf: LoadScaleOf = (id) => (id === 'dips' ? 'bodyweight' : 'external');
+    const slots = [slot('slot-dips', 'dips'), slot('slot-bench', 'bench')];
+    const unweighted = logged(
+      { id: 'd1', workoutId: 'push', workoutName: 'PUSH', performedOn: '2025-08-24' },
+      {
+        'slot-dips': [set(0, 0, 10, 0, { unit: 'kg' })],
+        'slot-bench': [set(0, 100, 5, 0, { unit: 'kg' })],
+      },
+      slots,
+    );
+    const stored = buildStatsUpdate(unweighted, NO_PREVIOUS, scaleOf).exerciseStats;
+
+    it('takes a weighted dip as a record over a bodyweight one', () => {
+      // +20 kg × 8 scored as plain Epley (25.3) lost to 0 × 10 (26.7).
+      const weighted = logged(
+        { id: 'd2', workoutId: 'push', workoutName: 'PUSH', performedOn: '2025-08-31' },
+        { 'slot-dips': [set(0, 20, 8, 0, { unit: 'kg' })] },
+        slots,
+      );
+      const update = buildStatsUpdate(weighted, (id) => stored.get(id) ?? null, scaleOf);
+
+      expect(update.prs.map((pr) => pr.exerciseId)).toEqual(['dips']);
+      expect(update.prs[0]?.e1rmKg).toBeCloseTo(46.667, 3);
+      expect(update.prs[0]?.previousE1rmKg).toBeCloseTo(26.667, 3);
+      expect(update.exerciseStats.get('dips')?.bestSet?.weight?.value).toBe(20);
+    });
+
+    it('counts the lightest plate on a belt as progress', () => {
+      const belted = logged(
+        { id: 'd2', workoutId: 'push', workoutName: 'PUSH', performedOn: '2025-08-31' },
+        { 'slot-dips': [set(0, 2.5, 10, 0, { unit: 'kg' })] },
+        slots,
+      );
+      const update = buildStatsUpdate(belted, (id) => stored.get(id) ?? null, scaleOf);
+      expect(update.prs.map((pr) => pr.exerciseId)).toEqual(['dips']);
+    });
+
+    it('leaves the barbell record in the same session on plain Epley', () => {
+      expect(stored.get('bench')?.bestE1rm).toBeCloseTo(100 * (1 + 5 / 30), 6);
+      expect(stored.get('dips')?.bestE1rm).toBeCloseTo(26.667, 3);
+    });
   });
 });
 
@@ -454,7 +527,7 @@ describe('a workout changed between weeks', () => {
     { 'slot-bench': [set(0, 185, 8, 2)], 'slot-fly': [set(0, 40, 12, 2)] },
     [slot('slot-bench', 'bench'), slot('slot-fly', 'fly')],
   );
-  const afterWeek1 = buildStatsUpdate(week1, NO_PREVIOUS);
+  const afterWeek1 = buildStatsUpdate(week1, NO_PREVIOUS, () => 'external');
 
   const week2Slots = [
     slot('slot-incline', 'incline'),
@@ -494,7 +567,7 @@ describe('a workout changed between weeks', () => {
     expect(previous).not.toBeNull();
     if (previous === null) return;
 
-    const chip = describeComparison(set(0, 190, 8, 2), previous, 'lb');
+    const chip = describeComparison(set(0, 190, 8, 2), previous, 'lb', 'external');
     expect(chip?.direction).toBe('up');
     expect(chip?.label).toBe('+5 lb');
   });
@@ -522,6 +595,7 @@ describe('one continuous history for a workout done on different days', () => {
         [slot('slot-a', 'crunch')],
       ),
       NO_PREVIOUS,
+      () => 'external',
     );
     const wednesday = buildStatsUpdate(
       logged(
@@ -530,6 +604,7 @@ describe('one continuous history for a workout done on different days', () => {
         [slot('slot-a', 'crunch')],
       ),
       (id) => monday.exerciseStats.get(id) ?? null,
+      () => 'external',
     );
 
     expect(monday.workoutStats?.workoutId).toBe('abs');
@@ -602,10 +677,9 @@ describe('parsing stored stats', () => {
     expect(stats.exerciseId).toBe('bench');
     expect(stats.bestSet?.reps).toBe(8);
     expect(stats.totalSessions).toBe(3);
-    expect(adjustedE1rm(stats.bestSet ?? { weight: null, reps: null, rir: null })).toBeCloseTo(
-      111.9,
-      1,
-    );
+    expect(
+      adjustedE1rm(stats.bestSet ?? { weight: null, reps: null, rir: null }, 'external'),
+    ).toBeCloseTo(111.9, 1);
   });
 
   it('reads an empty document as no history at all', () => {

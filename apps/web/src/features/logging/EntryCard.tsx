@@ -1,7 +1,7 @@
 import { Badge, Button, Card, Group, SegmentedControl, Stack, Text, Textarea } from '@mantine/core';
 import { useState } from 'react';
 import type { ExerciseStats, Overlay, OverlayScope, WorkoutStats } from '@lift/domain/overlay';
-import type { DeltaChip } from '@lift/domain/strength';
+import type { DeltaChip, LoadScale } from '@lift/domain/strength';
 import { isComparable, previousSetAt, resolveOverlay, workedPosition } from '@lift/domain/overlay';
 import type { LoggedSet, SessionEntry } from '@lift/domain/sessions';
 import type { DistanceUnit, Measure } from '@lift/domain/measure';
@@ -51,6 +51,8 @@ type Props = SetHandlers & {
   handedness: Handedness;
   workoutStats: WorkoutStats | null;
   exerciseStats: ExerciseStats | null;
+  /** How the exercise is scored (see `LoadScale`), for the comparison chip. */
+  loadScale: LoadScale;
   /** The workout being performed, so tier 1 can be labelled with its name. */
   workoutName: string;
   /** How far the overlay may look for last time's numbers. */
@@ -104,6 +106,7 @@ function rowOverlay(
   entry: SessionEntry,
   set: LoggedSet,
   displayUnit: Unit,
+  scale: LoadScale,
 ): RowOverlay {
   if (overlay.kind === 'new' || set.isWarmup) return NOTHING;
 
@@ -116,7 +119,7 @@ function rowOverlay(
   const previousLabel = formatSet(previous, displayUnit);
   if (!isComparable(overlay)) return { previousLabel, delta: null };
 
-  return { previousLabel, delta: describeComparison(set, previous, displayUnit) };
+  return { previousLabel, delta: describeComparison(set, previous, displayUnit, scale) };
 }
 
 export function EntryCard({
@@ -125,6 +128,7 @@ export function EntryCard({
   handedness,
   workoutStats,
   exerciseStats,
+  loadScale,
   workoutName,
   overlayScope,
   onNotes,
@@ -223,7 +227,13 @@ export function EntryCard({
 
         <div>
           {entry.sets.map((set) => {
-            const { previousLabel, delta } = rowOverlay(overlay, entry, set, displayUnit);
+            const { previousLabel, delta } = rowOverlay(
+              overlay,
+              entry,
+              set,
+              displayUnit,
+              loadScale,
+            );
             return (
               <SetRow
                 key={set.setIndex}

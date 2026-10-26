@@ -44,7 +44,8 @@ jobs:
         with:
           node-version: lts/*
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      # The phone app's packages (Expo, React Native) are not needed here.
+      - run: pnpm install --frozen-lockfile --filter '!@lift/mobile'
       - name: Authenticate to Firebase
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LIFT_TRACKER_E4A9C }}
@@ -69,7 +70,8 @@ jobs:
         with:
           node-version: lts/*
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      # The phone app's packages (Expo, React Native) are not needed here.
+      - run: pnpm install --frozen-lockfile --filter '!@lift/mobile'
       - run: pnpm run build
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:

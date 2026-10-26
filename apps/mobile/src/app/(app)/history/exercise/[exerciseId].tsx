@@ -10,7 +10,7 @@ import {
   recordMilestones,
   workoutFilterOptions,
 } from '@lift/domain/history';
-import { formatE1rm, formatSet } from '@lift/domain/strength';
+import { formatE1rm, formatSet, loadScaleFor } from '@lift/domain/strength';
 import type { TrendSample } from '@lift/domain/trend';
 import type { Unit } from '@lift/domain/types';
 import { useLocalSearchParams } from 'expo-router';
@@ -93,8 +93,11 @@ export default function ExerciseHistory() {
   const { resolver } = useExerciseLibrary();
   const { profile } = useProfile();
   const [scope, setScope] = useState<string>(ALL);
+  // Bodyweight or bar (see `LoadScale`): the trend and the records are scored
+  // on it, as the PR toast was.
+  const scale = loadScaleFor(resolver.resolve(id));
 
-  const all = useMemo(() => exercisePerformances(sessions, id), [sessions, id]);
+  const all = useMemo(() => exercisePerformances(sessions, id, scale), [sessions, id, scale]);
   const options = useMemo(() => workoutFilterOptions(all), [all]);
 
   const performances = useMemo(() => {

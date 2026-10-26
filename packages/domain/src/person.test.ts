@@ -12,6 +12,10 @@ describe('cleanName', () => {
     expect(cleanName('McDonald')).toBe('McDonald');
   });
 
+  it('capitalises letters outside A–Z', () => {
+    expect(cleanName('élodie')).toBe('Élodie');
+  });
+
   it('collapses spaces, and drops them around a hyphen', () => {
     expect(cleanName('  ebersole   sunderland ')).toBe('Ebersole Sunderland');
     expect(cleanName('ebersole - sunderland')).toBe('Ebersole-Sunderland');
@@ -30,11 +34,19 @@ describe('nameProblem', () => {
     expect(nameProblem('Jo', ' \t ')).toBe('Enter your last name.');
   });
 
-  it('refuses digits and symbols', () => {
-    expect(nameProblem('J0hn', 'Smith')).toMatch(/first name can only use letters/u);
-    expect(nameProblem('John', 'Smith!')).toMatch(/last name can only use letters/u);
-    expect(nameProblem('John', '-')).toMatch(/last name can only use letters/u);
-    expect(nameProblem('John', 'Smith--Jones')).toMatch(/last name can only use letters/u);
+  it('accepts accents, apostrophes, periods and other alphabets', () => {
+    expect(nameProblem('José', 'García')).toBeNull();
+    expect(nameProblem('Zoë', "O'Brien")).toBeNull();
+    expect(nameProblem('Martin', 'Luther Jr.')).toBeNull();
+    expect(nameProblem('明', '李')).toBeNull();
+  });
+
+  it('refuses numbers, and a part that does not start with a letter', () => {
+    expect(nameProblem('J0hn', 'Smith')).toMatch(/first name has to start with a letter/u);
+    expect(nameProblem('John', '42')).toMatch(/last name has to start with a letter/u);
+    expect(nameProblem('John', "'Neil")).toMatch(/last name has to start with a letter/u);
+    expect(nameProblem('John', '-')).toMatch(/last name has to start with a letter/u);
+    expect(nameProblem('John', 'Smith--Jones')).toMatch(/last name has to start with a letter/u);
   });
 
   it('agrees with hasName', () => {

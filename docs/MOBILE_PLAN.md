@@ -746,6 +746,9 @@ Added to web and phone together, shared code first. Not yet run on a device.
 
 ### Phase 6: Release
 
+_Moved to [PUBLISH_PLAN.md](PUBLISH_PLAN.md) on 2026-10-25, when `mobile` was merged to `master`
+ahead of publishing. The list below is kept as it stood then; work from that document._
+
 - [ ] EAS Build. TestFlight and Play internal testing.
 - [ ] Store listing, privacy labels, account deletion flow (already exists in
       `mutations/account.ts`).

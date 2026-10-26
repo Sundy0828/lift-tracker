@@ -16,7 +16,8 @@ import {
   workoutFilterOptions,
 } from '@lift/domain/history';
 import type { TrendSample } from '@lift/domain/trend';
-import { describeE1rm, formatE1rm, formatSet } from '@lift/domain/strength';
+import type { LoadScale } from '@lift/domain/strength';
+import { describeE1rm, formatE1rm, formatSet, loadScaleFor } from '@lift/domain/strength';
 import type { Unit } from '@lift/domain/types';
 
 /**
@@ -40,10 +41,12 @@ const AD_HOC = '__adhoc__';
 function PerformanceCard({
   performance,
   displayUnit,
+  scale,
   isRecord,
 }: {
   performance: ExercisePerformance;
   displayUnit: Unit;
+  scale: LoadScale;
   isRecord: boolean;
 }) {
   return (
@@ -76,7 +79,7 @@ function PerformanceCard({
             ) : null}
             {performance.e1rmKg === null || performance.best === null ? null : (
               <Tooltip
-                label={describeE1rm(performance.best, displayUnit) ?? ''}
+                label={describeE1rm(performance.best, displayUnit, scale) ?? ''}
                 withArrow
                 multiline
                 w={260}
@@ -109,10 +112,13 @@ export default function ExerciseHistoryScreen() {
   const { resolver } = useExerciseLibrary();
   const { profile } = useProfile();
   const [scope, setScope] = useState<string>(ALL);
+  // Bodyweight or bar (see `LoadScale`): the trend, the records and every
+  // e1RM on this screen are scored on it, as the PR toast was.
+  const scale = loadScaleFor(id === null ? null : resolver.resolve(id));
 
   const all = useMemo(
-    () => (id === null ? [] : exercisePerformances(sessions, id)),
-    [sessions, id],
+    () => (id === null ? [] : exercisePerformances(sessions, id, scale)),
+    [sessions, id, scale],
   );
   const options = useMemo(() => workoutFilterOptions(all), [all]);
 
@@ -236,7 +242,7 @@ export default function ExerciseHistoryScreen() {
                       </Text>
                     </Stack>
                     <Tooltip
-                      label={describeE1rm(milestone.set, displayUnit) ?? ''}
+                      label={describeE1rm(milestone.set, displayUnit, scale) ?? ''}
                       withArrow
                       multiline
                       w={260}
@@ -261,6 +267,7 @@ export default function ExerciseHistoryScreen() {
                 key={performance.sessionId}
                 performance={performance}
                 displayUnit={displayUnit}
+                scale={scale}
                 isRecord={recordSessions.has(performance.sessionId)}
               />
             ))}

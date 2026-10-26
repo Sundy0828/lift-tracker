@@ -16,7 +16,7 @@ import { Button, Card, Field, Heading, Notice, Small } from '../ui';
 
 /**
  * Your name, and the avatar made from it: the web's `NameCard`. Both halves
- * are required and letters only, so Save stays off until both pass.
+ * are required and must pass `nameProblem`, so Save stays off until both pass.
  *
  * Unsaved typing is dropped when you leave the tab. A tab stays mounted, so
  * otherwise a cleared name would still read blank on the way back, as if it

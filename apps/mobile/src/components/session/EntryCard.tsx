@@ -12,7 +12,7 @@ import {
   isRestEntry,
   setAmountIn,
 } from '@lift/domain/sessions';
-import type { DeltaChip } from '@lift/domain/strength';
+import type { DeltaChip, LoadScale } from '@lift/domain/strength';
 import { describeComparison, formatSet } from '@lift/domain/strength';
 import type { Handedness, Unit } from '@lift/domain/types';
 import {
@@ -38,6 +38,8 @@ type Props = SetHandlers & {
   displayUnit: Unit;
   workoutStats: WorkoutStats | null;
   exerciseStats: ExerciseStats | null;
+  /** How the exercise is scored (see `LoadScale`), for the comparison chip. */
+  loadScale: LoadScale;
   workoutName: string;
   overlayScope: OverlayScope;
   onNotes: (entryKey: string, notes: string) => void;
@@ -71,6 +73,7 @@ function rowOverlay(
   entry: SessionEntry,
   set: LoggedSet,
   displayUnit: Unit,
+  scale: LoadScale,
 ): RowOverlay {
   if (overlay.kind === 'new' || set.isWarmup) return NOTHING;
   const position = workedPosition(entry, set.setIndex);
@@ -79,7 +82,7 @@ function rowOverlay(
   if (previous === null) return NOTHING;
   const previousLabel = formatSet(previous, displayUnit);
   if (!isComparable(overlay)) return { previousLabel, delta: null };
-  return { previousLabel, delta: describeComparison(set, previous, displayUnit) };
+  return { previousLabel, delta: describeComparison(set, previous, displayUnit, scale) };
 }
 
 export function EntryCard({
@@ -87,6 +90,7 @@ export function EntryCard({
   displayUnit,
   workoutStats,
   exerciseStats,
+  loadScale,
   workoutName,
   overlayScope,
   onNotes,
@@ -170,7 +174,7 @@ export function EntryCard({
       ) : null}
 
       {entry.sets.map((set) => {
-        const { previousLabel, delta } = rowOverlay(overlay, entry, set, displayUnit);
+        const { previousLabel, delta } = rowOverlay(overlay, entry, set, displayUnit, loadScale);
         return (
           <SetRow
             key={set.setIndex}

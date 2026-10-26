@@ -2,6 +2,7 @@ import type { ExerciseStats, LastPerformance, WorkoutStats } from './overlay';
 import { toPerformance } from './overlay';
 import type { LoggedSet, Session, SessionEntry } from './sessions';
 import { exerciseEntries, performedSets, workingSets } from './sessions';
+import type { LoadScale } from './strength';
 import { adjustedE1rm, beatsRecord, bestSet } from './strength';
 import { occurrenceKey } from './workouts';
 
@@ -47,10 +48,15 @@ function performances(exerciseId: string, sessions: readonly Session[]): Perform
  *
  * Null when no remaining session performed the exercise; the caller then
  * deletes the document rather than storing a zero record.
+ *
+ * `scale` is the exercise's (see `LoadScale`). Because every set is rescored
+ * here, this is also how a record is moved onto a new scoring rule:
+ * `scripts/rebuild-records.ts` runs it over every exercise.
  */
 export function rebuildExerciseStats(
   exerciseId: string,
   sessions: readonly Session[],
+  scale: LoadScale,
 ): ExerciseStats | null {
   const found = performances(exerciseId, sessions);
   // The newest session, and its last entry when the exercise appears twice.
@@ -67,8 +73,8 @@ export function rebuildExerciseStats(
   for (const { session, entry } of found) {
     sessionIds.add(session.id);
 
-    const candidate = bestSet(entry.sets);
-    const score = candidate === null ? null : adjustedE1rm(candidate);
+    const candidate = bestSet(entry.sets, scale);
+    const score = candidate === null ? null : adjustedE1rm(candidate, scale);
     // The first scored set is the record whatever it scores: an assisted lift
     // starts below zero (see buildStatsUpdate).
     if (score === null || (best !== null && !beatsRecord(score, bestE1rm))) continue;

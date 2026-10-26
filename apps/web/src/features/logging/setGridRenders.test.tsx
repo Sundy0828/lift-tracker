@@ -98,6 +98,7 @@ function Harness() {
       handedness="right"
       workoutStats={null}
       exerciseStats={null}
+      loadScale="external"
       workoutName="PUSH"
       overlayScope="same-workout"
       onWeight={onWeight}

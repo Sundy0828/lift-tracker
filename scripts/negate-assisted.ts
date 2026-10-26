@@ -25,7 +25,10 @@ import { cert, initializeApp, type ServiceAccount } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { rebuildExerciseStats, rebuildWorkoutStats } from '@lift/domain/rebuild';
+import { parseCustomExercise } from '@lift/domain/exercises';
 import { parseSession, type Session } from '@lift/domain/sessions';
+import { loadScaleLookup } from '@lift/domain/strength';
+import { exerciseResolver } from './exercise-library';
 
 /** Dips, pull-ups and chin-ups, by name: the lifts an assisted machine is for. */
 const DEFAULT_MATCH = String.raw`\b(dips?|pull[\s-]?ups?|chin[\s-]?ups?)\b`;
@@ -183,9 +186,14 @@ async function main(): Promise<void> {
   // the corrected sessions rather than patched.
   const corrected = await userRef.collection('sessions').get();
   const sessions: Session[] = corrected.docs.map((doc) => parseSession(doc.id, plain(doc.data())));
+  // Scored per exercise, as the app scores them (see `LoadScale`).
+  const custom = await userRef.collection('customExercises').get();
+  const scaleOf = loadScaleLookup(
+    exerciseResolver(custom.docs.map((doc) => parseCustomExercise(doc.id, plain(doc.data())))),
+  );
 
   for (const exerciseId of touchedExercises) {
-    const stats = rebuildExerciseStats(exerciseId, sessions);
+    const stats = rebuildExerciseStats(exerciseId, sessions, scaleOf(exerciseId));
     const ref = userRef.collection('exerciseStats').doc(exerciseId);
     if (stats === null) await ref.delete();
     else await ref.set({ ...stats, updatedAt: FieldValue.serverTimestamp() });

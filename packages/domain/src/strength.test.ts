@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { LoggedSet } from './sessions';
 import { emptySet } from './sessions';
 import {
+  BODYWEIGHT_REFERENCE_KG,
   adjustedE1rm,
   beatsRecord,
   bestSet,
@@ -13,6 +14,7 @@ import {
   formatE1rm,
   formatSet,
   loadKg,
+  loadScaleFor,
 } from './strength';
 import type { Unit } from './types';
 
@@ -46,28 +48,33 @@ describe('epley', () => {
 
 describe('e1rm', () => {
   it('normalises pounds to kilograms before estimating', () => {
-    const estimate = e1rm(set(185, 8, 2));
+    const estimate = e1rm(set(185, 8, 2), 'external');
     expect(estimate).toBeCloseTo(185 * KG_PER_LB * (1 + 8 / 30), 6);
   });
 
   it('ignores RIR', () => {
-    expect(e1rm(set(100, 5, 0, { unit: 'kg' }))).toEqual(e1rm(set(100, 5, 4, { unit: 'kg' })));
+    expect(e1rm(set(100, 5, 0, { unit: 'kg' }), 'external')).toEqual(
+      e1rm(set(100, 5, 4, { unit: 'kg' }), 'external'),
+    );
   });
 
   it('is null without both a load and reps', () => {
-    expect(e1rm(set(null, 8, 1))).toBeNull();
-    expect(e1rm(set(185, null, 1))).toBeNull();
-    expect(e1rm(set(185, 0, 1))).toBeNull();
+    expect(e1rm(set(null, 8, 1), 'external')).toBeNull();
+    expect(e1rm(set(185, null, 1), 'external')).toBeNull();
+    expect(e1rm(set(185, 0, 1), 'external')).toBeNull();
   });
 });
 
 describe('adjustedE1rm', () => {
   it('adds reps in reserve to the reps performed', () => {
-    expect(adjustedE1rm(set(100, 8, 2, { unit: 'kg' }))).toBeCloseTo(epley(100, 10), 6);
+    expect(adjustedE1rm(set(100, 8, 2, { unit: 'kg' }), 'external')).toBeCloseTo(epley(100, 10), 6);
   });
 
   it('treats a missing RIR as taken to failure, which never inflates it', () => {
-    expect(adjustedE1rm(set(100, 8, null, { unit: 'kg' }))).toBeCloseTo(epley(100, 8), 6);
+    expect(adjustedE1rm(set(100, 8, null, { unit: 'kg' }), 'external')).toBeCloseTo(
+      epley(100, 8),
+      6,
+    );
   });
 
   /**
@@ -75,8 +82,8 @@ describe('adjustedE1rm', () => {
    * lighter set simply because it was taken closer to failure.
    */
   it('does not score a harder set as an improvement over a heavier easy one', () => {
-    const heavyEasy = adjustedE1rm(set(120, 5, 4, { unit: 'kg' }));
-    const lightHard = adjustedE1rm(set(100, 8, 0, { unit: 'kg' }));
+    const heavyEasy = adjustedE1rm(set(120, 5, 4, { unit: 'kg' }), 'external');
+    const lightHard = adjustedE1rm(set(100, 8, 0, { unit: 'kg' }), 'external');
     expect(heavyEasy).not.toBeNull();
     expect(lightHard).not.toBeNull();
     expect(heavyEasy ?? 0).toBeGreaterThan(lightHard ?? 0);
@@ -92,12 +99,12 @@ describe('loadKg', () => {
 
 describe('compareSets', () => {
   it('is null when either side is incomplete', () => {
-    expect(compareSets(set(185, null, 1), set(185, 8, 1))).toBeNull();
-    expect(compareSets(set(185, 8, 1), set(null, 8, 1))).toBeNull();
+    expect(compareSets(set(185, null, 1), set(185, 8, 1), 'external')).toBeNull();
+    expect(compareSets(set(185, 8, 1), set(null, 8, 1), 'external')).toBeNull();
   });
 
   it('reads more load at the same reps as up', () => {
-    const comparison = compareSets(set(190, 8, 2), set(185, 8, 2));
+    const comparison = compareSets(set(190, 8, 2), set(185, 8, 2), 'external');
     expect(comparison?.direction).toBe('up');
     expect(comparison?.weightDeltaKg).toBeCloseTo(5 * KG_PER_LB, 6);
     expect(comparison?.repsDelta).toBe(0);
@@ -105,37 +112,37 @@ describe('compareSets', () => {
 
   it('resolves heavier-but-shorter on estimated 1RM, not raw weight', () => {
     // 195x5 @2 is 195x7 adjusted; 185x8 @2 is 185x10 adjusted, which is more.
-    const comparison = compareSets(set(195, 5, 2), set(185, 8, 2));
+    const comparison = compareSets(set(195, 5, 2), set(185, 8, 2), 'external');
     expect(comparison?.direction).toBe('down');
     expect(comparison?.weightDeltaKg).toBeGreaterThan(0);
   });
 
   it('reads the same numbers as unchanged', () => {
-    expect(compareSets(set(185, 8, 2), set(185, 8, 2))?.direction).toBe('same');
+    expect(compareSets(set(185, 8, 2), set(185, 8, 2), 'external')?.direction).toBe('same');
   });
 
   /** Same output for more effort is a step back in capacity, not forward. */
   it('reads fewer reps in reserve at the same load as down', () => {
-    const comparison = compareSets(set(185, 8, 0), set(185, 8, 3));
+    const comparison = compareSets(set(185, 8, 0), set(185, 8, 3), 'external');
     expect(comparison?.direction).toBe('down');
     expect(comparison?.rirDelta).toBe(-3);
   });
 
   it('compares across units', () => {
-    const comparison = compareSets(set(100, 5, 1, { unit: 'kg' }), set(220.462, 5, 1));
+    const comparison = compareSets(set(100, 5, 1, { unit: 'kg' }), set(220.462, 5, 1), 'external');
     expect(comparison?.direction).toBe('same');
   });
 });
 
 describe('describeComparison', () => {
   function chip(current: LoggedSet, previous: LoggedSet, unit: Unit = 'lb') {
-    const result = describeComparison(current, previous, unit);
+    const result = describeComparison(current, previous, unit, 'external');
     expect(result).not.toBeNull();
     return result ?? { label: '', direction: 'same' as const, detail: '' };
   }
 
   it('is null when either side is incomplete', () => {
-    expect(describeComparison(set(185, null, 1), set(185, 8, 1), 'lb')).toBeNull();
+    expect(describeComparison(set(185, null, 1), set(185, 8, 1), 'lb', 'external')).toBeNull();
   });
 
   it('names the load alone when only the load moved', () => {
@@ -202,12 +209,12 @@ describe('describeComparison', () => {
 describe('bestSet', () => {
   it('picks the highest adjusted e1RM', () => {
     const sets = [set(185, 8, 3, { setIndex: 0 }), set(205, 5, 1, { setIndex: 1 })];
-    expect(bestSet(sets)?.setIndex).toBe(0);
+    expect(bestSet(sets, 'external')?.setIndex).toBe(0);
   });
 
   it('never lets a warmup take the record', () => {
     const sets = [set(315, 5, 0, { setIndex: 0, isWarmup: true }), set(185, 8, 2, { setIndex: 1 })];
-    expect(bestSet(sets)?.setIndex).toBe(1);
+    expect(bestSet(sets, 'external')?.setIndex).toBe(1);
   });
 
   it('ignores skipped and unfilled rows', () => {
@@ -216,16 +223,16 @@ describe('bestSet', () => {
       set(null, null, null, { setIndex: 1 }),
       set(185, 8, 2, { setIndex: 2 }),
     ];
-    expect(bestSet(sets)?.setIndex).toBe(2);
+    expect(bestSet(sets, 'external')?.setIndex).toBe(2);
   });
 
   it('keeps the earlier of two equal sets', () => {
     const sets = [set(185, 8, 2, { setIndex: 0 }), set(185, 8, 2, { setIndex: 1 })];
-    expect(bestSet(sets)?.setIndex).toBe(0);
+    expect(bestSet(sets, 'external')?.setIndex).toBe(0);
   });
 
   it('is null when nothing was performed', () => {
-    expect(bestSet([emptySet(0), emptySet(1)])).toBeNull();
+    expect(bestSet([emptySet(0), emptySet(1)], 'external')).toBeNull();
   });
 });
 
@@ -264,34 +271,133 @@ describe('formatting', () => {
 describe('describeE1rm', () => {
   it('says the number is an estimated single, not a weight anybody lifted', () => {
     // The case that prompted it: a record of 61.3 lb from a set of 40 × 15.
-    const text = describeE1rm({ weight: { value: 40, unit: 'lb' }, reps: 15, rir: 1 }, 'lb');
+    const text = describeE1rm(
+      { weight: { value: 40, unit: 'lb' }, reps: 15, rir: 1 },
+      'lb',
+      'external',
+    );
 
     expect(text).toContain('40 lb × 15 @ 1 RIR');
     expect(text).toContain('estimates a single of 61.3 lb');
   });
 
   it('explains that reps in reserve are counted as reps', () => {
-    const text = describeE1rm({ weight: { value: 40, unit: 'lb' }, reps: 15, rir: 1 }, 'lb');
+    const text = describeE1rm(
+      { weight: { value: 40, unit: 'lb' }, reps: 15, rir: 1 },
+      'lb',
+      'external',
+    );
     expect(text).toContain('scores as 16');
   });
 
   it('says nothing about reserve when there was none', () => {
-    const text = describeE1rm({ weight: { value: 225, unit: 'lb' }, reps: 3, rir: 0 }, 'lb');
+    const text = describeE1rm(
+      { weight: { value: 225, unit: 'lb' }, reps: 3, rir: 0 },
+      'lb',
+      'external',
+    );
     expect(text).not.toContain('reserve');
   });
 
   it('warns that a long set reads high', () => {
-    const long = describeE1rm({ weight: { value: 40, unit: 'lb' }, reps: 15, rir: 1 }, 'lb');
-    const short = describeE1rm({ weight: { value: 225, unit: 'lb' }, reps: 5, rir: 1 }, 'lb');
+    const long = describeE1rm(
+      { weight: { value: 40, unit: 'lb' }, reps: 15, rir: 1 },
+      'lb',
+      'external',
+    );
+    const short = describeE1rm(
+      { weight: { value: 225, unit: 'lb' }, reps: 5, rir: 1 },
+      'lb',
+      'external',
+    );
 
     expect(long).toContain('reads high');
     expect(short).not.toContain('reads high');
   });
 
   it('has nothing to say about a set that cannot be scored', () => {
-    expect(describeE1rm({ weight: null, reps: 8, rir: 1 }, 'lb')).toBeNull();
+    expect(describeE1rm({ weight: null, reps: 8, rir: 1 }, 'lb', 'external')).toBeNull();
     expect(
-      describeE1rm({ weight: { value: 40, unit: 'lb' }, reps: null, rir: 1 }, 'lb'),
+      describeE1rm({ weight: { value: 40, unit: 'lb' }, reps: null, rir: 1 }, 'lb', 'external'),
     ).toBeNull();
+  });
+});
+
+describe('load scale', () => {
+  const kg = (weight: number, reps: number, overrides: Partial<LoggedSet> = {}) =>
+    set(weight, reps, null, { unit: 'kg', ...overrides });
+
+  it('reads the scale from the equipment', () => {
+    expect(loadScaleFor({ id: 'Pullups', equipment: 'body only' })).toBe('bodyweight');
+    expect(loadScaleFor({ id: 'Barbell_Squat', equipment: 'barbell' })).toBe('external');
+    expect(loadScaleFor({ id: 'custom-1', equipment: null })).toBe('external');
+    // Unresolved: scored as it always was, never guessed to be bodyweight.
+    expect(loadScaleFor(null)).toBe('external');
+  });
+
+  it('puts the catalog bodyweight lifts filed under other equipment on the bodyweight scale', () => {
+    expect(loadScaleFor({ id: 'Dips_-_Chest_Version', equipment: 'other' })).toBe('bodyweight');
+    expect(loadScaleFor({ id: 'Ring_Dips', equipment: 'other' })).toBe('bodyweight');
+    expect(loadScaleFor({ id: 'Dip_Machine', equipment: 'machine' })).toBe('external');
+  });
+
+  /**
+   * The bug this scale exists for: scored by the sign of the load, 0 × 10
+   * dips beat +20 × 8, so adding weight read as getting weaker.
+   */
+  it('scores a bodyweight exercise against bodyweight at every load', () => {
+    expect(adjustedE1rm(kg(20, 8), 'bodyweight')).toBeCloseTo(
+      epley(BODYWEIGHT_REFERENCE_KG + 20, 8) - BODYWEIGHT_REFERENCE_KG,
+      6,
+    );
+    expect(adjustedE1rm(kg(20, 8), 'bodyweight')).toBeCloseTo(46.667, 3);
+    expect(adjustedE1rm(kg(0, 10), 'bodyweight')).toBeCloseTo(26.667, 3);
+    expect(adjustedE1rm(kg(-20, 10), 'bodyweight')).toBeCloseTo(0, 6);
+  });
+
+  it('is continuous through zero for a bodyweight exercise', () => {
+    const unweighted = adjustedE1rm(kg(0, 10), 'bodyweight') ?? NaN;
+    const belted = adjustedE1rm(kg(2.5, 10), 'bodyweight') ?? NaN;
+    const assisted = adjustedE1rm(kg(-2.5, 10), 'bodyweight') ?? NaN;
+
+    expect(belted).toBeGreaterThan(unweighted);
+    expect(assisted).toBeLessThan(unweighted);
+    // A plate's worth either side, not a cliff.
+    expect(belted - unweighted).toBeLessThan(5);
+    expect(beatsRecord(belted, unweighted)).toBe(true);
+  });
+
+  it('lets weighted dips beat bodyweight dips', () => {
+    expect(compareSets(kg(20, 8), kg(0, 10), 'bodyweight')?.direction).toBe('up');
+    const best = bestSet(
+      [kg(0, 10, { setIndex: 0 }), kg(20, 8, { setIndex: 1 }), kg(10, 6, { setIndex: 2 })],
+      'bodyweight',
+    );
+    expect(best?.setIndex).toBe(1);
+  });
+
+  it('leaves a barbell set on plain Epley', () => {
+    expect(adjustedE1rm(kg(100, 5), 'external')).toBeCloseTo(epley(100, 5), 6);
+    expect(e1rm(kg(100, 5), 'external')).toBeCloseTo(epley(100, 5), 6);
+    // The same set on the bodyweight scale would read very differently, which
+    // is why the scale is the exercise's and never mixed within one.
+    expect(adjustedE1rm(kg(100, 5), 'bodyweight')).not.toBeCloseTo(epley(100, 5), 0);
+  });
+
+  it('still scores an assisted set on an unclassified exercise against bodyweight', () => {
+    // A custom "Assisted Pull-up" with no equipment recorded.
+    expect(adjustedE1rm(kg(-20, 10), 'external')).toBeCloseTo(0, 6);
+    expect(adjustedE1rm(kg(0, 10), 'external')).toBeCloseTo(
+      adjustedE1rm(kg(0, 10), 'bodyweight') ?? NaN,
+      6,
+    );
+    expect(compareSets(kg(-10, 8), kg(-30, 8), 'external')?.direction).toBe('up');
+  });
+
+  it('explains a weighted bodyweight set as weight added to the body', () => {
+    const text = describeE1rm(kg(20, 8), 'kg', 'bodyweight');
+    expect(text).toContain('a single with 46.7 kg added');
+    expect(text).toContain('more added weight');
+    expect(describeE1rm(kg(100, 5), 'kg', 'external')).toContain('estimates a single of');
   });
 });

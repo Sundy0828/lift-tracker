@@ -1,3 +1,4 @@
+import type { Equipment, Exercise, ExerciseResolver } from './exercises';
 import type { Distance } from './measure';
 import { formatDistance, formatSeconds, toMetres } from './measure';
 import type { LoggedSet } from './sessions';
@@ -39,22 +40,115 @@ export function epley(weightKg: number, reps: number): number {
  *
  * Epley on the bar's load alone scores every pull-up at 0 kg as 0, however
  * many reps, and scores assistance (a negative load) as *less* the more reps
- * you do. Neither tracks progress. So a load of zero or below is scored as
- * the whole body moving: `epley(REF + load) - REF`, the estimated single
- * **added** to bodyweight. 10 reps unassisted scores about +27 kg; 10 reps
- * with 20 kg of help scores 0; less help or more reps scores higher, which is
- * what progress on an assisted machine looks like.
+ * you do. Neither tracks progress. So a bodyweight lift is scored as the whole
+ * body moving: `epley(REF + load) - REF`, the estimated single **added** to
+ * bodyweight. 10 reps unassisted scores about +27 kg; 10 reps with 20 kg of
+ * help scores 0; less help or more reps scores higher, which is what progress
+ * on an assisted machine looks like.
+ *
+ * **Which sets get this is decided per exercise, not per set** (`LoadScale`).
+ * It used to be decided by the sign of the load — zero or below on this
+ * scale, anything positive on plain Epley — and the seam at zero was a cliff:
+ * 0 kg × 10 dips scored about 26.7, +20 kg × 8 on a belt scored 25.3, so
+ * adding weight read as getting weaker and a light weighted set could never
+ * beat an unweighted one. Now a bodyweight exercise uses this formula at
+ * every load, added weight included (+20 kg × 8 is `epley(100, 8) - 80`,
+ * about 46.7), which is continuous through zero and only rises with the load.
+ *
+ * Every other exercise keeps plain Epley for a positive load, so no barbell
+ * or dumbbell record changes. A load of zero or below on one of those still
+ * falls back to this formula: an assisted set logged on a custom exercise with
+ * no equipment recorded has no other sensible score.
  *
  * A fixed reference rather than your logged bodyweight, so a lighter morning
- * cannot move a record. Positive loads keep plain Epley, so no barbell record
- * changes; the cost is that a lightly weighted set of a bodyweight lift
- * (+2.5 kg dips) scores below an unweighted one.
+ * cannot move a record.
  */
 export const BODYWEIGHT_REFERENCE_KG = 80;
 
-/** A set's score from its load and effective reps (reps plus any RIR). */
-function score(kilograms: number, effectiveReps: number): number {
-  if (kilograms > 0) return epley(kilograms, effectiveReps);
+/**
+ * Which formula an exercise's sets are scored on.
+ *
+ * - `bodyweight`: the body is the load, and the logged weight is added to it
+ *   (a belt) or taken off it (an assisted machine, as a negative load). Scored
+ *   against `BODYWEIGHT_REFERENCE_KG` at every load.
+ * - `external`: the logged weight is the load. Plain Epley, except that a load
+ *   of zero or below falls back to the bodyweight formula (see above).
+ *
+ * A property of the exercise rather than the set, because a record compares
+ * sets of one exercise against each other and they must all sit on one scale.
+ * Passed in by the caller, which has the exercise library: this module stays a
+ * pure function of numbers. Required everywhere rather than defaulted, so no
+ * caller can quietly score a dip on the barbell scale.
+ */
+export type LoadScale = 'bodyweight' | 'external';
+
+/** An exercise id's scale, for code that walks every exercise of a session. */
+export type LoadScaleOf = (exerciseId: string) => LoadScale;
+
+/**
+ * Equipment that means the body is the load.
+ *
+ * free-exercise-db has one such value, `body only` (pull-ups, chin-ups,
+ * push-ups, bench and triceps dips), and no assisted-machine value: its
+ * `machine` covers the leg press and the Smith machine too, so it cannot be
+ * read as bodyweight. Bodyweight lifts it files elsewhere are listed by id in
+ * `BODYWEIGHT_EXERCISE_IDS`; a custom exercise marked `body only` is the way to
+ * put one of your own on this scale.
+ */
+export const BODYWEIGHT_EQUIPMENT: readonly Equipment[] = ['body only'];
+
+/**
+ * Catalog lifts where the body is the load, filed under another equipment
+ * value (mostly `other`): dips, chins, muscle-ups, ring and strap work. Ids are
+ * the catalog's, so they never match a custom exercise. `catalog.test.ts`
+ * checks each still exists after a catalog refresh.
+ */
+export const BODYWEIGHT_EXERCISE_IDS: readonly string[] = [
+  'Band_Assisted_Pull-Up',
+  'Dips_-_Chest_Version',
+  'Gironda_Sternum_Chins',
+  'Inverted_Row_with_Straps',
+  'Kipping_Muscle_Up',
+  'Mixed_Grip_Chin',
+  'Muscle_Up',
+  'One_Arm_Chin-Up',
+  'Parallel_Bar_Dip',
+  'Push-Ups_With_Feet_On_An_Exercise_Ball',
+  'Ring_Dips',
+  'Side_To_Side_Chins',
+  'Suspended_Push-Up',
+  'Weighted_Bench_Dip',
+];
+
+/**
+ * The scale an exercise is scored on, from its equipment (or its id, for the
+ * catalog lifts above).
+ *
+ * An exercise that cannot be resolved (a deleted custom exercise, or the
+ * library still loading) is `external`: on that scale a positive load scores
+ * exactly as it always has, and an assisted one still gets the bodyweight
+ * fallback.
+ */
+export function loadScaleFor(exercise: Pick<Exercise, 'id' | 'equipment'> | null): LoadScale {
+  if (exercise === null) return 'external';
+  if (BODYWEIGHT_EXERCISE_IDS.includes(exercise.id)) return 'bodyweight';
+  const equipment = exercise.equipment;
+  return equipment !== null && BODYWEIGHT_EQUIPMENT.includes(equipment) ? 'bodyweight' : 'external';
+}
+
+/** `loadScaleFor` over a whole library, in the shape the record code takes. */
+export function loadScaleLookup(resolver: ExerciseResolver): LoadScaleOf {
+  return (exerciseId) => loadScaleFor(resolver.resolve(exerciseId));
+}
+
+/** Whether a set is read against bodyweight rather than as a bar weight. */
+function isBodyweightScored(kilograms: number, scale: LoadScale): boolean {
+  return scale === 'bodyweight' || kilograms <= 0;
+}
+
+/** A set's score from its load, its effective reps (reps plus any RIR) and its scale. */
+function score(kilograms: number, effectiveReps: number, scale: LoadScale): number {
+  if (!isBodyweightScored(kilograms, scale)) return epley(kilograms, effectiveReps);
   return epley(BODYWEIGHT_REFERENCE_KG + kilograms, effectiveReps) - BODYWEIGHT_REFERENCE_KG;
 }
 
@@ -75,10 +169,10 @@ export function loadKg(set: SetLoad): number | null {
 }
 
 /** Estimated 1RM from what was actually performed. Ignores RIR. */
-export function e1rm(set: SetLoad): number | null {
+export function e1rm(set: SetLoad, scale: LoadScale): number | null {
   const kilograms = loadKg(set);
   if (kilograms === null || set.reps === null || set.reps <= 0) return null;
-  return score(kilograms, set.reps);
+  return score(kilograms, set.reps, scale);
 }
 
 /**
@@ -92,11 +186,14 @@ export function e1rm(set: SetLoad): number | null {
  *
  * A set with no RIR recorded is treated as taken to failure (RIR 0). That is
  * the conservative reading: it never inflates the estimate.
+ *
+ * `scale` is the exercise's (see `LoadScale`): every set of one exercise has
+ * to be scored on the same one, or a record would compare across two scales.
  */
-export function adjustedE1rm(set: SetLoad): number | null {
+export function adjustedE1rm(set: SetLoad, scale: LoadScale): number | null {
   const kilograms = loadKg(set);
   if (kilograms === null || set.reps === null || set.reps <= 0) return null;
-  return score(kilograms, set.reps + (set.rir ?? 0));
+  return score(kilograms, set.reps + (set.rir ?? 0), scale);
 }
 
 export type Direction = 'up' | 'down' | 'same';
@@ -178,11 +275,16 @@ function isAmountSet(set: SetLoad): boolean {
  *
  * Null when either side is incomplete — an unfinished row has nothing to
  * compare, and guessing at it would put a delta chip on an empty input.
+ * Both sets are of one exercise, so they share its `scale`.
  */
-export function compareSets(current: SetLoad, previous: SetLoad): SetComparison | null {
+export function compareSets(
+  current: SetLoad,
+  previous: SetLoad,
+  scale: LoadScale,
+): SetComparison | null {
   if (isAmountSet(current) || isAmountSet(previous)) return compareAmounts(current, previous);
-  const now = adjustedE1rm(current);
-  const before = adjustedE1rm(previous);
+  const now = adjustedE1rm(current, scale);
+  const before = adjustedE1rm(previous, scale);
   if (now === null || before === null) return null;
 
   const e1rmDeltaKg = now - before;
@@ -231,8 +333,9 @@ export function describeComparison(
   current: SetLoad,
   previous: SetLoad,
   displayUnit: Unit,
+  scale: LoadScale,
 ): DeltaChip | null {
-  const comparison = compareSets(current, previous);
+  const comparison = compareSets(current, previous, scale);
   if (comparison === null) return null;
 
   const { direction, e1rmDeltaKg, weightDeltaKg, repsDelta, rirDelta } = comparison;
@@ -295,12 +398,12 @@ export function describeComparison(
  * never take the record and an unfilled row can never be "the best set".
  * Ties keep the earlier set: the record belongs to whoever set it first.
  */
-export function bestSet(sets: readonly LoggedSet[]): LoggedSet | null {
+export function bestSet(sets: readonly LoggedSet[], scale: LoadScale): LoggedSet | null {
   let best: LoggedSet | null = null;
   let bestScore = -Infinity;
 
   for (const set of performedSets(sets)) {
-    const score = adjustedE1rm(set);
+    const score = adjustedE1rm(set, scale);
     if (score === null || score <= bestScore) continue;
     best = set;
     bestScore = score;
@@ -335,14 +438,17 @@ export function formatE1rm(e1rmKg: number, displayUnit: Unit): string {
  * A long set gets a caveat as well. Epley is a straight line through a curve,
  * and past about ten reps it reads high; a record set at fifteen reps is a
  * real number but a soft one.
+ *
+ * A set scored against bodyweight (see `BODYWEIGHT_REFERENCE_KG`) is explained
+ * that way instead: its number is what was added to the body, not a bar.
  */
-export function describeE1rm(set: SetLoad, displayUnit: Unit): string | null {
-  const score = adjustedE1rm(set);
+export function describeE1rm(set: SetLoad, displayUnit: Unit, scale: LoadScale): string | null {
+  const score = adjustedE1rm(set, scale);
   if (score === null || set.reps === null) return null;
 
   const effective = set.reps + (set.rir ?? 0);
   const kilograms = loadKg(set) ?? 0;
-  if (kilograms <= 0) {
+  if (isBodyweightScored(kilograms, scale)) {
     const reserve =
       set.rir === null || set.rir === 0 ? '' : ` Reps in reserve count as reps you had left.`;
     const single =
@@ -354,7 +460,9 @@ export function describeE1rm(set: SetLoad, displayUnit: Unit): string | null {
     return `${formatSet(set, displayUnit)} estimates ${single}, scored as if you weigh ${formatE1rm(
       BODYWEIGHT_REFERENCE_KG,
       displayUnit,
-    )}, so less assistance and more reps both count as progress.${reserve}`;
+    )}, so ${
+      kilograms > 0 ? 'more added weight' : 'less assistance'
+    } and more reps both count as progress.${reserve}`;
   }
   const reserve =
     set.rir === null || set.rir === 0

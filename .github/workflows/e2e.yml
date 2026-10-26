@@ -60,7 +60,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - run: pnpm install --frozen-lockfile
+      # The phone app's packages (Expo, React Native) are not needed here.
+      - run: pnpm install --frozen-lockfile --filter '!@lift/mobile'
       # Only chromium: the suite runs one project, a Pixel 7 profile.
       - run: pnpm --filter @lift/web exec playwright install --with-deps chromium
       - run: pnpm run e2e:ci

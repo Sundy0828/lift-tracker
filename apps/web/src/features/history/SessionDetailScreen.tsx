@@ -17,6 +17,7 @@ import { BackTitle } from '@/app/BackTitle';
 import { MuscleMap } from '@/components/MuscleMap';
 import { useOnline } from '@/app/useOnline';
 import { useAuth } from '@lift/data/hooks/useAuth';
+import { useLoadScale } from '@lift/data/hooks/useLoadScale';
 import { useMuscleLookup } from '@lift/data/hooks/useMuscleLookup';
 import { useProfile } from '@lift/data/hooks/useProfile';
 import { useSession } from '@lift/data/hooks/useSession';
@@ -33,6 +34,7 @@ import {
 } from '@lift/domain/history';
 import type { LoggedSet, Session, SessionEntry } from '@lift/domain/sessions';
 import { workedSets } from '@lift/domain/sessions';
+import type { LoadScale, LoadScaleOf } from '@lift/domain/strength';
 import { adjustedE1rm, bestSet, describeE1rm, formatE1rm, formatSet } from '@lift/domain/strength';
 import type { Unit } from '@lift/domain/types';
 import { formatWeight } from '@lift/domain/units';
@@ -102,8 +104,17 @@ function buildRows(slots: readonly ExerciseSlot[] | null, entries: readonly Sess
  * which also explains why the last set of an exercise usually has none: the
  * timer was ended by moving on rather than by another set.
  */
-function SetLine({ set, displayUnit }: { set: LoggedSet; displayUnit: Unit }) {
-  const score = adjustedE1rm(set);
+function SetLine({
+  set,
+  displayUnit,
+  scale,
+}: {
+  set: LoggedSet;
+  displayUnit: Unit;
+  /** The exercise's, so the e1RM matches its record (see `LoadScale`). */
+  scale: LoadScale;
+}) {
+  const score = adjustedE1rm(set, scale);
   const rest = set.restTakenSeconds;
 
   return (
@@ -135,7 +146,7 @@ function SetLine({ set, displayUnit }: { set: LoggedSet; displayUnit: Unit }) {
           </Tooltip>
         )}
         {score === null ? null : (
-          <Tooltip label={describeE1rm(set, displayUnit) ?? ''} withArrow multiline w={260}>
+          <Tooltip label={describeE1rm(set, displayUnit, scale) ?? ''} withArrow multiline w={260}>
             <Text size="xs" c="dimmed" style={{ fontVariantNumeric: 'tabular-nums' }}>
               e1RM {formatE1rm(score, displayUnit)}
             </Text>
@@ -146,7 +157,15 @@ function SetLine({ set, displayUnit }: { set: LoggedSet; displayUnit: Unit }) {
   );
 }
 
-function EntryRow({ row, displayUnit }: { row: Row; displayUnit: Unit }) {
+function EntryRow({
+  row,
+  displayUnit,
+  scaleOf,
+}: {
+  row: Row;
+  displayUnit: Unit;
+  scaleOf: LoadScaleOf;
+}) {
   const { slot, entry } = row;
   const kind = slot?.kind ?? entry?.kind ?? 'exercise';
 
@@ -164,7 +183,9 @@ function EntryRow({ row, displayUnit }: { row: Row; displayUnit: Unit }) {
   const prescription = slot?.prescription ?? entry?.prescription ?? null;
   const sets = entry === null ? [] : entry.sets;
   const done = workedSets(sets);
-  const best = bestSet(sets);
+  // A row with no exercise id has no entry, so no sets for the scale to score.
+  const scale = exerciseId === null ? 'external' : scaleOf(exerciseId);
+  const best = bestSet(sets, scale);
   // Only from rests the timer actually measured, so a session logged with it
   // off says nothing rather than claiming a rest of zero.
   const averageRest = averageRestSeconds(sets);
@@ -221,7 +242,7 @@ function EntryRow({ row, displayUnit }: { row: Row; displayUnit: Unit }) {
           <>
             <Stack gap={2}>
               {sets.map((set) => (
-                <SetLine key={set.setIndex} set={set} displayUnit={displayUnit} />
+                <SetLine key={set.setIndex} set={set} displayUnit={displayUnit} scale={scale} />
               ))}
             </Stack>
             {averageRest === null ? null : (
@@ -256,12 +277,14 @@ function DeleteCluster({ session }: { session: Session }) {
   const online = useOnline();
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { scaleOf, isPending: scalePending } = useLoadScale();
 
   const remove = async (): Promise<void> => {
-    if (uid === null) return;
+    // The records are rescored on the way out, so not before the library is in.
+    if (uid === null || scalePending) return;
     setBusy(true);
     try {
-      await deleteSession(uid, session);
+      await deleteSession(uid, session, scaleOf);
       notifications.show({ message: 'Session deleted', color: 'gray' });
       void navigate('/history');
     } catch (cause: unknown) {
@@ -293,7 +316,7 @@ function DeleteCluster({ session }: { session: Session }) {
               <Button
                 size="compact-sm"
                 color="red"
-                loading={busy}
+                loading={busy || scalePending}
                 onClick={() => {
                   void remove();
                 }}
@@ -335,6 +358,7 @@ export default function SessionDetailScreen() {
   const { session, isPending, notFound } = useSession(sessionId ?? null);
   const { profile } = useProfile();
   const { lookup } = useMuscleLookup();
+  const { scaleOf } = useLoadScale();
   const { version, isPending: versionPending } = useWorkoutVersion(
     session?.workoutId ?? null,
     session?.workoutVersion ?? null,
@@ -459,7 +483,7 @@ export default function SessionDetailScreen() {
 
       <Stack gap="xs">
         {rows.map((row) => (
-          <EntryRow key={row.key} row={row} displayUnit={displayUnit} />
+          <EntryRow key={row.key} row={row} displayUnit={displayUnit} scaleOf={scaleOf} />
         ))}
       </Stack>
 

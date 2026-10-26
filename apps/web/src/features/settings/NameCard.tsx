@@ -15,7 +15,7 @@ import {
 /**
  * Your name, and the avatar made from it.
  *
- * Both halves are required and letters only, so Save stays off until both
+ * Both halves are required and must pass `nameProblem`, so Save stays off until both
  * pass rather than accepting a bad name and quietly keeping the old one.
  */
 export function NameCard() {

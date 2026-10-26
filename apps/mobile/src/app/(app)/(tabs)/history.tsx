@@ -35,7 +35,7 @@ import {
 } from '@lift/domain/history';
 import type { Session } from '@lift/domain/sessions';
 import { localDateKey } from '@lift/domain/sessions';
-import { describeE1rm, formatE1rm, formatSet } from '@lift/domain/strength';
+import { describeE1rm, formatE1rm, formatSet, loadScaleFor } from '@lift/domain/strength';
 import type { Unit } from '@lift/domain/types';
 import type { MuscleLookup } from '@lift/domain/volume';
 import { WEEKLY_STOPS, totalVolume } from '@lift/domain/volume';
@@ -537,7 +537,8 @@ function Records() {
   return (
     <View style={styles.section}>
       {feed.map((entry) => {
-        const name = resolver.resolve(entry.exerciseId)?.name ?? entry.exerciseId;
+        const exercise = resolver.resolve(entry.exerciseId);
+        const name = exercise?.name ?? entry.exerciseId;
         const set = entry.bestSet;
         const open = explained === entry.exerciseId;
         return (
@@ -578,7 +579,7 @@ function Records() {
               </Pressable>
             </View>
             {open && set !== null ? (
-              <Small>{describeE1rm(set, profile.displayUnit) ?? ''}</Small>
+              <Small>{describeE1rm(set, profile.displayUnit, loadScaleFor(exercise)) ?? ''}</Small>
             ) : null}
           </Card>
         );

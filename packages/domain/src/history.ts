@@ -8,6 +8,7 @@ import {
   sessionSeconds,
   workedSets,
 } from './sessions';
+import type { LoadScale } from './strength';
 import { adjustedE1rm, beatsRecord, loadKg } from './strength';
 import type { Unit } from './types';
 import { formatNumber, fromKg } from './units';
@@ -298,10 +299,13 @@ export type ExercisePerformance = {
   e1rmKg: number | null;
 };
 
-function bestScored(sets: readonly LoggedSet[]): { set: LoggedSet; e1rmKg: number } | null {
+function bestScored(
+  sets: readonly LoggedSet[],
+  scale: LoadScale,
+): { set: LoggedSet; e1rmKg: number } | null {
   let best: { set: LoggedSet; e1rmKg: number } | null = null;
   for (const set of performedSets(sets)) {
-    const score = adjustedE1rm(set);
+    const score = adjustedE1rm(set, scale);
     if (score === null) continue;
     // Ties keep the earlier set, matching `strength.bestSet`.
     if (best === null || score > best.e1rmKg) best = { set, e1rmKg: score };
@@ -319,10 +323,14 @@ function matchesExercise(entry: SessionEntry, exerciseId: string): boolean {
  * Oldest-first because that is the order a trend reads in and the only order a
  * running record can be walked in; the screens that want newest-first reverse
  * it, which is cheaper than sorting twice.
+ *
+ * `scale` is the lift's (see `LoadScale`), so the trend line, the record
+ * milestones and the PR toast all score its sets the same way.
  */
 export function exercisePerformances(
   sessions: readonly Session[],
   exerciseId: string,
+  scale: LoadScale,
 ): ExercisePerformance[] {
   const performances: ExercisePerformance[] = [];
 
@@ -332,7 +340,7 @@ export function exercisePerformances(
       .flatMap((entry) => workedSets(entry.sets));
     if (sets.length === 0) continue;
 
-    const best = bestScored(sets);
+    const best = bestScored(sets, scale);
     performances.push({
       sessionId: session.id,
       performedOn: session.performedOn,

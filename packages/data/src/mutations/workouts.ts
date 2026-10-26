@@ -39,14 +39,19 @@ export function createWorkout(uid: string, workoutId: string, name: string): Pro
   });
 }
 
-/** Overwrites the working copy's versioned content. */
+/**
+ * Overwrites the working copy's versioned content.
+ *
+ * `mergeFields`, not `merge`: each listed field is replaced whole. A plain
+ * merge would deep-merge the `groupRest` map, so a round rest removed from it
+ * (a circuit dissolved, or a discard back to a version without one) would stay
+ * in the document and come back.
+ */
 export function saveWorkoutBody(uid: string, workoutId: string, body: WorkoutBody): Promise<void> {
   return setDoc(
     paths.workout(uid, workoutId),
     { ...cloneBody(body), updatedAt: serverTimestamp() },
-    {
-      merge: true,
-    },
+    { mergeFields: ['name', 'slots', 'groupRest', 'updatedAt'] },
   );
 }
 

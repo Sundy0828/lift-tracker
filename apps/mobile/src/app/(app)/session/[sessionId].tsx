@@ -1,5 +1,6 @@
 import { useAuth } from '@lift/data/hooks/useAuth';
 import { useExerciseLibrary } from '@lift/data/hooks/useExerciseLibrary';
+import { useLoadScale } from '@lift/data/hooks/useLoadScale';
 import { useExerciseStats, useWorkoutStats } from '@lift/data/hooks/useOverlayStats';
 import { useProfile } from '@lift/data/hooks/useProfile';
 import { useRestTimer } from '@lift/data/hooks/useRestTimer';
@@ -148,6 +149,7 @@ export default function ActiveSession() {
 
   const { session, isPending, notFound } = useSession(sessionId);
   const { resolver } = useExerciseLibrary();
+  const { scaleOf, isPending: scalePending } = useLoadScale();
   const { profile, isPending: profilePending } = useProfile();
   const draft = useSessionDraft(uid, session);
   const {
@@ -598,7 +600,9 @@ export default function ActiveSession() {
   const unit = profile.displayUnit;
 
   const complete = async (finalEntries: readonly SessionEntry[]): Promise<void> => {
-    if (uid === null || isDone || finishing) return;
+    // Not before the library is in: until then every lift reads as a barbell
+    // lift, and a weighted dip would be stored on the wrong scale.
+    if (uid === null || isDone || finishing || scalePending) return;
     setFinishing(true);
     setFinishError(null);
     draft.flush();
@@ -607,7 +611,7 @@ export default function ActiveSession() {
     let result;
     try {
       // Awaited: offline that is the queued write, online the server's answer.
-      result = await completeSession(uid, finished, lookup);
+      result = await completeSession(uid, finished, lookup, scaleOf);
     } catch {
       setFinishing(false);
       setFinishError('The session could not be saved. Everything you logged is still here.');
@@ -769,6 +773,7 @@ export default function ActiveSession() {
                 displayUnit={unit}
                 workoutStats={workoutStats}
                 exerciseStats={byExercise.get(entry.exerciseId) ?? null}
+                loadScale={scaleOf(entry.exerciseId)}
                 workoutName={session.workoutName}
                 overlayScope="same-workout"
                 onNotes={onNotes}
@@ -818,7 +823,7 @@ export default function ActiveSession() {
                     : `Finish session (${String(progress.total - progress.completed)} sets left)`
                 }
                 variant={allSetsDone ? 'filled' : 'subtle'}
-                busy={finishing}
+                busy={finishing || scalePending}
                 onPress={finish}
               />
               <Pressable

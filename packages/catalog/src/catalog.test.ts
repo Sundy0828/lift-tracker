@@ -10,6 +10,7 @@ import {
 } from '@lift/domain/exercises';
 import { MUSCLE_GROUPS } from '@lift/domain/muscles';
 import { buildSearchIndex, search } from '@lift/domain/search';
+import { BODYWEIGHT_EXERCISE_IDS } from '@lift/domain/strength';
 
 /**
  * Validates the *committed* generated catalog, not the generator. This is what
@@ -60,6 +61,11 @@ describe('generated catalog', () => {
     const ids = raw.map((entry) => entry['id']);
     expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('still has every lift the strength math scores as bodyweight by id', () => {
+    const ids = new Set(raw.map((entry) => entry['id']));
+    expect(BODYWEIGHT_EXERCISE_IDS.filter((id) => !ids.has(id))).toEqual([]);
   });
 
   it('uses only muscle names the domain knows', () => {

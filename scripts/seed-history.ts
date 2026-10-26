@@ -43,8 +43,10 @@ import type { ExerciseStats, WorkoutStats } from '@lift/domain/overlay';
 import { buildStatsUpdate } from '@lift/domain/overlay';
 import type { LoggedSet, Session, SessionEntry } from '@lift/domain/sessions';
 import { localDateKey, sessionExerciseIds } from '@lift/domain/sessions';
+import { loadScaleLookup } from '@lift/domain/strength';
 import type { ExerciseSlot, Prescription, WorkoutBody } from '@lift/domain/workouts';
 import { DEFAULT_PRESCRIPTION } from '@lift/domain/workouts';
+import { exerciseResolver } from './exercise-library';
 
 // --- CLI ------------------------------------------------------------------
 
@@ -662,11 +664,14 @@ async function seed(db: Firestore, uid: string, weeks: number): Promise<void> {
   const exerciseStats = new Map<string, ExerciseStats>();
   const workoutStats = new Map<string, WorkoutStats>();
   let records = 0;
+  // Catalog lifts only, so no custom exercises: pull-ups score on the
+  // bodyweight scale, as the app would score them.
+  const scaleOf = loadScaleLookup(exerciseResolver([]));
 
   for (const session of [...sessions].sort((a, b) =>
     (a.completedAt ?? '').localeCompare(b.completedAt ?? ''),
   )) {
-    const update = buildStatsUpdate(session, (id) => exerciseStats.get(id) ?? null);
+    const update = buildStatsUpdate(session, (id) => exerciseStats.get(id) ?? null, scaleOf);
     records += update.prs.length;
     for (const [id, stats] of update.exerciseStats) exerciseStats.set(id, stats);
     if (update.workoutStats !== null) {

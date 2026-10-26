@@ -39,7 +39,8 @@ jobs:
         with:
           node-version: lts/*
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      # The phone app's packages (Expo, React Native) are not needed here.
+      - run: pnpm install --frozen-lockfile --filter '!@lift/mobile'
       - run: pnpm run build
       - name: Set preview channel id from branch name
         id: channel

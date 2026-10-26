@@ -229,6 +229,26 @@ export function onRestDone(listener: () => void): () => void {
   };
 }
 
+/**
+ * Cancels the rest alarm if it belongs to `sessionId`, for a session discarded
+ * from Today. Only one rest is ever scheduled, but it may be another unfinished
+ * session's, left by a killed run; that one is kept. An alarm from before
+ * alerts carried their session cannot be told apart, and is cancelled.
+ */
+export function cancelRestAlarmFor(sessionId: string): Promise<void> {
+  return serially(async () => {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const other = scheduled.some((request) => {
+      const data = request.content.data as Record<string, unknown> | null;
+      const owner = data?.['sessionId'];
+      return data?.['kind'] === 'rest' && typeof owner === 'string' && owner !== sessionId;
+    });
+    if (other) return;
+    hideRestCountdown();
+    await cancelAll();
+  });
+}
+
 /** Done pressed with no session screen up, by rest tag: when it was pressed. */
 const doneWhileAway = new Map<string, number>();
 

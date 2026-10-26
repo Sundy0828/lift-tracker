@@ -1,4 +1,5 @@
 import { useAllSessions } from '@lift/data/hooks/useAllSessions';
+import { useLoadScale } from '@lift/data/hooks/useLoadScale';
 import { useProfile } from '@lift/data/hooks/useProfile';
 import { exportFilename, sessionsToCsv, sessionsToJson } from '@lift/domain/export';
 import { useEffect, useRef, useState } from 'react';
@@ -42,6 +43,8 @@ export function ExportCard() {
   const { profile } = useProfile();
   const [wanted, setWanted] = useState<Format | null>(null);
   const { sessions, isPending, complete, error } = useAllSessions(wanted !== null);
+  // The CSV's e1RM column is scored per exercise, so it waits for the library.
+  const { scaleOf, isPending: scalePending } = useLoadScale();
   const [done, setDone] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   /** The request already written, so one press cannot share two files. */
@@ -50,11 +53,21 @@ export function ExportCard() {
   // The read starts on the press and the file goes out the moment it lands,
   // so the press is one action rather than press-then-wait.
   useEffect(() => {
-    if (wanted === null || isPending || error !== null || written.current === wanted) return;
+    if (
+      wanted === null ||
+      isPending ||
+      scalePending ||
+      error !== null ||
+      written.current === wanted
+    ) {
+      return;
+    }
     written.current = wanted;
 
     const contents =
-      wanted === 'csv' ? sessionsToCsv(sessions, profile.displayUnit) : sessionsToJson(sessions);
+      wanted === 'csv'
+        ? sessionsToCsv(sessions, profile.displayUnit, scaleOf)
+        : sessionsToJson(sessions);
     const sent =
       wanted === 'csv'
         ? shareFile(
@@ -79,7 +92,7 @@ export function ExportCard() {
         setWanted(null);
       },
     );
-  }, [wanted, isPending, error, sessions, complete, profile.displayUnit]);
+  }, [wanted, isPending, scalePending, scaleOf, error, sessions, complete, profile.displayUnit]);
 
   const start = (format: Format): void => {
     setDone(null);

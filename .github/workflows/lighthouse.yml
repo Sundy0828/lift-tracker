@@ -67,7 +67,8 @@ jobs:
         with:
           node-version: lts/*
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      # The phone app's packages (Expo, React Native) are not needed here.
+      - run: pnpm install --frozen-lockfile --filter '!@lift/mobile'
       # A production build: it is the bundle that ships, and the one the §3
       # budgets are about.
       - run: pnpm run build

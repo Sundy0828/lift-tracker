@@ -7,6 +7,7 @@ import {
   performedSets,
   workingSets,
 } from './sessions';
+import type { LoadScaleOf } from './strength';
 import { adjustedE1rm, beatsRecord, bestSet } from './strength';
 import type { Prescription } from './workouts';
 import { occurrenceKey, parsePrescription } from './workouts';
@@ -222,10 +223,17 @@ export function toPerformance(session: Session, entry: SessionEntry): LastPerfor
  * Tier 1 is **overwritten**, not merged: it is "the last performance", and an
  * exercise dropped from the workout should stop overlaying. Tier 2 is merged,
  * because `bestE1rm` is a running maximum and `totalSessions` a running count.
+ *
+ * `scaleOf` says which formula each exercise is scored on (see `LoadScale`).
+ * It has to be the same one the stored record was scored with, or a weighted
+ * dip would be measured against a bodyweight dip on a different scale; a
+ * record written before the scale was per exercise is put on the current one
+ * by `scripts/rebuild-records.ts`.
  */
 export function buildStatsUpdate(
   session: Session,
   previous: (exerciseId: string) => ExerciseStats | null,
+  scaleOf: LoadScaleOf,
 ): StatsUpdate {
   const performed = exerciseEntries(session.entries).filter(
     (entry) => performedSets(entry.sets).length > 0,
@@ -240,8 +248,9 @@ export function buildStatsUpdate(
     byOccurrence[occurrenceKey(entry.exerciseId, entry.occurrenceIndex)] = performance;
 
     // Null for a timed or distance row: only reps are scored.
-    const best = bestSet(entry.sets);
-    const bestScore = best === null ? null : adjustedE1rm(best);
+    const scale = scaleOf(entry.exerciseId);
+    const best = bestSet(entry.sets, scale);
+    const bestScore = best === null ? null : adjustedE1rm(best, scale);
 
     // An exercise can appear twice in one workout, so the tier-2 document may
     // be touched twice in this loop. The in-progress value wins over the

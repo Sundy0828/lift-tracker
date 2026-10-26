@@ -55,5 +55,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - run: pnpm install --frozen-lockfile
+      # The phone app's packages (Expo, React Native) are not needed here.
+      - run: pnpm install --frozen-lockfile --filter '!@lift/mobile'
       - run: pnpm run test:rules:ci

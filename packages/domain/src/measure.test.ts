@@ -90,7 +90,7 @@ describe('timed and distance sets', () => {
     const hold = set({ seconds: 45 });
     expect(isPerformed(hold)).toBe(true);
     expect(workedSets([hold])).toHaveLength(1);
-    expect(adjustedE1rm(hold)).toBeNull();
+    expect(adjustedE1rm(hold, 'external')).toBeNull();
   });
 
   it('are judged against the target in their own unit', () => {
@@ -110,14 +110,21 @@ describe('timed and distance sets', () => {
   });
 
   it('compare on time or distance, with the load breaking a tie', () => {
-    expect(compareSets(set({ seconds: 50 }), set({ seconds: 45 }))?.direction).toBe('up');
-    expect(compareSets(set({ seconds: 40 }), set({ seconds: 45 }))?.direction).toBe('down');
+    expect(compareSets(set({ seconds: 50 }), set({ seconds: 45 }), 'external')?.direction).toBe(
+      'up',
+    );
+    expect(compareSets(set({ seconds: 40 }), set({ seconds: 45 }), 'external')?.direction).toBe(
+      'down',
+    );
     const heavier = compareSets(
       set({ seconds: 45, weight: { value: 25, unit: 'lb' } }),
       set({ seconds: 45, weight: { value: 10, unit: 'lb' } }),
+      'external',
     );
     expect(heavier?.direction).toBe('up');
-    expect(describeComparison(set({ seconds: 50 }), set({ seconds: 45 }), 'lb')?.label).toBe('+5s');
+    expect(
+      describeComparison(set({ seconds: 50 }), set({ seconds: 45 }), 'lb', 'external')?.label,
+    ).toBe('+5s');
   });
 
   it('print as a time or a distance', () => {
@@ -156,21 +163,27 @@ describe('assisted and bodyweight sets', () => {
   const load = (value: number) => ({ value, unit: 'kg' as const });
 
   it('score more as the assistance comes off, and more again without it', () => {
-    const heavyHelp = adjustedE1rm(set({ weight: load(-30), reps: 8 })) ?? NaN;
-    const lightHelp = adjustedE1rm(set({ weight: load(-10), reps: 8 })) ?? NaN;
-    const none = adjustedE1rm(set({ weight: load(0), reps: 8 })) ?? NaN;
+    const heavyHelp = adjustedE1rm(set({ weight: load(-30), reps: 8 }), 'external') ?? NaN;
+    const lightHelp = adjustedE1rm(set({ weight: load(-10), reps: 8 }), 'external') ?? NaN;
+    const none = adjustedE1rm(set({ weight: load(0), reps: 8 }), 'external') ?? NaN;
     expect(heavyHelp).toBeLessThan(lightHelp);
     expect(lightHelp).toBeLessThan(none);
     // And more reps at the same help is progress too.
-    expect(adjustedE1rm(set({ weight: load(-10), reps: 10 }))).toBeGreaterThan(lightHelp);
+    expect(adjustedE1rm(set({ weight: load(-10), reps: 10 }), 'external')).toBeGreaterThan(
+      lightHelp,
+    );
   });
 
   it('leaves a barbell set scored exactly as before', () => {
-    expect(adjustedE1rm(set({ weight: load(100), reps: 5 }))).toBeCloseTo(100 * (1 + 5 / 30));
+    expect(adjustedE1rm(set({ weight: load(100), reps: 5 }), 'external')).toBeCloseTo(
+      100 * (1 + 5 / 30),
+    );
   });
 
   it('are explained as assistance, not as a weight lifted', () => {
-    expect(describeE1rm(set({ weight: load(-40), reps: 5 }), 'kg')).toContain('of assistance');
+    expect(describeE1rm(set({ weight: load(-40), reps: 5 }), 'kg', 'external')).toContain(
+      'of assistance',
+    );
     expect(formatSet(set({ weight: load(-20), reps: 8 }), 'kg')).toBe('-20 kg × 8');
   });
 
@@ -186,7 +199,11 @@ describe('assisted and bodyweight sets', () => {
       ...firstEntry(addAdHocEntry([], { exerciseId: 'dip', exerciseName: 'Dips' })),
       sets: [set({ weight: load(-40), reps: 5 })],
     };
-    const first = buildStatsUpdate({ ...session, entries: [entry] }, () => null);
+    const first = buildStatsUpdate(
+      { ...session, entries: [entry] },
+      () => null,
+      () => 'external',
+    );
     expect(first.prs).toHaveLength(1);
     expect(first.prs[0]?.isFirst).toBe(true);
 
@@ -198,6 +215,7 @@ describe('assisted and bodyweight sets', () => {
         entries: [{ ...entry, sets: [set({ weight: load(-30), reps: 5 })] }],
       },
       () => stats,
+      () => 'external',
     );
     expect(better.prs[0]?.isFirst).toBe(false);
   });
@@ -233,7 +251,7 @@ describe('assisted and bodyweight sets', () => {
         sets: [set({ weight: load(-20), reps: 8 })],
       })),
     };
-    const csv = sessionsToCsv([session], 'kg');
+    const csv = sessionsToCsv([session], 'kg', () => 'external');
     expect(csv).toContain(',-20,kg,8,');
     expect(csv).not.toContain("'-20");
   });

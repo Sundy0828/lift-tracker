@@ -11,11 +11,12 @@
 export const MAX_NAME_LENGTH = 40;
 
 /**
- * Letters A–Z only, in one or more parts joined by a single space or hyphen:
- * "Ebersole Sunderland" and "Ebersole-Sunderland" both pass, "J0hn" and "-"
- * do not.
+ * One or more parts joined by a single space or hyphen. Each part starts with
+ * a letter, in any alphabet, so the avatar's initials are always letters; after
+ * that anything but a number goes. "Ebersole-Sunderland", "O'Brien", "José"
+ * and "Jr." pass; "J0hn", "-" and "'Neil" do not.
  */
-const NAME_PATTERN = /^[A-Za-z]+(?:[ -][A-Za-z]+)*$/u;
+const NAME_PATTERN = /^\p{L}[^\s\p{N}-]*(?:[ -]\p{L}[^\s\p{N}-]*)*$/u;
 
 /**
  * Trimmed, inner whitespace collapsed (and dropped around a hyphen), capped,
@@ -30,7 +31,7 @@ export function cleanName(value: string): string {
     .replace(/ ?- ?/gu, '-')
     .slice(0, MAX_NAME_LENGTH)
     .replace(
-      /(^|[ -])([a-z])/gu,
+      /(^|[ -])(\p{Ll})/gu,
       (_, before: string, letter: string) => before + letter.toUpperCase(),
     );
 }
@@ -40,7 +41,7 @@ export function namePartProblem(value: string, part: 'first' | 'last'): string |
   const cleaned = cleanName(value);
   if (cleaned === '') return `Enter your ${part} name.`;
   if (!NAME_PATTERN.test(cleaned)) {
-    return `Your ${part} name can only use letters A–Z, with a space or hyphen between parts.`;
+    return `Your ${part} name has to start with a letter, and cannot contain numbers.`;
   }
   return null;
 }

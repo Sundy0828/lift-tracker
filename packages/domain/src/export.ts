@@ -1,5 +1,6 @@
 import type { LoggedSet, Session } from './sessions';
 import { exerciseEntries, localDateKey } from './sessions';
+import type { LoadScaleOf } from './strength';
 import { adjustedE1rm, loadKg } from './strength';
 import type { Unit } from './types';
 import { fromKg } from './units';
@@ -35,15 +36,17 @@ const COLUMNS = [
   'weight',
   'weight_unit',
   'reps',
-  'seconds',
-  'distance',
-  'distance_unit',
   'rir',
   'rest_taken_seconds',
   'e1rm',
   'set_completed_at',
   'exercise_notes',
   'session_notes',
+  // Added after the first release, so they go last: a sheet or script that
+  // reads the older columns by position keeps working.
+  'seconds',
+  'distance',
+  'distance_unit',
 ] as const;
 
 /**
@@ -86,8 +89,16 @@ function round(value: number | null): number | null {
  *
  * Rest rows carry no sets and never appear. A session with nothing logged
  * still gets no row: the file is a log of work done.
+ *
+ * The `e1rm` column is scored the way the app scores records, so it needs
+ * each exercise's scale (see `LoadScale`): a weighted dip is a bodyweight
+ * estimate here too, not a bar weight.
  */
-export function sessionsToCsv(sessions: readonly Session[], displayUnit: Unit): string {
+export function sessionsToCsv(
+  sessions: readonly Session[],
+  displayUnit: Unit,
+  scaleOf: LoadScaleOf,
+): string {
   const lines: string[] = [COLUMNS.join(',')];
 
   for (const session of sessions) {
@@ -100,8 +111,10 @@ export function sessionsToCsv(sessions: readonly Session[], displayUnit: Unit): 
           );
 
     for (const entry of exerciseEntries(session.entries)) {
+      const scale = scaleOf(entry.exerciseId);
       for (const set of entry.sets) {
         const kilograms = loadKg(set);
+        const estimate = adjustedE1rm(set, scale);
 
         lines.push(
           row([
@@ -122,15 +135,15 @@ export function sessionsToCsv(sessions: readonly Session[], displayUnit: Unit): 
             kilograms === null ? null : round(fromKg(kilograms, displayUnit)),
             set.weight?.unit ?? null,
             set.reps,
-            set.seconds,
-            set.distance?.value ?? null,
-            set.distance?.unit ?? null,
             set.rir,
             set.restTakenSeconds,
-            round(adjustedE1rm(set) === null ? null : fromKg(adjustedE1rm(set) ?? 0, displayUnit)),
+            round(estimate === null ? null : fromKg(estimate, displayUnit)),
             set.completedAt,
             entry.notes,
             session.notes,
+            set.seconds,
+            set.distance?.value ?? null,
+            set.distance?.unit ?? null,
           ]),
         );
       }

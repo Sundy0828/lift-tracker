@@ -1,4 +1,5 @@
 import { useAuth } from '@lift/data/hooks/useAuth';
+import { useLoadScale } from '@lift/data/hooks/useLoadScale';
 import { useMuscleLookup } from '@lift/data/hooks/useMuscleLookup';
 import { useProfile } from '@lift/data/hooks/useProfile';
 import { useSession } from '@lift/data/hooks/useSession';
@@ -17,6 +18,7 @@ import {
 } from '@lift/domain/history';
 import type { LoggedSet, Session, SessionEntry } from '@lift/domain/sessions';
 import { workedSets } from '@lift/domain/sessions';
+import type { LoadScale, LoadScaleOf } from '@lift/domain/strength';
 import { adjustedE1rm, bestSet, describeE1rm, formatE1rm, formatSet } from '@lift/domain/strength';
 import type { Unit } from '@lift/domain/types';
 import { formatWeight } from '@lift/domain/units';
@@ -88,10 +90,19 @@ function buildRows(
 }
 
 /** One logged set, and the rest that followed it. Tap for what the e1RM means. */
-function SetLine({ set, displayUnit }: { set: LoggedSet; displayUnit: Unit }) {
+function SetLine({
+  set,
+  displayUnit,
+  scale,
+}: {
+  set: LoggedSet;
+  displayUnit: Unit;
+  /** The exercise's, so the e1RM matches its record (see `LoadScale`). */
+  scale: LoadScale;
+}) {
   const palette = usePalette();
   const [open, setOpen] = useState(false);
-  const score = adjustedE1rm(set);
+  const score = adjustedE1rm(set, scale);
   const rest = set.restTakenSeconds;
 
   return (
@@ -118,12 +129,20 @@ function SetLine({ set, displayUnit }: { set: LoggedSet; displayUnit: Unit }) {
           )}
         </View>
       </View>
-      {open ? <Small>{describeE1rm(set, displayUnit) ?? ''}</Small> : null}
+      {open ? <Small>{describeE1rm(set, displayUnit, scale) ?? ''}</Small> : null}
     </Pressable>
   );
 }
 
-function EntryRow({ row, displayUnit }: { row: Row_; displayUnit: Unit }) {
+function EntryRow({
+  row,
+  displayUnit,
+  scaleOf,
+}: {
+  row: Row_;
+  displayUnit: Unit;
+  scaleOf: LoadScaleOf;
+}) {
   const push = usePush();
   const palette = usePalette();
   const { slot, entry } = row;
@@ -143,7 +162,9 @@ function EntryRow({ row, displayUnit }: { row: Row_; displayUnit: Unit }) {
   const prescription = slot?.prescription ?? entry?.prescription ?? null;
   const sets = entry === null ? [] : entry.sets;
   const done = workedSets(sets);
-  const best = bestSet(sets);
+  // A row with no exercise id has no entry, so no sets for the scale to score.
+  const scale = exerciseId === null ? 'external' : scaleOf(exerciseId);
+  const best = bestSet(sets, scale);
   // Only from rests the timer measured: a session logged with it off says
   // nothing rather than claiming a rest of zero.
   const averageRest = averageRestSeconds(sets);
@@ -187,7 +208,7 @@ function EntryRow({ row, displayUnit }: { row: Row_; displayUnit: Unit }) {
         <>
           <View style={styles.sets}>
             {sets.map((set) => (
-              <SetLine key={set.setIndex} set={set} displayUnit={displayUnit} />
+              <SetLine key={set.setIndex} set={set} displayUnit={displayUnit} scale={scale} />
             ))}
           </View>
           {averageRest === null ? null : (
@@ -213,13 +234,15 @@ function DeleteCluster({ session }: { session: Session }) {
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { scaleOf, isPending: scalePending } = useLoadScale();
 
   const remove = async (): Promise<void> => {
-    if (uid === null) return;
+    // The records are rescored on the way out, so not before the library is in.
+    if (uid === null || scalePending) return;
     setBusy(true);
     setError(null);
     try {
-      await deleteSession(uid, session);
+      await deleteSession(uid, session, scaleOf);
       goBack('/history');
     } catch (cause: unknown) {
       setArmed(false);
@@ -248,7 +271,7 @@ function DeleteCluster({ session }: { session: Session }) {
               size="compact"
               variant="danger"
               label="Delete for good"
-              busy={busy}
+              busy={busy || scalePending}
               onPress={() => void remove()}
             />
             <Button
@@ -284,6 +307,7 @@ export default function SessionDetail() {
   const { session, isPending, notFound } = useSession(sessionId);
   const { profile } = useProfile();
   const { lookup } = useMuscleLookup();
+  const { scaleOf } = useLoadScale();
   const { version, isPending: versionPending } = useWorkoutVersion(
     session?.workoutId ?? null,
     session?.workoutVersion ?? null,
@@ -384,7 +408,7 @@ export default function SessionDetail() {
 
       <View style={styles.entries}>
         {rows.map((row) => (
-          <EntryRow key={row.key} row={row} displayUnit={displayUnit} />
+          <EntryRow key={row.key} row={row} displayUnit={displayUnit} scaleOf={scaleOf} />
         ))}
       </View>
 

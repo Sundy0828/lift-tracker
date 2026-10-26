@@ -235,7 +235,7 @@ describe('exercisePerformances', () => {
   const later = session('p2', '2025-09-01', [entry('bench', [set(0, 105, 5, 1, { unit: 'kg' })])]);
 
   it('returns one performance per session, oldest first', () => {
-    const performances = exercisePerformances([later, chest, push], 'bench');
+    const performances = exercisePerformances([later, chest, push], 'bench', 'external');
     expect(performances.map((one) => one.sessionId)).toEqual(['p1', 'c1', 'p2']);
   });
 
@@ -247,7 +247,7 @@ describe('exercisePerformances', () => {
         occurrenceIndex: 1,
       }),
     ]);
-    const performances = exercisePerformances([doubled], 'bench');
+    const performances = exercisePerformances([doubled], 'bench', 'external');
     expect(performances).toHaveLength(1);
     expect(performances[0]?.sets).toHaveLength(2);
     // The day's best set wins whichever slot produced it.
@@ -258,18 +258,18 @@ describe('exercisePerformances', () => {
     const skipped = session('s1', '2025-08-25', [
       entry('bench', [{ ...emptySet(0), skipped: true }]),
     ]);
-    expect(exercisePerformances([skipped], 'bench')).toEqual([]);
+    expect(exercisePerformances([skipped], 'bench', 'external')).toEqual([]);
   });
 
   it('keeps a bodyweight performance even though it cannot be scored', () => {
     const bodyweight = session('bw', '2025-08-25', [entry('pullup', [set(0, null, 10)])]);
-    const performances = exercisePerformances([bodyweight], 'pullup');
+    const performances = exercisePerformances([bodyweight], 'pullup', 'external');
     expect(performances).toHaveLength(1);
     expect(performances[0]?.e1rmKg).toBeNull();
   });
 
   it('separates PUSH bench from CHEST-day bench under the filter', () => {
-    const performances = exercisePerformances([push, chest, later], 'bench');
+    const performances = exercisePerformances([push, chest, later], 'bench', 'external');
     expect(filterByWorkout(performances, 'push').map((one) => one.sessionId)).toEqual(['p1', 'p2']);
     expect(filterByWorkout(performances, 'chest').map((one) => one.sessionId)).toEqual(['c1']);
     expect(filterByWorkout(performances, null)).toHaveLength(3);
@@ -283,7 +283,7 @@ describe('exercisePerformances', () => {
       { workoutName: 'PUSH DAY' },
     );
     const options = workoutFilterOptions(
-      exercisePerformances([push, chest, later, renamed], 'bench'),
+      exercisePerformances([push, chest, later, renamed], 'bench', 'external'),
     );
     expect(options).toEqual([
       { workoutId: 'push', workoutName: 'PUSH DAY', count: 3 },
@@ -302,7 +302,7 @@ describe('exercisePerformances', () => {
         workoutName: 'Ad-hoc session',
       },
     );
-    const options = workoutFilterOptions(exercisePerformances([adhoc], 'bench'));
+    const options = workoutFilterOptions(exercisePerformances([adhoc], 'bench', 'external'));
     expect(options[0]?.workoutId).toBeNull();
   });
 });
@@ -316,6 +316,7 @@ describe('recordMilestones', () => {
         ]),
       ),
       'bench',
+      'external',
     );
 
   it('reports only the sessions where the record moved, newest first', () => {
@@ -353,8 +354,25 @@ describe('recordMilestones', () => {
       session('easy', '2025-08-04', [entry('bench', [set(0, 100, 5, 3, { unit: 'kg' })])]),
       session('hard', '2025-08-11', [entry('bench', [set(0, 102.5, 5, 0, { unit: 'kg' })])]),
     ];
-    const milestones = recordMilestones(exercisePerformances(sessions, 'bench'));
+    const milestones = recordMilestones(exercisePerformances(sessions, 'bench', 'external'));
     expect(milestones.map((one) => one.performance.sessionId)).toEqual(['easy']);
+  });
+
+  it('counts each plate added to a bodyweight lift as a new record', () => {
+    const dips = (id: string, date: string, weight: number, reps: number) =>
+      session(id, date, [entry('dips', [set(0, weight, reps, 0, { unit: 'kg' })])]);
+    const sessions = [
+      dips('bw', '2025-08-04', 0, 10),
+      dips('plate', '2025-08-11', 2.5, 10),
+      dips('belt', '2025-08-18', 20, 8),
+    ];
+
+    const milestones = recordMilestones(exercisePerformances(sessions, 'dips', 'bodyweight'));
+    expect(milestones.map((one) => one.performance.sessionId)).toEqual(['belt', 'plate', 'bw']);
+    // The trend line reads the same numbers, so it rises with the load too.
+    const trend = exercisePerformances(sessions, 'dips', 'bodyweight').map((one) => one.e1rmKg);
+    expect(trend[0]).toBeCloseTo(26.667, 3);
+    expect(trend[2]).toBeCloseTo(46.667, 3);
   });
 });
 

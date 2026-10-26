@@ -88,7 +88,11 @@ function logged(
 function foldExerciseStats(exerciseId: string, sessions: readonly Session[]): ExerciseStats | null {
   let stats: ExerciseStats | null = null;
   for (const session of sessions) {
-    const update = buildStatsUpdate(session, (id) => (id === exerciseId ? stats : null));
+    const update = buildStatsUpdate(
+      session,
+      (id) => (id === exerciseId ? stats : null),
+      () => 'external',
+    );
     stats = update.exerciseStats.get(exerciseId) ?? stats;
   }
   return stats;
@@ -98,7 +102,11 @@ function foldExerciseStats(exerciseId: string, sessions: readonly Session[]): Ex
 function foldWorkoutStats(workoutId: string, sessions: readonly Session[]): WorkoutStats | null {
   let stats: WorkoutStats | null = null;
   for (const session of sessions) {
-    const next = buildStatsUpdate(session, () => null).workoutStats;
+    const next = buildStatsUpdate(
+      session,
+      () => null,
+      () => 'external',
+    ).workoutStats;
     if (next !== null && next.workoutId === workoutId) stats = next;
   }
   return stats;
@@ -128,12 +136,12 @@ const latest = logged(
 
 describe('rebuildExerciseStats', () => {
   it('drops the record to the next best when the PR session is gone', () => {
-    const all = rebuildExerciseStats('bench', [first, prSession, latest]);
+    const all = rebuildExerciseStats('bench', [first, prSession, latest], 'external');
     expect(all?.bestE1rmSessionId).toBe('s2');
 
-    const stats = rebuildExerciseStats('bench', [first, latest]);
+    const stats = rebuildExerciseStats('bench', [first, latest], 'external');
     expect(stats).not.toBeNull();
-    expect(stats?.bestE1rm).toBeCloseTo(adjustedE1rm(middle) ?? 0, 6);
+    expect(stats?.bestE1rm).toBeCloseTo(adjustedE1rm(middle, 'external') ?? 0, 6);
     expect(stats?.bestE1rmSessionId).toBe('s3');
     expect(stats?.bestE1rmAt).toBe('2025-09-07');
     expect(stats?.bestSet).toEqual(middle);
@@ -141,7 +149,7 @@ describe('rebuildExerciseStats', () => {
   });
 
   it('reads the last performance off the newest remaining session', () => {
-    const stats = rebuildExerciseStats('bench', [first, prSession]);
+    const stats = rebuildExerciseStats('bench', [first, prSession], 'external');
     expect(stats?.lastSessionId).toBe('s2');
     expect(stats?.lastPerformedOn).toBe('2025-08-31');
     expect(stats?.lastWorkoutId).toBe('push');
@@ -150,13 +158,13 @@ describe('rebuildExerciseStats', () => {
   });
 
   it('is null when nothing is left, so the caller deletes the document', () => {
-    expect(rebuildExerciseStats('bench', [])).toBeNull();
-    expect(rebuildExerciseStats('squat', [first, prSession, latest])).toBeNull();
+    expect(rebuildExerciseStats('bench', [], 'external')).toBeNull();
+    expect(rebuildExerciseStats('squat', [first, prSession, latest], 'external')).toBeNull();
   });
 
   it('ignores an abandoned session', () => {
     const abandoned = { ...prSession, status: 'abandoned' as const };
-    const stats = rebuildExerciseStats('bench', [first, abandoned]);
+    const stats = rebuildExerciseStats('bench', [first, abandoned], 'external');
     expect(stats?.lastSessionId).toBe('s1');
     expect(stats?.totalSessions).toBe(1);
   });
@@ -168,7 +176,7 @@ describe('rebuildExerciseStats', () => {
       [BENCH_SLOT, slot('slot-bench-2', 'bench', { occurrenceIndex: 1 })],
     );
 
-    const stats = rebuildExerciseStats('bench', [first, twice]);
+    const stats = rebuildExerciseStats('bench', [first, twice], 'external');
     expect(stats?.totalSessions).toBe(2);
     // Both occurrences feed the record, and the later row is the last one.
     expect(stats?.bestE1rmSessionId).toBe('s9');
@@ -182,11 +190,11 @@ describe('rebuildExerciseStats', () => {
       [BENCH_SLOT],
     );
 
-    expect(rebuildExerciseStats('bench', [warmupOnly])).toBeNull();
+    expect(rebuildExerciseStats('bench', [warmupOnly], 'external')).toBeNull();
 
-    const stats = rebuildExerciseStats('bench', [first, warmupOnly]);
+    const stats = rebuildExerciseStats('bench', [first, warmupOnly], 'external');
     expect(stats?.lastSessionId).toBe('s1');
-    expect(stats?.bestE1rm).toBeCloseTo(adjustedE1rm(light) ?? 0, 6);
+    expect(stats?.bestE1rm).toBeCloseTo(adjustedE1rm(light, 'external') ?? 0, 6);
   });
 
   it('breaks a shared performedOn on startedAt', () => {
@@ -213,8 +221,8 @@ describe('rebuildExerciseStats', () => {
       [BENCH_SLOT],
     );
 
-    expect(rebuildExerciseStats('bench', [morning, evening])?.lastSessionId).toBe('pm');
-    expect(rebuildExerciseStats('bench', [evening, morning])?.lastSessionId).toBe('pm');
+    expect(rebuildExerciseStats('bench', [morning, evening], 'external')?.lastSessionId).toBe('pm');
+    expect(rebuildExerciseStats('bench', [evening, morning], 'external')?.lastSessionId).toBe('pm');
   });
 
   it('equals the fold of buildStatsUpdate over the same sessions', () => {
@@ -222,13 +230,13 @@ describe('rebuildExerciseStats', () => {
     // Scrambled, because a query returns whatever order it returns.
     const scrambled = [latest, first, prSession];
 
-    expect(rebuildExerciseStats('bench', scrambled)).toEqual(
+    expect(rebuildExerciseStats('bench', scrambled, 'external')).toEqual(
       foldExerciseStats('bench', chronological),
     );
   });
 
   it('equals the fold once the record session is left out', () => {
-    expect(rebuildExerciseStats('bench', [latest, first])).toEqual(
+    expect(rebuildExerciseStats('bench', [latest, first], 'external')).toEqual(
       foldExerciseStats('bench', [first, latest]),
     );
   });
@@ -246,9 +254,50 @@ describe('rebuildExerciseStats', () => {
     );
     const chronological = [first, twice, warmupOnly];
 
-    expect(rebuildExerciseStats('bench', [warmupOnly, first, twice])).toEqual(
+    expect(rebuildExerciseStats('bench', [warmupOnly, first, twice], 'external')).toEqual(
       foldExerciseStats('bench', chronological),
     );
+  });
+
+  /**
+   * What `scripts/rebuild-records.ts` relies on: rescoring the same sessions
+   * on the exercise's scale moves a record that the old sign-of-the-load rule
+   * had left on a bodyweight session.
+   */
+  it('moves a dip record to the weighted session on the bodyweight scale', () => {
+    const DIPS_SLOT = slot('slot-dips', 'dips');
+    const unweighted = logged(
+      { id: 'd1', workoutId: 'push', workoutName: 'PUSH', performedOn: '2025-08-24' },
+      { 'slot-dips': [set(0, 0, 10, 0, { unit: 'kg' })] },
+      [DIPS_SLOT],
+    );
+    const weighted = logged(
+      { id: 'd2', workoutId: 'push', workoutName: 'PUSH', performedOn: '2025-08-31' },
+      { 'slot-dips': [set(0, 20, 8, 0, { unit: 'kg' })] },
+      [DIPS_SLOT],
+    );
+
+    // Plain Epley on the positive load: the cliff at zero kept the old record.
+    expect(
+      rebuildExerciseStats('dips', [unweighted, weighted], 'external')?.bestE1rmSessionId,
+    ).toBe('d1');
+
+    const stats = rebuildExerciseStats('dips', [unweighted, weighted], 'bodyweight');
+    expect(stats?.bestE1rmSessionId).toBe('d2');
+    expect(stats?.bestE1rm).toBeCloseTo(46.667, 3);
+    expect(stats?.bestSet?.weight).toEqual({ value: 20, unit: 'kg' });
+
+    // And it agrees with completing the two sessions on that scale.
+    let folded: ExerciseStats | null = null;
+    for (const session of [unweighted, weighted]) {
+      folded =
+        buildStatsUpdate(
+          session,
+          () => folded,
+          () => 'bodyweight',
+        ).exerciseStats.get('dips') ?? folded;
+    }
+    expect(stats).toEqual(folded);
   });
 });
 
