@@ -32,11 +32,13 @@ Phases A and B are mostly console work for you; Claude does the code around them
 The merge changes how bodyweight and assisted sets score, and the records stored in each account's
 `exerciseStats` were written under the old scoring. Rebuild them once the new web is live:
 
-- [ ] Point `GOOGLE_APPLICATION_CREDENTIALS` at the service-account key (kept outside the repo),
+- [x] Point `GOOGLE_APPLICATION_CREDENTIALS` at the service-account key (kept outside the repo),
       as for `negate-assisted` and `set-name`.
-- [ ] `pnpm run rebuild-records` (dry run; `--email you@example.com` for one account). Read the old
+- [x] `pnpm run rebuild-records` (dry run; `--email you@example.com` for one account). Read the old
       → new list per account and exercise.
-- [ ] `pnpm run rebuild-records --apply`.
+- [x] `pnpm run rebuild-records --apply`. _Done 2026-10-26: 3 records in 2 accounts (Dips - Chest
+      Version 26.6 → 63.9 kg; first records for Tibialis Raise and Single-Leg Calf Raise, logged at
+      0 kg). A second dry run found nothing left._
 - [ ] Spot-check your own dips and pull-ups on History → Records, on the web and the phone.
 
 ---
